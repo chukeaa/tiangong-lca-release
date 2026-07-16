@@ -220,11 +220,26 @@ async function assertReleasePlan(
   const manifestDatasets = Array.isArray(manifest.datasets)
     ? manifest.datasets.map((value) => {
         const item = record(value, "release_manifest_dataset_invalid");
+        const sourceProcess =
+          item.sourceProcess === undefined
+            ? undefined
+            : record(
+                item.sourceProcess,
+                "release_manifest_dataset_source_process_invalid",
+              );
         return {
           datasetType: item.datasetType,
           role: item.role,
           uuid: item.uuid,
           version: item.version,
+          ...(sourceProcess
+            ? {
+                sourceProcess: {
+                  id: sourceProcess.id,
+                  version: sourceProcess.version,
+                },
+              }
+            : {}),
           canonicalContentHash: item.canonicalContentHash,
         };
       })

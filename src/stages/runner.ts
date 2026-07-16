@@ -596,7 +596,7 @@ async function finalizeCanonicalArtifactsStage(
       role: descriptor.role,
       processIndex: descriptor.processIndex,
       uuid: descriptor.uuid,
-      sourceProcess: { id: descriptor.uuid, version: descriptor.version },
+      sourceProcess: descriptor.sourceProcess,
       document: descriptor.document,
     });
     if (
@@ -1004,6 +1004,7 @@ async function buildPackagesStage(
       role: entry.role,
       uuid: entry.uuid,
       version: entry.version,
+      ...(entry.sourceProcess ? { sourceProcess: entry.sourceProcess } : {}),
       versionSignificantHash:
         descriptor?.versionSignificantHash ?? canonicalContentHash,
       semanticHash: descriptor?.semanticHash ?? canonicalContentHash,
@@ -1037,6 +1038,9 @@ async function buildPackagesStage(
       role: dataset.role,
       uuid: dataset.uuid,
       version: dataset.version,
+      ...(dataset.sourceProcess
+        ? { sourceProcess: dataset.sourceProcess }
+        : {}),
       canonicalContentHash: dataset.canonicalContentHash,
     })),
     packages: packages.map((item: Record<string, any>) => ({

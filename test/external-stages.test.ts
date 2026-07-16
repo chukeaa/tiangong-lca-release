@@ -72,6 +72,19 @@ test("conversion, validation, round-trip, and packaging stages produce an immuta
     ) as Record<string, any>;
     assert.equal(manifest.schemaVersion, "tiangong.release-manifest.v1");
     assert.equal(manifest.packages.length, 4);
+    const generatedDatasets = manifest.datasets.filter(
+      (dataset: Record<string, unknown>) =>
+        dataset.role === "lifecycle_model" || dataset.role === "result_process",
+    );
+    assert.equal(generatedDatasets.length, 2);
+    assert.ok(
+      generatedDatasets.every(
+        (dataset: Record<string, any>) =>
+          dataset.sourceProcess?.id ===
+            "11111111-1111-4111-8111-111111111111" &&
+          dataset.sourceProcess?.version === "01.00.000",
+      ),
+    );
     assert.equal(manifest.publishPlanHash, plan.planHash);
     assert.match(plan.planHash, /^[0-9a-f]{64}$/);
 

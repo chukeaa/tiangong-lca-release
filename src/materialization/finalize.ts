@@ -31,6 +31,7 @@ export type CanonicalDatasetIndexEntry = {
   role: string;
   uuid: string;
   version: string;
+  sourceProcess?: { id: string; version: string };
   path: string;
   sha256: string;
   byteSize: number;
@@ -59,6 +60,9 @@ export async function buildCanonicalTidasTree(input: {
       role: source.role,
       uuid: source.uuid,
       version: source.version,
+      ...(source.role === "unit_process"
+        ? { sourceProcess: { id: source.uuid, version: source.version } }
+        : {}),
       path: relativePath,
       sha256: await sha256File(target),
       byteSize: statSync(target).size,
@@ -79,6 +83,7 @@ export async function buildCanonicalTidasTree(input: {
       role: generated.role,
       uuid: generated.uuid,
       version: generated.version,
+      sourceProcess: generated.sourceProcess,
       path: relativePath,
       sha256: await sha256File(target),
       byteSize: statSync(target).size,

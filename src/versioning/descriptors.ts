@@ -16,6 +16,7 @@ export type DatasetDescriptorRecord = {
   processIndex: number;
   uuid: string;
   version: string;
+  sourceProcess: { id: string; version: string };
   versionSignificantHash: string;
   semanticHash: string;
   canonicalContentHash: string;
@@ -316,6 +317,7 @@ export function resolveGeneratedVersionSet(input: {
         processIndex: draft.processIndex,
         uuid: draft.uuid,
         version,
+        sourceProcess: rendered.sourceProcess,
         ...hashes,
         document: rendered.document,
       };
