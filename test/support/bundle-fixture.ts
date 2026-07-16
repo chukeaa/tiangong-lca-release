@@ -15,6 +15,14 @@ import type { ReleaseRequest } from "../../src/workspace/run-store.js";
 const SHA_ZERO = "0".repeat(64);
 const ROOT_PROCESS_ID = "11111111-1111-4111-8111-111111111111";
 const REFERENCE_FLOW_ID = "22222222-2222-4222-8222-222222222222";
+const BIOSPHERE_FLOW_ID = "33333333-3333-4333-8333-333333333333";
+const LCIA_METHOD_ID = "44444444-4444-4444-8444-444444444444";
+const CONTACT_ID = "55555555-5555-4555-8555-555555555555";
+const SOURCE_ID = "66666666-6666-4666-8666-666666666666";
+const UNIT_GROUP_ID = "77777777-7777-4777-8777-777777777777";
+const FLOW_PROPERTY_ID = "88888888-8888-4888-8888-888888888888";
+const DATA_SET_VERSION = "01.00.000";
+const FIXTURE_TIMESTAMP = "2026-07-16T00:00:00.000Z";
 
 function sha256(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -87,24 +95,375 @@ function reference(
     "@refObjectId": id,
     "@type": type,
     "@uri": `../${category}/${id}_01.00.000.json`,
-    "@version": "01.00.000",
+    "@version": DATA_SET_VERSION,
     "common:shortDescription": { "@xml:lang": "en", "#text": description },
   };
 }
 
+function localized(text: string) {
+  return { "@xml:lang": "en", "#text": text };
+}
+
+function compliance(source: ReturnType<typeof reference>) {
+  return {
+    complianceDeclarations: {
+      compliance: {
+        "common:referenceToComplianceSystem": source,
+        "common:approvalOfOverallCompliance": "Not defined",
+      },
+    },
+  };
+}
+
+function administrativeInformation(input: {
+  contact: ReturnType<typeof reference>;
+  source: ReturnType<typeof reference>;
+}) {
+  return {
+    dataEntryBy: {
+      "common:timeStamp": FIXTURE_TIMESTAMP,
+      "common:referenceToDataSetFormat": input.source,
+    },
+    publicationAndOwnership: {
+      "common:dataSetVersion": DATA_SET_VERSION,
+      "common:referenceToOwnershipOfDataSet": input.contact,
+    },
+  };
+}
+
+function supportReferences() {
+  return {
+    contact: reference(
+      "contact data set",
+      "contacts",
+      CONTACT_ID,
+      "TianGong release fixture contact",
+    ),
+    source: reference(
+      "source data set",
+      "sources",
+      SOURCE_ID,
+      "TianGong release fixture source",
+    ),
+    unitGroup: reference(
+      "unit group data set",
+      "unitgroups",
+      UNIT_GROUP_ID,
+      "Mass units",
+    ),
+    flowProperty: reference(
+      "flow property data set",
+      "flowproperties",
+      FLOW_PROPERTY_ID,
+      "Mass",
+    ),
+  };
+}
+
+function contactDocument(): JsonValue {
+  const refs = supportReferences();
+  return {
+    contactDataSet: {
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns": "http://lca.jrc.it/ILCD/Contact",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/Contact ../../schemas/ILCD_ContactDataSet.xsd",
+      contactInformation: {
+        dataSetInformation: {
+          "common:UUID": CONTACT_ID,
+          "common:shortName": localized("TianGong release fixture contact"),
+          "common:name": localized("TianGong Release Fixture Organisation"),
+          classificationInformation: {
+            "common:classification": {
+              "common:class": {
+                "@level": "0",
+                "@classId": "2",
+                "#text": "Organisations",
+              },
+            },
+          },
+        },
+      },
+      administrativeInformation: administrativeInformation(refs),
+    },
+  };
+}
+
+function sourceDocument(): JsonValue {
+  const refs = supportReferences();
+  return {
+    sourceDataSet: {
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns": "http://lca.jrc.it/ILCD/Source",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/Source ../../schemas/ILCD_SourceDataSet.xsd",
+      sourceInformation: {
+        dataSetInformation: {
+          "common:UUID": SOURCE_ID,
+          "common:shortName": localized("TianGong release fixture format"),
+          classificationInformation: {
+            "common:classification": {
+              "common:class": {
+                "@level": "0",
+                "@classId": "1",
+                "#text": "Data set formats",
+              },
+            },
+          },
+        },
+      },
+      administrativeInformation: administrativeInformation(refs),
+    },
+  };
+}
+
+function unitGroupDocument(): JsonValue {
+  const refs = supportReferences();
+  return {
+    unitGroupDataSet: {
+      "@xmlns": "http://lca.jrc.it/ILCD/UnitGroup",
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/UnitGroup ../../schemas/ILCD_UnitGroupDataSet.xsd",
+      unitGroupInformation: {
+        dataSetInformation: {
+          "common:UUID": UNIT_GROUP_ID,
+          "common:name": localized("Mass units"),
+          classificationInformation: {
+            "common:classification": {
+              "common:class": {
+                "@level": "0",
+                "@classId": "1",
+                "#text": "Technical unit groups",
+              },
+            },
+          },
+        },
+        quantitativeReference: { referenceToReferenceUnit: "0" },
+      },
+      modellingAndValidation: compliance(refs.source),
+      administrativeInformation: administrativeInformation(refs),
+      units: {
+        unit: {
+          "@dataSetInternalID": "0",
+          name: "kg",
+          meanValue: "1",
+        },
+      },
+    },
+  };
+}
+
+function flowPropertyDocument(): JsonValue {
+  const refs = supportReferences();
+  return {
+    flowPropertyDataSet: {
+      "@xmlns": "http://lca.jrc.it/ILCD/FlowProperty",
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/FlowProperty ../../schemas/ILCD_FlowPropertyDataSet.xsd",
+      flowPropertiesInformation: {
+        dataSetInformation: {
+          "common:UUID": FLOW_PROPERTY_ID,
+          "common:name": localized("Mass"),
+          classificationInformation: {
+            "common:classification": {
+              "common:class": {
+                "@level": "0",
+                "@classId": "1",
+                "#text": "Technical flow properties",
+              },
+            },
+          },
+        },
+        quantitativeReference: {
+          referenceToReferenceUnitGroup: refs.unitGroup,
+        },
+      },
+      modellingAndValidation: compliance(refs.source),
+      administrativeInformation: administrativeInformation(refs),
+    },
+  };
+}
+
+function productClassification() {
+  return {
+    "common:classification": {
+      "common:class": [
+        {
+          "@level": "0",
+          "@classId": "0",
+          "#text": "Agriculture, forestry and fishery products",
+        },
+        {
+          "@level": "1",
+          "@classId": "01",
+          "#text": "Products of agriculture, horticulture and market gardening",
+        },
+        { "@level": "2", "@classId": "011", "#text": "Cereals" },
+        { "@level": "3", "@classId": "0111", "#text": "Wheat" },
+        { "@level": "4", "@classId": "01111", "#text": "Wheat, seed" },
+      ],
+    },
+  };
+}
+
+function flowDocument(id: string, name: string): JsonValue {
+  const refs = supportReferences();
+  return {
+    flowDataSet: {
+      "@xmlns": "http://lca.jrc.it/ILCD/Flow",
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns:ecn":
+        "http://eplca.jrc.ec.europa.eu/ILCD/Extensions/2018/ECNumber",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@locations": "../ILCDLocations.xml",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/Flow ../../schemas/ILCD_FlowDataSet.xsd",
+      flowInformation: {
+        dataSetInformation: {
+          "common:UUID": id,
+          name: {
+            baseName: localized(name),
+            treatmentStandardsRoutes: localized("release fixture route"),
+            mixAndLocationTypes: localized("production mix, GLO"),
+          },
+          classificationInformation: productClassification(),
+        },
+        quantitativeReference: { referenceToReferenceFlowProperty: "0" },
+      },
+      modellingAndValidation: {
+        LCIMethod: { typeOfDataSet: "Product flow" },
+        ...compliance(refs.source),
+      },
+      administrativeInformation: administrativeInformation(refs),
+      flowProperties: {
+        flowProperty: {
+          "@dataSetInternalID": "0",
+          referenceToFlowPropertyDataSet: refs.flowProperty,
+          meanValue: "1",
+        },
+      },
+    },
+  };
+}
+
+function lciaMethodDocument(): JsonValue {
+  const refs = supportReferences();
+  return {
+    LCIAMethodDataSet: {
+      "@xmlns": "http://lca.jrc.it/ILCD/LCIAMethod",
+      "@xmlns:common": "http://lca.jrc.it/ILCD/Common",
+      "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+      "@version": "1.1",
+      "@xsi:schemaLocation":
+        "http://lca.jrc.it/ILCD/LCIAMethod ../../schemas/ILCD_LCIAMethodDataSet.xsd",
+      LCIAMethodInformation: {
+        dataSetInformation: {
+          "common:UUID": LCIA_METHOD_ID,
+          "common:name": localized("Fixture midpoint impact method"),
+          classificationInformation: {
+            "common:classification": {
+              "common:class": [
+                {
+                  "@level": "0",
+                  "@classId": "2",
+                  "#text": "Midpoint level LCIA methods",
+                },
+              ],
+            },
+          },
+        },
+        quantitativeReference: { referenceQuantity: refs.flowProperty },
+        time: {
+          referenceYear: localized("2026"),
+          duration: localized("time independent"),
+          timeRepresentativenessDescription: localized(
+            "Release pipeline verification fixture.",
+          ),
+        },
+        geography: {
+          interventionLocation: "GLO",
+          impactLocation: "GLO",
+          geographicalRepresentativenessDescription: localized(
+            "Globally applicable release pipeline verification fixture.",
+          ),
+        },
+        impactModel: {
+          modelName: "Fixture impact model",
+          modelDescription: localized(
+            "Deterministic impact model for release pipeline verification.",
+          ),
+        },
+      },
+      modellingAndValidation: {
+        LCIAMethodNormalisationAndWeighting: {
+          typeOfDataSet: "Mid-point indicator",
+          LCIAMethodPrinciple: "other",
+        },
+        dataSources: { referenceToDataSource: refs.source },
+        validation: { review: { "@type": "Not reviewed" } },
+        complianceDeclarations: {
+          compliance: {
+            "common:referenceToComplianceSystem": refs.source,
+            "common:approvalOfOverallCompliance": "Not defined",
+            "common:nomenclatureCompliance": "Not defined",
+            "common:methodologicalCompliance": "Not defined",
+            "common:reviewCompliance": "Not defined",
+            "common:documentationCompliance": "Not defined",
+            "common:qualityCompliance": "Not defined",
+          },
+        },
+      },
+      administrativeInformation: {
+        dataGenerator: {
+          "common:referenceToPersonOrEntityGeneratingTheDataSet": refs.contact,
+        },
+        dataEntryBy: {
+          "common:timeStamp": FIXTURE_TIMESTAMP,
+          "common:referenceToDataSetFormat": refs.source,
+          recommendationBy: {
+            referenceToEntity: refs.contact,
+            level: "Level I",
+            meaning: localized(
+              "Recommended for release pipeline verification.",
+            ),
+          },
+        },
+        publicationAndOwnership: {
+          "common:dateOfLastRevision": FIXTURE_TIMESTAMP,
+          "common:dataSetVersion": DATA_SET_VERSION,
+          "common:referenceToOwnershipOfDataSet": refs.contact,
+        },
+      },
+      characterisationFactors: {
+        factor: {
+          referenceToFlowDataSet: reference(
+            "flow data set",
+            "flows",
+            BIOSPHERE_FLOW_ID,
+            "Fixture inventory flow",
+          ),
+          exchangeDirection: "Output",
+          meanValue: "1",
+          deviatingRecommendation: "Level I",
+        },
+      },
+    },
+  };
+}
+
 function unitProcessDocument(): JsonValue {
-  const contact = reference(
-    "contact data set",
-    "contacts",
-    "55555555-5555-4555-8555-555555555555",
-    "TianGong release fixture contact",
-  );
-  const source = reference(
-    "source data set",
-    "sources",
-    "66666666-6666-4666-8666-666666666666",
-    "TianGong release fixture source",
-  );
+  const { contact, source } = supportReferences();
   return {
     processDataSet: {
       "@xmlns": "http://lca.jrc.it/ILCD/Process",
@@ -197,12 +556,12 @@ function unitProcessDocument(): JsonValue {
           },
         },
         dataEntryBy: {
-          "common:timeStamp": "2026-07-16T00:00:00.000Z",
+          "common:timeStamp": FIXTURE_TIMESTAMP,
           "common:referenceToDataSetFormat": source,
           "common:referenceToPersonOrEntityEnteringTheData": contact,
         },
         publicationAndOwnership: {
-          "common:dataSetVersion": "01.00.000",
+          "common:dataSetVersion": DATA_SET_VERSION,
           "common:permanentDataSetURI": `https://lcdn.tiangong.earth/datasetdetail/process.xhtml?uuid=${ROOT_PROCESS_ID}&version=01.00.000`,
           "common:referenceToOwnershipOfDataSet": contact,
           "common:copyright": "false",
@@ -234,24 +593,81 @@ function writeSourceClosure(directory: string): {
   directory: string;
   manifestHash: string;
 } {
-  const processPath = `processes/${ROOT_PROCESS_ID}_01.00.000.json`;
-  const processDocument = unitProcessDocument();
-  const processBody = `${JSON.stringify(processDocument, null, 2)}\n`;
-  const processFile = path.join(directory, processPath);
-  mkdirSync(path.dirname(processFile), { recursive: true });
-  writeFileSync(processFile, processBody, "utf8");
+  const sourceDocuments = [
+    {
+      datasetType: "contact",
+      role: "support",
+      uuid: CONTACT_ID,
+      category: "contacts",
+      document: contactDocument(),
+    },
+    {
+      datasetType: "flowproperty",
+      role: "support",
+      uuid: FLOW_PROPERTY_ID,
+      category: "flowproperties",
+      document: flowPropertyDocument(),
+    },
+    {
+      datasetType: "flow",
+      role: "support",
+      uuid: REFERENCE_FLOW_ID,
+      category: "flows",
+      document: flowDocument(REFERENCE_FLOW_ID, "Fixture reference flow"),
+    },
+    {
+      datasetType: "flow",
+      role: "support",
+      uuid: BIOSPHERE_FLOW_ID,
+      category: "flows",
+      document: flowDocument(BIOSPHERE_FLOW_ID, "Fixture inventory flow"),
+    },
+    {
+      datasetType: "lciamethod",
+      role: "support",
+      uuid: LCIA_METHOD_ID,
+      category: "lciamethods",
+      document: lciaMethodDocument(),
+    },
+    {
+      datasetType: "process",
+      role: "unit_process",
+      uuid: ROOT_PROCESS_ID,
+      category: "processes",
+      document: unitProcessDocument(),
+    },
+    {
+      datasetType: "source",
+      role: "support",
+      uuid: SOURCE_ID,
+      category: "sources",
+      document: sourceDocument(),
+    },
+    {
+      datasetType: "unitgroup",
+      role: "support",
+      uuid: UNIT_GROUP_ID,
+      category: "unitgroups",
+      document: unitGroupDocument(),
+    },
+  ].map((item) => {
+    const relativePath = `${item.category}/${item.uuid}_${DATA_SET_VERSION}.json`;
+    const body = `${JSON.stringify(item.document, null, 2)}\n`;
+    const filePath = path.join(directory, relativePath);
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, body, "utf8");
+    return {
+      datasetType: item.datasetType,
+      role: item.role,
+      uuid: item.uuid,
+      version: DATA_SET_VERSION,
+      path: relativePath,
+      sha256: sha256(body),
+    };
+  });
   const manifest = {
     schemaVersion: "tiangong.source-closure.v1",
-    datasets: [
-      {
-        datasetType: "process",
-        role: "unit_process",
-        uuid: ROOT_PROCESS_ID,
-        version: "01.00.000",
-        path: processPath,
-        sha256: sha256(processBody),
-      },
-    ],
+    datasets: sourceDocuments,
   };
   const manifestBody = `${JSON.stringify(manifest, null, 2)}\n`;
   writeFileSync(path.join(directory, "manifest.json"), manifestBody, "utf8");
@@ -280,8 +696,8 @@ export function createCalculationBundleFixture(rootDirectory: string): {
           processIndex: 0,
           exchangeInternalId: "biosphere-1",
           flow: {
-            id: "33333333-3333-4333-8333-333333333333",
-            version: "01.00.000",
+            id: BIOSPHERE_FLOW_ID,
+            version: DATA_SET_VERSION,
           },
           direction: "Output",
           unit: "kg",
@@ -319,8 +735,8 @@ export function createCalculationBundleFixture(rootDirectory: string): {
         {
           processIndex: 0,
           flow: {
-            id: "33333333-3333-4333-8333-333333333333",
-            version: "01.00.000",
+            id: BIOSPHERE_FLOW_ID,
+            version: DATA_SET_VERSION,
           },
           direction: "Output",
           unit: "kg",
@@ -337,8 +753,8 @@ export function createCalculationBundleFixture(rootDirectory: string): {
         {
           processIndex: 0,
           method: {
-            id: "44444444-4444-4444-8444-444444444444",
-            version: "01.00.000",
+            id: LCIA_METHOD_ID,
+            version: DATA_SET_VERSION,
           },
           meanAmount: 2.5,
         },
