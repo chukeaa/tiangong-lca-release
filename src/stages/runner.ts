@@ -24,6 +24,7 @@ import {
 } from "../identity/identity.js";
 import {
   readJsonFile,
+  relativeContainedPath,
   sha256File,
   writeJsonAtomic,
   writeTextAtomic,
@@ -880,10 +881,7 @@ function workspaceArtifactReference(
   mediaType: string,
 ): JsonValue {
   return {
-    path: path
-      .relative(layout.root, path.resolve(filePath))
-      .split(path.sep)
-      .join("/"),
+    path: relativeContainedPath(layout.root, filePath),
     sha256,
     byteSize: statSync(filePath).size,
     mediaType,

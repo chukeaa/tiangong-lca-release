@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { readApprovalDecision } from "../approval/decision.js";
 import { calculateBundleContentHash } from "../bundle/manifest.js";
@@ -8,6 +8,7 @@ import type { JsonValue } from "../contracts/json.js";
 import {
   ensureDirectory,
   readJsonFile,
+  relativeContainedPath,
   resolveContainedPath,
   sha256File,
   writeJsonAtomic,
@@ -92,7 +93,7 @@ function normalizedRelativePath(
   fromDirectory: string,
   filePath: string,
 ): string {
-  return path.relative(fromDirectory, filePath).split(path.sep).join("/");
+  return relativeContainedPath(fromDirectory, filePath);
 }
 
 async function stageArtifact(
@@ -148,7 +149,7 @@ async function invokeReleaseCli(input: {
     "path",
     "release_cli_output_path_missing",
   );
-  if (path.resolve(outputPath) !== path.resolve(input.outputPath)) {
+  if (realpathSync(outputPath) !== realpathSync(input.outputPath)) {
     throw new Error("release_cli_output_path_mismatch");
   }
   const output = await stageArtifact(input.outputPath, input.mediaType);
@@ -296,8 +297,7 @@ async function assertReleasePlan(
     manifestScope.processCount !== bundle.scope.processCount ||
     manifestScope.selectionManifestHash !==
       request.scope.selectionManifestHash ||
-    path.resolve(releaseManifestRefPath) !==
-      path.resolve(layout.releaseManifest) ||
+    releaseManifestRefPath !== realpathSync(layout.releaseManifest) ||
     releaseManifestRef.sha256 !== actualReleaseManifestSha256 ||
     releaseManifestRef.byteSize !== statSync(layout.releaseManifest).size ||
     releaseManifestRef.mediaType !== "application/json" ||

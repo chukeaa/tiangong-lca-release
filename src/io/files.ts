@@ -3,6 +3,7 @@ import {
   createReadStream,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
@@ -61,10 +62,22 @@ export function resolveContainedPath(
   rootDirectory: string,
   relativePath: string,
 ): string {
-  const root = path.resolve(rootDirectory);
-  const resolved = path.resolve(root, relativePath);
+  const root = realpathSync(path.resolve(rootDirectory));
+  const resolved = realpathSync(path.resolve(root, relativePath));
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
     throw new Error(`artifact_path_outside_bundle:${relativePath}`);
   }
   return resolved;
+}
+
+export function relativeContainedPath(
+  rootDirectory: string,
+  filePath: string,
+): string {
+  const root = realpathSync(path.resolve(rootDirectory));
+  const resolved = realpathSync(path.resolve(filePath));
+  if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new Error(`artifact_path_outside_bundle:${filePath}`);
+  }
+  return path.relative(root, resolved).split(path.sep).join("/");
 }
