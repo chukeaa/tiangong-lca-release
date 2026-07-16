@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/schemas/release-request.v1.json",
+  "title": "TianGong Release Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "releaseRunId",
+    "calculationBundle",
+    "scope",
+    "profiles",
+    "sourceClosure"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release-request.v1" },
+    "releaseRunId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "calculationBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestPath", "bundleContentHash"],
+      "properties": {
+        "manifestPath": { "type": "string", "minLength": 1 },
+        "bundleContentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coverageMode", "selectionManifestHash"],
+      "properties": {
+        "coverageMode": { "enum": ["subset", "global_eligible"] },
+        "selectionManifestHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelProfileId", "resultProfileId", "packageProfileIds"],
+      "properties": {
+        "modelProfileId": {
+          "const": "resolved-one-hop-aggregated-background.v1"
+        },
+        "resultProfileId": { "const": "lci-lcia-result.v1" },
+        "packageProfileIds": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "unit-process-full-closure.v1" },
+            { "const": "standalone-lifecyclemodel-result-full-closure.v1" }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "sourceClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory", "manifestHash"],
+      "properties": {
+        "directory": { "type": "string", "minLength": 1 },
+        "manifestHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "previousReleaseManifestPath": { "type": ["string", "null"] },
+    "releaseProfilePath": { "type": ["string", "null"] }
+  }
+}

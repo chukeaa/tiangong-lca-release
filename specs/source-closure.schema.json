@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/schemas/source-closure.v1.json",
+  "title": "TianGong Frozen TIDAS Source Closure v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasets"],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.source-closure.v1" },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "datasetType",
+          "role",
+          "uuid",
+          "version",
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "datasetType": {
+            "enum": [
+              "process",
+              "lifecyclemodel",
+              "flow",
+              "flowproperty",
+              "unitgroup",
+              "lciamethod",
+              "source",
+              "contact"
+            ]
+          },
+          "role": { "enum": ["unit_process", "support"] },
+          "uuid": { "$ref": "#/$defs/uuid" },
+          "version": { "$ref": "#/$defs/version" },
+          "path": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
+          "sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
