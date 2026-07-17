@@ -11,6 +11,10 @@ import {
 } from "../io/files.js";
 import { initialStageRecord, STAGE_IDS } from "../stages/catalog.js";
 import type { ReleaseRunRecord } from "../stages/types.js";
+import {
+  assertReleaseTargetBinding,
+  type ReleaseTargetBinding,
+} from "../target/profile.js";
 import { releaseWorkspaceLayout } from "./layout.js";
 
 export type ReleaseRequest = {
@@ -28,6 +32,7 @@ export type ReleaseRequest = {
     packageProfileIds: string[];
   };
   sourceClosure: { directory: string; manifestHash: string };
+  target?: ReleaseTargetBinding;
   previousReleaseManifestPath?: string | null;
   releaseProfilePath?: string | null;
 };
@@ -61,6 +66,9 @@ export function assertReleaseRequest(value: unknown): ReleaseRequest {
   }
   if (request.profiles?.resultProfileId !== "lci-lcia-result.v1") {
     throw new Error("release_request_result_profile_unsupported");
+  }
+  if (request.target !== undefined) {
+    request.target = assertReleaseTargetBinding(request.target);
   }
   return request;
 }

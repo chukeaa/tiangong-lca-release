@@ -1,12 +1,42 @@
+---
+title: TianGong LCA Release Operator Guide
+docType: guide
+scope: repo
+status: active
+authoritative: true
+owner: release
+language: en
+whenToUse:
+  - when configuring or operating a deterministic LCI/LCIA release
+  - when bootstrapping, inspecting, packaging, approving, publishing, or verifying a Release Run
+whenToUpdate:
+  - when the operator CLI, target binding, credential boundary, package profiles, or publication workflow changes
+checkPaths:
+  - README.md
+  - .env.example
+  - .agents/skills/tiangong-release-operator/**
+  - specs/release-targets.json
+  - src/cli.ts
+  - src/operator/**
+  - src/target/**
+lastReviewedAt: 2026-07-17
+lastReviewedCommit: fc3ae3c8a31b9a4e2b85e8cd4b9857756c2695f8
+lastReviewedNote: "Documented the explicit-target Codex operator workflow and target-bound publication frontier."
+related:
+  - AGENTS.md
+  - docs/architecture.md
+  - .agents/skills/tiangong-release-operator/SKILL.md
+---
+
 # TianGong LCA Release
 
 Agent-first control plane for deterministic, resumable LCI/LCIA releases.
 
-The release pipeline consumes a frozen `tiangong.calculation-bundle.v1`, builds one-hop LifecycleModels and Result Processes with stable UUID/version lineage, validates canonical TIDAS and ILCD package variants, and publishes only through the actor-scoped `tiangong-lca` CLI.
+The pipeline consumes a frozen `tiangong.calculation-bundle.v1` containing graph evidence, LCI/LCIA results, and an exact source closure. It builds one-hop LifecycleModels and Result Processes with stable UUID/version lineage, validates canonical TIDAS and ILCD variants, constructs four self-contained ZIPs, and publishes only through the actor-scoped `tiangong-lca` CLI.
 
-## Security boundary
+## Security and target boundary
 
-The process inherits these variables only when a remote command is needed:
+Remote access uses these environment variables:
 
 ```text
 TIANGONG_LCA_API_BASE_URL
@@ -14,9 +44,15 @@ TIANGONG_LCA_API_KEY
 TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY
 ```
 
-The API key is a password-equivalent user-session bootstrap. This repository never reads or stores it and never accepts a Supabase service-role key.
+`TIANGONG_LCA_API_KEY` is a password-equivalent user-session bootstrap. The release executable checks only that it is present and passes the protected environment to `tiangong-lca`; it never prints, decodes, puts it in command arguments, or persists it. Never use a Supabase service-role key.
 
-The account behind the key must have the live platform role `data_product_manager`. Authentication is performed by `tiangong-lca`; Edge and Database make the final authorization decision for every private read and state transition.
+The actor must have the live platform role `data_product_manager`. Authentication is performed by `tiangong-lca`; Edge and Database make the final authorization decision for every private read and state transition.
+
+Only actor-scoped `tiangong-lca` commands receive the protected remote environment. Local `tidas-tools` validation, conversion, and packaging processes run with a minimal non-credential environment allowlist.
+
+Public target facts are versioned in `specs/release-targets.json`. Bootstrap freezes the selected target ID, API base URL, publishable-key SHA-256, and derived target fingerprint into the Release Request. The publish plan and v2 approval repeat that fingerprint. Before every remote frontier, the executable recomputes the current environment binding and rejects any mismatch before calling the public CLI.
+
+The ignored repository-local `.env` is loaded automatically by the executable when present. Keep it mode `0600` and never commit it.
 
 ## Development
 
@@ -26,47 +62,75 @@ npm ci
 npm run prepush:gate
 ```
 
-The remote stages require an independently provisioned `tiangong-lca` build that implements `tiangong-lca release --help`; this repository deliberately does not link an old CLI library dependency. During local cross-repo development, point `TIANGONG_LCA_CLI_EXECUTABLE` at that exact built executable. `TIANGONG_TIDAS_TOOLS_EXECUTABLE` similarly selects the release-capable TIDAS tool. Neither override is a credential.
+The repository deliberately does not link an old CLI implementation. Point `TIANGONG_LCA_CLI_EXECUTABLE` at a release-capable `tiangong-lca` build and `TIANGONG_TIDAS_TOOLS_EXECUTABLE` at the exact TIDAS release tool. Neither override is a credential.
 
-## Command surface
+For source operation with clean JSON stdout:
 
 ```bash
-tiangong-release init --input release-request.json --out-dir .release/workspaces/<id>
-tiangong-release plan --run-dir .release/workspaces/<id>
-tiangong-release status --run-dir .release/workspaces/<id>
-tiangong-release next --run-dir .release/workspaces/<id>
-tiangong-release run-stage --run-dir .release/workspaces/<id> --stage <id>
-tiangong-release decision apply --run-dir .release/workspaces/<id> --input decisions.json
-tiangong-release validate --run-dir .release/workspaces/<id>
-tiangong-release package --run-dir .release/workspaces/<id>
-tiangong-release publish --run-dir .release/workspaces/<id> --approve-plan <sha256>
-tiangong-release verify --run-dir .release/workspaces/<id>
+npm run --silent release -- doctor --target production --json
 ```
 
-Use `--json` for stable machine output. Logs go to stderr and large data goes to workspace artifacts.
+## Operator workflow
 
-## Publication workflow
-
-`package` runs every incomplete local stage through deterministic four-ZIP construction. It does not authenticate or mutate remote state:
+Check the explicit target and actor first:
 
 ```bash
-tiangong-release package --run-dir .release/workspaces/<id> --json
+tiangong-release doctor --target production --json
+```
+
+Bootstrap one deterministic run from an exact calculation package:
+
+```bash
+tiangong-release bootstrap --target production --package-id <package-uuid> --json
+```
+
+Bootstrap performs read/download operations only. It verifies the raw Calculation Bundle manifest and every artifact, materializes `source/source-closure.ndjson.gz` into a frozen local source tree, and derives the Release Run UUID from the package, calculation, bundle hash, profile lock, and target fingerprint. An identical retry reuses the same run; conflicting bytes cannot overwrite it. Signed URLs remain only in a deleted temporary projection.
+
+List runs without selecting one implicitly, then inspect an exact directory:
+
+```bash
+tiangong-release runs list --json
+tiangong-release candidate --run-dir .release/workspaces/<id> --json
 tiangong-release plan --run-dir .release/workspaces/<id> --json
+tiangong-release status --run-dir .release/workspaces/<id> --json
+tiangong-release next --run-dir .release/workspaces/<id> --json
 ```
 
-Publication requires an explicit decision bound to the exact `outputs/publish-plan.json` `planHash`:
+Every run-specific command requires `--run-dir`; there is no mutable-latest fallback. `candidate` writes the bounded report `reports/release-candidate.json`, containing counts, hashes, findings, artifact paths, and next commands rather than large dataset arrays.
+
+Run local validation and packaging:
+
+```bash
+tiangong-release validate --run-dir .release/workspaces/<id> --json
+tiangong-release package --run-dir .release/workspaces/<id> --json
+tiangong-release candidate --run-dir .release/workspaces/<id> --json
+```
+
+The four deterministic ZIPs are:
+
+- unit-process full closure in TIDAS;
+- unit-process full closure in ILCD;
+- standalone LifecycleModel/result full closure in TIDAS;
+- standalone LifecycleModel/result full closure in ILCD.
+
+Packaging never authenticates or mutates remote publication state.
+
+## Approval, publication, and readback
+
+Human approval must bind the exact target fingerprint and `outputs/publish-plan.json` `planHash`:
 
 ```json
 {
-  "schemaVersion": "tiangong.release.approval-decision.v1",
+  "schemaVersion": "tiangong.release.approval-decision.v2",
   "releaseRunId": "<release-run-uuid>",
   "publishPlanHash": "<64 lowercase hex characters>",
+  "targetFingerprint": "<64 lowercase hex characters>",
   "decision": "approve",
-  "reason": "Reviewed exact package and validation evidence."
+  "reason": "Reviewed the exact target, package hashes, and validation evidence."
 }
 ```
 
-Apply the immutable decision, publish, then independently verify remote bytes:
+Apply the immutable decision, publish that plan, then independently verify remote bytes:
 
 ```bash
 tiangong-release decision apply --run-dir .release/workspaces/<id> --input approval.json --json
@@ -74,8 +138,12 @@ tiangong-release publish --run-dir .release/workspaces/<id> --approve-plan <plan
 tiangong-release verify --run-dir .release/workspaces/<id> --json
 ```
 
-Stage 18 validates the decision before any remote action, re-hashes the profile lock, Calculation Bundle manifest, publish plan, Release Manifest, and all four ZIPs, then performs idempotent `prepare -> upload -> finalize -> approve` through the public CLI. Stage 19 publishes only with the returned approval ID/hash. Stage 20 starts from a fresh remote status read, downloads all four published ZIPs to `outputs/readback-artifacts/`, verifies exact byte size and SHA-256, submits the readback receipt, and queries the terminal status again.
+Stage 18 revalidates all bindings before remote work, then performs idempotent `prepare -> upload -> finalize -> approve`. Stage 19 publishes only with the returned approval ID/hash. Stage 20 performs a fresh status read, downloads all four ZIPs into `outputs/readback-artifacts/`, verifies exact byte size and SHA-256, submits the readback receipt, and queries terminal status again.
 
-Failures leave a stage ledger entry and may be retried at the same frontier. Upload object keys and prepare/publish idempotency keys are derived from immutable release identities. Once a successor passes, earlier stages are sealed and cannot be rerun. Terminal run status progresses through `ready_for_approval`, `approved`, `published`, and `verified`.
+Failures leave a stage ledger entry and may be retried at the same frontier. A passed successor seals all predecessors. Terminal status progresses through `ready_for_approval`, `approved`, `published`, and `verified`.
 
-Remote request/receipt files are stored under `outputs/`; the combined independent proof is `reports/independent-readback-report.json`. They contain IDs, hashes, public metadata, and storage references only—never the User API Key, password, access/refresh token, or service-role credential.
+Remote request/receipt files contain IDs, hashes, public metadata, and storage references only. The combined proof is `reports/independent-readback-report.json`.
+
+## Codex operation
+
+The repository-local `.agents/skills/tiangong-release-operator/SKILL.md` teaches Codex the bounded workflow. Its default actions are doctor, bootstrap, list, candidate, plan, validation, and package. It requires an exact human confirmation of the current target fingerprint and plan hash before creating a v2 decision or beginning any remote mutation.

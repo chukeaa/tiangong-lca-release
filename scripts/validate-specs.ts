@@ -32,6 +32,13 @@ ajv.addFormat(
 ajv.addFormat("date-time", (value: string) =>
   Number.isFinite(Date.parse(value)),
 );
+ajv.addFormat("uri", (value: string) => {
+  try {
+    return Boolean(new URL(value));
+  } catch {
+    return false;
+  }
+});
 
 for (const schemaPath of [
   "specs/calculation-bundle.schema.json",
@@ -39,6 +46,8 @@ for (const schemaPath of [
   "specs/release-request.schema.json",
   "specs/release-manifest.schema.json",
   "specs/approval-decision.schema.json",
+  "specs/release-target-profile.schema.json",
+  "specs/release-candidate-report.schema.json",
 ]) {
   const schema = readJson(schemaPath);
   ajv.compile(schema);
@@ -74,5 +83,17 @@ assert.deepEqual(stageContracts.runStatuses.slice(-3), [
   "published",
   "verified",
 ]);
+
+const targets = readJson("specs/release-targets.json");
+assert.equal(targets.targets.length, 2);
+const production = targets.targets.find(
+  (target: { targetId: string }) => target.targetId === "production",
+);
+assert.equal(production.targetId, "production");
+assert.match(production.publishableKeySha256, /^[0-9a-f]{64}$/u);
+const fixtureTarget = targets.targets.find(
+  (target: { targetId: string }) => target.targetId === "fixture",
+);
+assert.match(fixtureTarget.apiBaseUrl, /^https:\/\/[^/]+\.invalid\//u);
 
 process.stdout.write("Release specs: valid\n");

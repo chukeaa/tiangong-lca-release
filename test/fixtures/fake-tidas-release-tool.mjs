@@ -4,6 +4,14 @@ import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const args = process.argv.slice(2);
+if (process.env.TIANGONG_LCA_API_KEY) {
+  process.stderr.write("protected release credential reached local tool\n");
+  process.exit(10);
+}
+if (args[0] === "--version") {
+  process.stdout.write("tidas-release-tool 0.0.0-fixture\n");
+  process.exit(0);
+}
 const command = args[0];
 const option = (name) => {
   const index = args.indexOf(name);

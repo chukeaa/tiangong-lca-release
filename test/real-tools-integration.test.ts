@@ -8,7 +8,8 @@ import { initializeReleaseWorkspace } from "../src/workspace/run-store.js";
 import { createCalculationBundleFixture } from "./support/bundle-fixture.js";
 
 const REAL_TOOLS_EXECUTABLE =
-  process.env.TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE;
+  process.env.TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE ??
+  process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
 
 const PACKAGE_STAGES = [
   "resolve-calculation-bundle",
@@ -34,7 +35,7 @@ test(
   {
     skip: REAL_TOOLS_EXECUTABLE
       ? false
-      : "set TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE to run",
+      : "set TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE or TIANGONG_TIDAS_TOOLS_EXECUTABLE to run",
   },
   async () => {
     const root = mkdtempSync(

@@ -6,6 +6,7 @@ export type CalculationBundleArtifactKind =
   | "lci"
   | "lcia"
   | "coverage"
+  | "source_closure"
   | "csv"
   | "json"
   | "hdf5";

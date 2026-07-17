@@ -19,6 +19,10 @@ import { executeReleaseCli } from "../src/cli.js";
 import { readJsonFile } from "../src/io/files.js";
 import { runReleaseStage } from "../src/stages/runner.js";
 import {
+  loadReleaseTargetProfile,
+  releaseTargetBinding,
+} from "../src/target/profile.js";
+import {
   initializeReleaseWorkspace,
   readReleaseRun,
 } from "../src/workspace/run-store.js";
@@ -47,6 +51,7 @@ type PreparedRun = {
   root: string;
   runDirectory: string;
   publishPlanHash: string;
+  targetFingerprint: string;
   restore: () => void;
 };
 
@@ -73,6 +78,9 @@ async function prepareRun(
   const previousTidas = process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
   const previousCli = process.env.TIANGONG_LCA_CLI_EXECUTABLE;
   const previousApiKey = process.env.TIANGONG_LCA_API_KEY;
+  const previousApiBaseUrl = process.env.TIANGONG_LCA_API_BASE_URL;
+  const previousPublishableKey =
+    process.env.TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY;
   process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE = copyExecutable(
     root,
     "fake-tidas-release-tool.mjs",
@@ -85,11 +93,15 @@ async function prepareRun(
   );
   process.env.TIANGONG_LCA_API_KEY =
     "password-equivalent-sentinel-must-not-persist";
+  process.env.TIANGONG_LCA_API_BASE_URL =
+    "https://release.invalid/functions/v1";
+  process.env.TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY = "fixture-publishable-key";
 
   const fixture = createCalculationBundleFixture(root);
+  const target = releaseTargetBinding(loadReleaseTargetProfile("fixture"));
   const runDirectory = path.join(root, "run");
   initializeReleaseWorkspace({
-    request: fixture.request,
+    request: { ...fixture.request, target },
     outDirectory: runDirectory,
     profileLock: { schemaVersion: "tiangong.release.profiles.v1" },
   });
@@ -117,6 +129,8 @@ async function prepareRun(
       ["TIANGONG_TIDAS_TOOLS_EXECUTABLE", previousTidas],
       ["TIANGONG_LCA_CLI_EXECUTABLE", previousCli],
       ["TIANGONG_LCA_API_KEY", previousApiKey],
+      ["TIANGONG_LCA_API_BASE_URL", previousApiBaseUrl],
+      ["TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY", previousPublishableKey],
     ] as const) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
@@ -129,6 +143,7 @@ async function prepareRun(
     root,
     runDirectory,
     publishPlanHash: String(publishPlan.planHash),
+    targetFingerprint: target.targetFingerprint,
     restore,
   };
 }
@@ -156,9 +171,10 @@ test("approval, publish, and independent readback complete through public CLIs",
     writeFileSync(
       decisionPath,
       `${JSON.stringify({
-        schemaVersion: "tiangong.release.approval-decision.v1",
+        schemaVersion: "tiangong.release.approval-decision.v2",
         releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
         publishPlanHash: prepared.publishPlanHash,
+        targetFingerprint: prepared.targetFingerprint,
         decision: "approve",
         reason: "Reviewed exact package and validation evidence.",
       })}\n`,
@@ -278,9 +294,10 @@ test("approval stage preserves manager errors and resumes idempotently", async (
     const firstDecision = await applyApprovalDecision({
       runDirectory: prepared.runDirectory,
       value: {
-        schemaVersion: "tiangong.release.approval-decision.v1",
+        schemaVersion: "tiangong.release.approval-decision.v2",
         releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
         publishPlanHash: prepared.publishPlanHash,
+        targetFingerprint: prepared.targetFingerprint,
         decision: "approve",
       },
     });
@@ -330,9 +347,10 @@ test("approval revalidates the canonical publish-plan hash before remote writes"
     await applyApprovalDecision({
       runDirectory: prepared.runDirectory,
       value: {
-        schemaVersion: "tiangong.release.approval-decision.v1",
+        schemaVersion: "tiangong.release.approval-decision.v2",
         releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
         publishPlanHash: prepared.publishPlanHash,
+        targetFingerprint: prepared.targetFingerprint,
         decision: "approve",
       },
     });
@@ -359,15 +377,79 @@ test("approval revalidates the canonical publish-plan hash before remote writes"
   }
 });
 
+test("remote publication denies target environment drift before the first write", async () => {
+  const prepared = await prepareRun();
+  try {
+    await applyApprovalDecision({
+      runDirectory: prepared.runDirectory,
+      value: {
+        schemaVersion: "tiangong.release.approval-decision.v2",
+        releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
+        publishPlanHash: prepared.publishPlanHash,
+        targetFingerprint: prepared.targetFingerprint,
+        decision: "approve",
+      },
+    });
+    process.env.TIANGONG_LCA_API_BASE_URL =
+      "https://drift.invalid/functions/v1";
+    await assert.rejects(
+      runReleaseStage(prepared.runDirectory, "approval"),
+      /release_target_environment_mismatch:fixture/u,
+    );
+    assert.equal(
+      existsSync(
+        path.join(prepared.runDirectory, ".fake-lca-cli-invocations.jsonl"),
+      ),
+      false,
+    );
+  } finally {
+    prepared.restore();
+  }
+});
+
+test("target-bound publish plans reject legacy or mismatched approvals", async () => {
+  const prepared = await prepareRun();
+  try {
+    await assert.rejects(
+      applyApprovalDecision({
+        runDirectory: prepared.runDirectory,
+        value: {
+          schemaVersion: "tiangong.release.approval-decision.v1",
+          releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
+          publishPlanHash: prepared.publishPlanHash,
+          decision: "approve",
+        },
+      }),
+      /approval_decision_binding_mismatch/u,
+    );
+    await assert.rejects(
+      applyApprovalDecision({
+        runDirectory: prepared.runDirectory,
+        value: {
+          schemaVersion: "tiangong.release.approval-decision.v2",
+          releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
+          publishPlanHash: prepared.publishPlanHash,
+          targetFingerprint: "f".repeat(64),
+          decision: "approve",
+        },
+      }),
+      /approval_decision_binding_mismatch/u,
+    );
+  } finally {
+    prepared.restore();
+  }
+});
+
 test("independent readback fails before confirmation when remote bytes drift", async () => {
   const prepared = await prepareRun();
   try {
     await applyApprovalDecision({
       runDirectory: prepared.runDirectory,
       value: {
-        schemaVersion: "tiangong.release.approval-decision.v1",
+        schemaVersion: "tiangong.release.approval-decision.v2",
         releaseRunId: readReleaseRun(prepared.runDirectory).releaseRunId,
         publishPlanHash: prepared.publishPlanHash,
+        targetFingerprint: prepared.targetFingerprint,
         decision: "approve",
       },
     });

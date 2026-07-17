@@ -67,6 +67,30 @@
         "manifestHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "targetId",
+        "apiBaseUrl",
+        "publishableKeySha256",
+        "targetFingerprint"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release-target-binding.v1" },
+        "targetId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "apiBaseUrl": { "type": "string", "format": "uri" },
+        "publishableKeySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "targetFingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "previousReleaseManifestPath": { "type": ["string", "null"] },
     "releaseProfilePath": { "type": ["string", "null"] }
   }

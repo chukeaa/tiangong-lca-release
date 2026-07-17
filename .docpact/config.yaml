@@ -25,6 +25,7 @@ ownership:
           - .docpact/**
           - .gitignore
           - .env.example
+          - .agents/skills/**
       ownerRepo: release
     - id: release-contracts-identity-and-versioning
       paths:
@@ -43,6 +44,7 @@ ownership:
           - src/materialization/**
           - src/source/**
           - src/stages/**
+          - src/operator/**
           - src/tools/**
           - src/validation/**
           - src/workspace/**
@@ -52,6 +54,7 @@ ownership:
         include:
           - src/approval/**
           - src/publication/**
+          - src/target/**
           - src/cli.ts
           - src/index.ts
       ownerRepo: release
@@ -74,6 +77,7 @@ coverage:
     - .docpact/**
     - .gitignore
     - .env.example
+    - .agents/skills/**
     - specs/**
     - src/**
     - package.json
@@ -113,6 +117,7 @@ routing:
         - src/io/**
         - src/source/**
         - src/stages/**
+        - src/operator/**
         - src/workspace/**
         - docs/architecture.md
     materialization-and-validation:
@@ -126,7 +131,9 @@ routing:
       paths:
         - src/approval/**
         - src/publication/**
+        - src/target/**
         - src/cli.ts
+        - .agents/skills/tiangong-release-operator/**
         - README.md
         - docs/architecture.md
     validation-and-automation:
@@ -152,6 +159,7 @@ routing:
         - docs/**
         - .docpact/**
         - .env.example
+        - .agents/skills/**
     root-integration:
       paths:
         - AGENTS.md
@@ -164,6 +172,8 @@ docInventory:
     - README.md
     - .docpact/config.yaml
     - docs/architecture.md
+  exclude:
+    - .agents/skills/**
 
 repo:
   id: release
@@ -180,6 +190,8 @@ rules:
         kind: doc-ai-layer
       - path: docs/architecture.md
         kind: architecture
+      - path: .agents/skills/tiangong-release-operator/**
+        kind: agent-workflow
     requiredDocs:
       - path: AGENTS.md
         mode: review_or_update

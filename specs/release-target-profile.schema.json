@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/schemas/release-target-profile.v1.json",
+  "title": "TianGong Release Target Profile v1",
+  "oneOf": [
+    { "$ref": "#/$defs/profile" },
+    { "$ref": "#/$defs/binding" },
+    { "$ref": "#/$defs/catalog" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "targetId",
+        "apiBaseUrl",
+        "publishableKeySha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release-target-profile.v1" },
+        "targetId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "apiBaseUrl": { "type": "string", "format": "uri" },
+        "publishableKeySha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "targetId",
+        "apiBaseUrl",
+        "publishableKeySha256",
+        "targetFingerprint"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release-target-binding.v1" },
+        "targetId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "apiBaseUrl": { "type": "string", "format": "uri" },
+        "publishableKeySha256": { "$ref": "#/$defs/sha256" },
+        "targetFingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "targets"],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release-target-catalog.v1" },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      }
+    }
+  }
+}

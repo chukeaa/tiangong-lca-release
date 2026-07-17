@@ -89,7 +89,7 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 7,
+      "minItems": 8,
       "items": { "$ref": "#/$defs/artifact" }
     },
     "calculationEvidence": { "$ref": "#/$defs/nonEmptyObject" },
@@ -129,6 +129,7 @@
             "lci",
             "lcia",
             "coverage",
+            "source_closure",
             "csv",
             "json",
             "hdf5"
