@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/schemas/release-manifest.v1.json",
+  "title": "TianGong TIDAS Release Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "releaseRunId",
+    "releaseVersion",
+    "scope",
+    "profileLockHash",
+    "calculationBundle",
+    "datasets",
+    "packages",
+    "validation",
+    "artifactSetHash",
+    "publishPlanHash"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release-manifest.v1" },
+    "releaseRunId": { "$ref": "#/$defs/uuid" },
+    "releaseVersion": { "$ref": "#/$defs/version" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coverageMode", "selectionManifestHash", "processCount"],
+      "properties": {
+        "coverageMode": { "const": "global_eligible" },
+        "selectionManifestHash": { "$ref": "#/$defs/sha256" },
+        "processCount": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "profileLockHash": { "$ref": "#/$defs/sha256" },
+    "calculationBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calculationId", "bundleContentHash", "manifestSha256"],
+      "properties": {
+        "calculationId": { "$ref": "#/$defs/uuid" },
+        "bundleContentHash": { "$ref": "#/$defs/sha256" },
+        "manifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/package" }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tidas",
+        "ilcd",
+        "semanticRoundtrip",
+        "referenceClosure",
+        "numericParity"
+      ],
+      "properties": {
+        "tidas": { "$ref": "#/$defs/gate" },
+        "ilcd": { "$ref": "#/$defs/gate" },
+        "semanticRoundtrip": { "$ref": "#/$defs/gate" },
+        "referenceClosure": { "$ref": "#/$defs/gate" },
+        "numericParity": { "$ref": "#/$defs/gate" }
+      }
+    },
+    "artifactSetHash": { "$ref": "#/$defs/sha256" },
+    "publishPlanHash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byteSize", "mediaType"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byteSize": { "$ref": "#/$defs/nonNegativeInteger" },
+        "mediaType": { "type": "string", "minLength": 1 }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "datasetType",
+        "role",
+        "uuid",
+        "version",
+        "versionSignificantHash",
+        "semanticHash",
+        "canonicalContentHash",
+        "artifact"
+      ],
+      "properties": {
+        "datasetType": {
+          "enum": [
+            "process",
+            "lifecyclemodel",
+            "flow",
+            "flowproperty",
+            "unitgroup",
+            "lciamethod",
+            "source",
+            "contact"
+          ]
+        },
+        "role": {
+          "enum": [
+            "unit_process",
+            "result_process",
+            "lifecycle_model",
+            "support"
+          ]
+        },
+        "uuid": { "$ref": "#/$defs/uuid" },
+        "version": { "$ref": "#/$defs/version" },
+        "versionSignificantHash": { "$ref": "#/$defs/sha256" },
+        "semanticHash": { "$ref": "#/$defs/sha256" },
+        "canonicalContentHash": { "$ref": "#/$defs/sha256" },
+        "lineageKeyHash": { "$ref": "#/$defs/sha256" },
+        "artifact": { "$ref": "#/$defs/artifactRef" }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "format",
+        "selfContained",
+        "closureHash",
+        "artifact"
+      ],
+      "properties": {
+        "profileId": {
+          "enum": [
+            "unit-process-full-closure.v1",
+            "standalone-lifecyclemodel-result-full-closure.v1"
+          ]
+        },
+        "format": { "enum": ["tidas", "ilcd"] },
+        "selfContained": { "const": true },
+        "closureHash": { "$ref": "#/$defs/sha256" },
+        "artifact": { "$ref": "#/$defs/artifactRef" }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "report"],
+      "properties": {
+        "status": { "const": "passed" },
+        "report": { "$ref": "#/$defs/artifactRef" }
+      }
+    }
+  }
+}
