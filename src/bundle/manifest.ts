@@ -29,7 +29,7 @@ export function assertCalculationBundleManifest(
   if (manifest.schemaVersion !== "tiangong.calculation-bundle.v1") {
     throw new Error("calculation_bundle_schema_unsupported");
   }
-  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length < 7) {
+  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length < 8) {
     throw new Error("calculation_bundle_artifacts_incomplete");
   }
   if (

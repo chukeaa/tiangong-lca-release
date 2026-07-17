@@ -15,6 +15,8 @@ import {
 } from "../io/files.js";
 import type { StageArtifact, StageRecord } from "../stages/types.js";
 import { runJsonCommand, tiangongCliExecutable } from "../tools/external.js";
+import { assertRemoteTargetFrontier } from "../target/frontier.js";
+import { targetPlanReference } from "../target/profile.js";
 import { releaseWorkspaceLayout } from "../workspace/layout.js";
 import { readReleaseRun, type ReleaseRequest } from "../workspace/run-store.js";
 
@@ -201,6 +203,7 @@ async function assertReleasePlan(
     profileLockHash: plan.profileLockHash,
     calculationBundleHash: plan.calculationBundleHash,
     artifactSetHash: plan.artifactSetHash,
+    ...(plan.target === undefined ? {} : { target: plan.target }),
     datasets: plan.datasets,
     packages: plan.packages,
   } as unknown as JsonValue;
@@ -257,6 +260,11 @@ async function assertReleasePlan(
     manifest.scope,
     "release_manifest_scope_invalid",
   );
+  const expectedTarget = request.target
+    ? targetPlanReference(request.target)
+    : null;
+  const planTarget = plan.target ?? null;
+  const manifestTarget = manifest.target ?? null;
   assertHash(
     stringField(
       manifest,
@@ -305,6 +313,10 @@ async function assertReleasePlan(
       canonicalize(manifestPackages as unknown as JsonValue) ||
     canonicalize(plan.datasets as JsonValue) !==
       canonicalize(manifestDatasets as unknown as JsonValue) ||
+    canonicalize(planTarget as JsonValue) !==
+      canonicalize(expectedTarget as unknown as JsonValue) ||
+    canonicalize(manifestTarget as JsonValue) !==
+      canonicalize(expectedTarget as unknown as JsonValue) ||
     request.scope.coverageMode !== "global_eligible" ||
     request.scope.coverageMode !== bundle.scope.coverageMode ||
     request.scope.selectionManifestHash !== bundle.scope.selectionManifestHash
@@ -448,6 +460,10 @@ function nextStageCommand(
 export async function approvalStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<RemoteStageResult> {
+  assertRemoteTargetFrontier({
+    runDirectory: layout.root,
+    requireApproval: true,
+  });
   const decision = readApprovalDecision(layout.root);
   const { request, plan, manifest, lock, bundle } =
     await assertReleasePlan(layout);
@@ -621,6 +637,10 @@ export async function approvalStage(
 export async function publishStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<RemoteStageResult> {
+  assertRemoteTargetFrontier({
+    runDirectory: layout.root,
+    requireApproval: true,
+  });
   readApprovalDecision(layout.root);
   const { request, plan } = await assertReleasePlan(layout);
   const publishPlanHash = stringField(
@@ -775,6 +795,10 @@ function assertReadbackStatus(
 export async function readbackVerifyStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<RemoteStageResult> {
+  assertRemoteTargetFrontier({
+    runDirectory: layout.root,
+    requireApproval: true,
+  });
   const { request, plan, manifest, lock } = await assertReleasePlan(layout);
   const publishPlanHash = stringField(
     plan,

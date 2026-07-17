@@ -19,7 +19,7 @@ checkPaths:
   - src/**
 lastReviewedAt: 2026-07-17
 lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
-lastReviewedNote: "Documented Release Core workspace integration during initial Docpact onboarding; runtime architecture is unchanged."
+lastReviewedNote: "Added deterministic calculation-package bootstrap, versioned target binding, compact operator reports, and the Codex publication frontier."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -31,7 +31,9 @@ related:
 The executable flow is:
 
 ```text
-Worker Calculation Bundle
+data-manager calculation package ID
+  -> actor-scoped Calculation Bundle projection and exact downloads
+  -> frozen manifest, source closure, and target-bound Release Request
   -> local Release Run stages and cache
   -> tidas-sdk programmatic validation
   -> tidas-tools conversion / closure / deterministic ZIP
@@ -42,6 +44,16 @@ Worker Calculation Bundle
 
 Calculation and publication are separate. A completed calculation may be previewed and downloaded without creating a public release. Publication is possible only after canonical artifacts, validation, closure, semantic round-trip, an immutable publish plan, and durable approval all match.
 
+## Operator intake boundary
+
+`doctor --target <id>` validates the Node runtime, versioned public target profile, protected credential presence, CLI/tool availability, and a read-only manager authorization probe. It does not create or mutate a release.
+
+`bootstrap --target <id> --package-id <uuid>` asks `tiangong-lca` for the actor-scoped Calculation Bundle projection, keeps signed URLs in a temporary directory, downloads the exact raw manifest and every declared artifact, and re-verifies byte size, SHA-256, bundle content hash, scope, and required artifact kinds. The required `source_closure` NDJSON artifact is transformed into the repository's frozen source-tree contract without changing canonical document bytes.
+
+The Release Run UUID is UUIDv5-derived from immutable package, calculation, bundle, profile-lock, and target facts. The same input reuses the same workspace; no command chooses a mutable latest run. `runs list` is discovery only, while every run-specific operation requires an exact directory. `candidate` is the bounded F2 report surface for Agents and humans.
+
+The legacy `init` path remains readable for existing local runs. A run without a target binding may execute local stages, but it can never cross a remote frontier.
+
 The relational platform stores release/index/hash/status/approval/audit facts. Generated datasets and packages remain immutable objects and never become ordinary editable Process or LifecycleModel rows.
 
 ## Workspace integration boundary
@@ -50,11 +62,13 @@ The relational platform stores release/index/hash/status/approval/audit facts. G
 
 ## Remote stage boundary
 
+The target profile contains only public environment identity: target ID, API base URL, and the SHA-256 of the expected publishable key. Its canonical fingerprint is frozen in the Release Request, included in the publish-plan hash, and repeated by approval-decision v2. Immediately before any remote command, Release Core requires the current environment, request, publish plan, and approval to bind the same fingerprint. This is a local fail-closed guard in addition to actor authorization enforced by Edge and Database.
+
 The three remote stages use only the public `tiangong-lca release` command family:
 
 ```text
 18 approval
-  local exact-plan decision
+  local exact-target and exact-plan v2 decision
   -> prepare run
   -> upload four content-addressed ZIPs
   -> service-only artifact finalize after Edge byte/hash verification

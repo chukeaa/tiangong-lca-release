@@ -1,16 +1,49 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lca.tiangong.earth/schemas/release-approval-decision.v1.json",
-  "title": "TianGong Release Approval Decision v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "releaseRunId", "publishPlanHash", "decision"],
-  "properties": {
-    "schemaVersion": { "const": "tiangong.release.approval-decision.v1" },
-    "releaseRunId": { "type": "string", "format": "uuid" },
-    "publishPlanHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "decision": { "const": "approve" },
+  "$id": "https://lca.tiangong.earth/schemas/release-approval-decision.json",
+  "title": "TianGong Release Approval Decision",
+  "oneOf": [{ "$ref": "#/$defs/v1" }, { "$ref": "#/$defs/v2" }],
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
-    "expiresAt": { "type": "string", "format": "date-time" }
+    "v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "releaseRunId",
+        "publishPlanHash",
+        "decision"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release.approval-decision.v1" },
+        "releaseRunId": { "$ref": "#/$defs/uuid" },
+        "publishPlanHash": { "$ref": "#/$defs/sha256" },
+        "decision": { "const": "approve" },
+        "reason": { "$ref": "#/$defs/reason" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "releaseRunId",
+        "publishPlanHash",
+        "targetFingerprint",
+        "decision"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "tiangong.release.approval-decision.v2" },
+        "releaseRunId": { "$ref": "#/$defs/uuid" },
+        "publishPlanHash": { "$ref": "#/$defs/sha256" },
+        "targetFingerprint": { "$ref": "#/$defs/sha256" },
+        "decision": { "const": "approve" },
+        "reason": { "$ref": "#/$defs/reason" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    }
   }
 }

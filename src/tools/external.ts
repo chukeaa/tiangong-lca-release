@@ -26,10 +26,12 @@ export async function runJsonCommand(input: {
   executable: string;
   args: string[];
   cwd: string;
+  env?: NodeJS.ProcessEnv;
 }): Promise<JsonValue & { status?: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.executable, input.args, {
       cwd: input.cwd,
+      env: input.env ?? process.env,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -114,6 +116,102 @@ export async function runJsonCommand(input: {
       resolve(result);
     });
   });
+}
+
+export async function runTextCommand(input: {
+  executable: string;
+  args: string[];
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(input.executable, input.args, {
+      cwd: input.cwd,
+      env: input.env ?? process.env,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let bytes = 0;
+    let overflow = false;
+    const capture = (target: Buffer[], chunk: Buffer) => {
+      bytes += chunk.byteLength;
+      if (bytes > MAX_CAPTURE_BYTES) {
+        overflow = true;
+        child.kill("SIGTERM");
+        return;
+      }
+      target.push(chunk);
+    };
+    child.stdout.on("data", (chunk: Buffer) => capture(stdout, chunk));
+    child.stderr.on("data", (chunk: Buffer) => capture(stderr, chunk));
+    child.on("error", (error) => {
+      reject(
+        new ExternalCommandError({
+          code: "external_command_spawn_failed",
+          message: `${input.executable}: ${error.message}`,
+        }),
+      );
+    });
+    child.on("close", (exitCode) => {
+      if (overflow) {
+        reject(
+          new ExternalCommandError({
+            code: "external_command_output_too_large",
+            message: `${input.executable} exceeded ${MAX_CAPTURE_BYTES} captured bytes.`,
+            exitCode,
+          }),
+        );
+        return;
+      }
+      const result = {
+        exitCode: exitCode ?? 1,
+        stdout: Buffer.concat(stdout).toString("utf8").trim(),
+        stderr: Buffer.concat(stderr).toString("utf8").trim(),
+      };
+      if (result.exitCode !== 0) {
+        reject(
+          new ExternalCommandError({
+            code: "external_command_failed",
+            message:
+              result.stderr ||
+              `${input.executable} exited with ${result.exitCode}.`,
+            exitCode,
+          }),
+        );
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
+export function localToolEnvironment(
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const allowed = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TZ",
+    "PYTHONUTF8",
+    "PYTHONIOENCODING",
+    "SYSTEMROOT",
+    "WINDIR",
+    "PATHEXT",
+  ];
+  return Object.fromEntries(
+    allowed.flatMap((name) => {
+      const value = source[name];
+      return value === undefined ? [] : [[name, value]];
+    }),
+  );
 }
 
 export function tidasToolsExecutable(): string {

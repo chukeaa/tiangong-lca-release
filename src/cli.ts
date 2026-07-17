@@ -9,12 +9,17 @@ import {
 } from "./approval/decision.js";
 import type { JsonValue } from "./contracts/json.js";
 import { readJsonFile, sha256File, writeJsonAtomic } from "./io/files.js";
+import { bootstrapReleaseRun } from "./operator/bootstrap.js";
+import { buildReleaseCandidateReport } from "./operator/candidate.js";
+import { releaseDoctor } from "./operator/doctor.js";
+import { listReleaseRuns } from "./operator/runs.js";
 import {
   releasePlan,
   releaseRunSummary,
   runReleaseStage,
 } from "./stages/runner.js";
 import { STAGE_IDS, type StageId } from "./stages/catalog.js";
+import { assertRemoteTargetFrontier } from "./target/frontier.js";
 import {
   assertReleaseRequest,
   initializeReleaseWorkspace,
@@ -32,6 +37,10 @@ export type CliResult = {
 const mainHelp = `TianGong LCA Release control plane
 
 Usage:
+  tiangong-release doctor --target <id> [--json]
+  tiangong-release bootstrap --target <id> --package-id <uuid> [--root <dir>] [--json]
+  tiangong-release runs list [--root <dir>] [--limit <n>] [--json]
+  tiangong-release candidate --run-dir <dir> [--json]
   tiangong-release init --input <file> --out-dir <dir> [--json]
   tiangong-release plan --run-dir <dir> [--json]
   tiangong-release status --run-dir <dir> [--json]
@@ -45,7 +54,8 @@ Usage:
 
 Security:
   Remote stages inherit the protected TIANGONG_LCA_API_* environment and invoke
-  tiangong-lca. This executable never reads, decodes, prints, or persists the user API key.
+  tiangong-lca. This executable checks only API-key presence and never decodes,
+  prints, places in arguments, or persists the credential value.
 `;
 
 function jsonOutput(value: unknown): string {
@@ -64,6 +74,28 @@ function humanStatus(value: ReturnType<typeof releaseRunSummary>): string {
     "Next:",
     ...(value.nextCommands.length
       ? value.nextCommands.map((command) => `- ${command}`)
+      : ["- none"]),
+    "",
+  ].join("\n");
+}
+
+function humanOperatorResult(input: {
+  title: string;
+  status: string;
+  nextCommands: string[];
+  artifactPaths?: string[];
+}): string {
+  return [
+    input.title,
+    "",
+    `Status: ${input.status}`,
+    ...(input.artifactPaths?.length
+      ? ["", "Artifacts:", ...input.artifactPaths.map((item) => `- ${item}`)]
+      : []),
+    "",
+    "Next:",
+    ...(input.nextCommands.length
+      ? input.nextCommands.map((item) => `- ${item}`)
       : ["- none"]),
     "",
   ].join("\n");
@@ -127,6 +159,114 @@ function normalizeRequestPaths(
     );
   }
   return resolved;
+}
+
+async function runDoctorCommand(args: string[]): Promise<CliResult> {
+  const values = parseCommandOptions(args, ["target"]);
+  if (values.help) return { exitCode: 0, stdout: mainHelp, stderr: "" };
+  const targetId = required(values.target as string | undefined, "--target");
+  const report = await releaseDoctor({ targetId });
+  return {
+    exitCode: report.status === "ready" ? 0 : 2,
+    stdout: values.json
+      ? jsonOutput(report)
+      : humanOperatorResult({
+          title: `Release doctor (${targetId})`,
+          status: report.status,
+          nextCommands: report.nextCommands,
+        }),
+    stderr: "",
+  };
+}
+
+async function runBootstrapCommand(args: string[]): Promise<CliResult> {
+  const values = parseCommandOptions(args, [
+    "target",
+    "package-id",
+    "root",
+    "previous-release-manifest",
+  ]);
+  if (values.help) return { exitCode: 0, stdout: mainHelp, stderr: "" };
+  const targetId = required(values.target as string | undefined, "--target");
+  const packageId = required(
+    values["package-id"] as string | undefined,
+    "--package-id",
+  );
+  const report = await bootstrapReleaseRun({
+    packageId,
+    targetId,
+    ...(values.root ? { releaseRoot: String(values.root) } : {}),
+    ...(values["previous-release-manifest"]
+      ? {
+          previousReleaseManifestPath: String(
+            values["previous-release-manifest"],
+          ),
+        }
+      : {}),
+  });
+  return {
+    exitCode: 0,
+    stdout: values.json
+      ? jsonOutput(report)
+      : humanOperatorResult({
+          title: `Release run ${report.releaseRunId}`,
+          status: report.status,
+          artifactPaths: report.artifactPaths,
+          nextCommands: report.nextCommands,
+        }),
+    stderr: "",
+  };
+}
+
+function runRunsListCommand(args: string[]): CliResult {
+  const values = parseCommandOptions(args, ["root", "limit"]);
+  if (values.help) return { exitCode: 0, stdout: mainHelp, stderr: "" };
+  const limit = values.limit === undefined ? undefined : Number(values.limit);
+  const report = listReleaseRuns({
+    ...(values.root ? { releaseRoot: String(values.root) } : {}),
+    ...(limit === undefined ? {} : { limit }),
+  });
+  return {
+    exitCode: 0,
+    stdout: values.json
+      ? jsonOutput(report)
+      : humanOperatorResult({
+          title: `Release runs (${report.returned}/${report.total})`,
+          status: report.status,
+          artifactPaths: report.artifactPaths,
+          nextCommands: report.nextCommands,
+        }),
+    stderr: "",
+  };
+}
+
+async function runCandidateCommand(args: string[]): Promise<CliResult> {
+  const values = parseCommandOptions(args, ["run-dir"]);
+  if (values.help) return { exitCode: 0, stdout: mainHelp, stderr: "" };
+  const runDirectory = path.resolve(
+    required(values["run-dir"] as string | undefined, "--run-dir"),
+  );
+  const candidate = await buildReleaseCandidateReport({ runDirectory });
+  const body = {
+    ...candidate.report,
+    reportPath: candidate.reportPath,
+    reportSha256: candidate.reportSha256,
+  };
+  return {
+    exitCode: 0,
+    stdout: values.json
+      ? jsonOutput(body)
+      : humanOperatorResult({
+          title: `Release candidate ${candidate.report.releaseRunId}`,
+          status: candidate.report.releaseStatus,
+          artifactPaths: [
+            candidate.reportPath,
+            ...candidate.report.artifactPaths,
+          ],
+          nextCommands: candidate.report.nextCommands,
+        }),
+    stderr: "",
+  };
 }
 
 async function runInit(args: string[]): Promise<CliResult> {
@@ -249,6 +389,10 @@ async function runDecisionApplyCommand(args: string[]): Promise<CliResult> {
     schemaVersion: "tiangong.release.decision-apply.v1",
     releaseRunId: applied.decision.releaseRunId,
     publishPlanHash: applied.decision.publishPlanHash,
+    ...(applied.decision.schemaVersion ===
+    "tiangong.release.approval-decision.v2"
+      ? { targetFingerprint: applied.decision.targetFingerprint }
+      : {}),
     decision: applied.decision.decision,
     decisionPath: applied.path,
     decisionSha256: applied.sha256,
@@ -330,15 +474,20 @@ async function runPublishCommand(args: string[]): Promise<CliResult> {
   if (plan.planHash !== approvedPlanHash) {
     throw new Error("approval_plan_hash_mismatch");
   }
+  const target = assertRemoteTargetFrontier({
+    runDirectory,
+    requireApproval: false,
+  });
   if (existsSync(layout.approvalDecision)) {
     readApprovalDecision(runDirectory);
   } else {
     await applyApprovalDecision({
       runDirectory,
       value: {
-        schemaVersion: "tiangong.release.approval-decision.v1",
+        schemaVersion: "tiangong.release.approval-decision.v2",
         releaseRunId: plan.releaseRunId,
         publishPlanHash: approvedPlanHash,
+        targetFingerprint: target.targetFingerprint,
         decision: "approve",
       },
     });
@@ -387,6 +536,24 @@ export async function executeReleaseCli(argv: string[]): Promise<CliResult> {
         [subcommand, ...rest].filter((item): item is string => Boolean(item)),
       );
     }
+    if (command === "doctor") {
+      return await runDoctorCommand(
+        [subcommand, ...rest].filter((item): item is string => Boolean(item)),
+      );
+    }
+    if (command === "bootstrap") {
+      return await runBootstrapCommand(
+        [subcommand, ...rest].filter((item): item is string => Boolean(item)),
+      );
+    }
+    if (command === "runs" && subcommand === "list") {
+      return runRunsListCommand(rest);
+    }
+    if (command === "candidate") {
+      return await runCandidateCommand(
+        [subcommand, ...rest].filter((item): item is string => Boolean(item)),
+      );
+    }
     if (command === "plan") {
       return await runPlanCommand(
         [subcommand, ...rest].filter((item): item is string => Boolean(item)),
@@ -426,12 +593,19 @@ export async function executeReleaseCli(argv: string[]): Promise<CliResult> {
     throw new Error(`unknown_command:${command}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const code =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? String((error as { code: string }).code)
+        : message.split(":", 1)[0];
     return {
       exitCode: 1,
       stdout: "",
       stderr: jsonOutput({
         schemaVersion: "tiangong.release-error.v1",
-        code: message.split(":", 1)[0],
+        code,
         message,
         retryable: !message.startsWith("unknown_command"),
       }),
@@ -440,6 +614,18 @@ export async function executeReleaseCli(argv: string[]): Promise<CliResult> {
 }
 
 if (import.meta.main) {
+  try {
+    process.loadEnvFile(path.resolve(".env"));
+  } catch (error) {
+    if (
+      !error ||
+      typeof error !== "object" ||
+      !("code" in error) ||
+      (error as { code?: unknown }).code !== "ENOENT"
+    ) {
+      throw error;
+    }
+  }
   const result = await executeReleaseCli(process.argv.slice(2));
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);

@@ -11,6 +11,10 @@ import {
 import path from "node:path";
 
 const argv = process.argv.slice(2);
+if (argv[0] === "--version") {
+  process.stdout.write("tiangong-lca 0.0.0-fixture\n");
+  process.exit(0);
+}
 if (argv[0] !== "release" || !argv[1]) {
   process.stderr.write(
     `${JSON.stringify({ code: "fake_release_command_required", message: "release action required" })}\n`,
@@ -68,7 +72,64 @@ if (!outputPath) fail("fake_output_required", "--output is required", 2);
 let outputData;
 let state = readState();
 
-if (action === "prepare") {
+if (action === "calculation-bundle") {
+  const packageId = option("--package-id");
+  if (
+    !process.env.FAKE_CALCULATION_PACKAGE_ID ||
+    packageId !== process.env.FAKE_CALCULATION_PACKAGE_ID
+  ) {
+    fail("package_not_found", "Fake calculation package was not found.", 2);
+  }
+  const bundleDirectory = process.env.FAKE_CALCULATION_BUNDLE_DIRECTORY;
+  const manifestPath = path.join(bundleDirectory, "manifest.json");
+  const manifestBytes = readFileSync(manifestPath);
+  const manifest = JSON.parse(manifestBytes.toString("utf8"));
+  outputData = {
+    packageId,
+    calculationBundle: {
+      schemaVersion: manifest.schemaVersion,
+      calculationId: manifest.calculationId,
+      bundleContentHash: manifest.bundleContentHash,
+      manifest,
+      manifestDownload: {
+        sha256: sha256(manifestBytes),
+        byteSize: manifestBytes.byteLength,
+        mediaType: "application/json",
+        signedDownloadUrl: `data:application/json;base64,${manifestBytes.toString("base64")}`,
+      },
+      artifacts: manifest.artifacts.map((artifact) => ({
+        ...artifact,
+        signedDownloadUrl: `https://download.invalid/${artifact.path}`,
+      })),
+    },
+  };
+} else if (action === "calculation-artifact") {
+  const packageId = option("--package-id");
+  if (
+    !process.env.FAKE_CALCULATION_PACKAGE_ID ||
+    packageId !== process.env.FAKE_CALCULATION_PACKAGE_ID
+  ) {
+    fail("package_not_found", "Fake calculation package was not found.", 2);
+  }
+  const bundleDirectory = process.env.FAKE_CALCULATION_BUNDLE_DIRECTORY;
+  const artifactPath = option("--artifact-path");
+  const manifest = readJson(path.join(bundleDirectory, "manifest.json"));
+  const artifact = manifest.artifacts.find(
+    (candidate) => candidate.path === artifactPath,
+  );
+  if (!artifact) {
+    fail("calculation_artifact_not_found", "Fake artifact was not found.", 2);
+  }
+  const bytes = readFileSync(path.join(bundleDirectory, artifact.path));
+  if (
+    bytes.byteLength !== artifact.byteSize ||
+    sha256(bytes) !== artifact.sha256
+  ) {
+    fail("calculation_artifact_drift", "Fake artifact integrity drifted.");
+  }
+  mkdirSync(path.dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, bytes, { mode: 0o600 });
+} else if (action === "prepare") {
   const input = readJson(inputPath);
   state = {
     ...state,
@@ -232,7 +293,9 @@ if (action === "prepare") {
   fail("fake_action_unknown", `Unknown fake action: ${action}`, 2);
 }
 
-if (action !== "artifact-download") writeJson(outputPath, outputData);
+if (action !== "artifact-download" && action !== "calculation-artifact") {
+  writeJson(outputPath, outputData);
+}
 const bytes = readFileSync(outputPath);
 const report = {
   schemaVersion: "tiangong.cli.lca-release.v1",
@@ -245,7 +308,11 @@ const report = {
     sha256: sha256(bytes),
     byteSize: statSync(outputPath).size,
     mediaType:
-      action === "artifact-download" ? "application/zip" : "application/json",
+      action === "artifact-download"
+        ? "application/zip"
+        : action === "calculation-artifact"
+          ? "application/octet-stream"
+          : "application/json",
   },
   warnings: [],
   nextCommands: [],

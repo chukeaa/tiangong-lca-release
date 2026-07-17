@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { calculateBundleContentHash } from "../../src/bundle/manifest.js";
@@ -39,6 +39,7 @@ function writeGzipArtifact(input: {
   kind: CalculationBundleArtifactKind;
   relativePath: string;
   records: JsonValue[];
+  schemaVersion?: string;
 }): CalculationBundleArtifact {
   const plain = ndjson(input.records);
   const compressed = gzipSync(plain, { level: 6 });
@@ -48,7 +49,8 @@ function writeGzipArtifact(input: {
   return {
     kind: input.kind,
     path: input.relativePath,
-    schemaVersion: `tiangong.calculation-bundle.${input.kind}.v1`,
+    schemaVersion:
+      input.schemaVersion ?? `tiangong.calculation-bundle.${input.kind}.v1`,
     mediaType: "application/x-ndjson",
     compression: "gzip",
     sha256: sha256(compressed),
@@ -684,6 +686,33 @@ export function createCalculationBundleFixture(rootDirectory: string): {
   const sourceClosureDirectory = path.join(rootDirectory, "source-closure");
   mkdirSync(bundleDirectory, { recursive: true });
   mkdirSync(sourceClosureDirectory, { recursive: true });
+  const sourceClosure = writeSourceClosure(sourceClosureDirectory);
+  const sourceManifest = JSON.parse(
+    readFileSync(path.join(sourceClosureDirectory, "manifest.json"), "utf8"),
+  ) as {
+    datasets: Array<{
+      datasetType: string;
+      role: string;
+      uuid: string;
+      version: string;
+      path: string;
+    }>;
+  };
+  const sourceClosureRecords = sourceManifest.datasets.map((entry) => {
+    const document = JSON.parse(
+      readFileSync(path.join(sourceClosureDirectory, entry.path), "utf8"),
+    ) as JsonValue;
+    return {
+      schemaVersion: "tiangong.source-closure.dataset.v1",
+      datasetType: entry.datasetType,
+      role: entry.role,
+      uuid: entry.uuid,
+      version: entry.version,
+      path: entry.path,
+      sha256: sha256(canonicalize(document)),
+      document,
+    } as JsonValue;
+  });
 
   const flow = { id: REFERENCE_FLOW_ID, version: "01.00.000" };
   const artifacts = [
@@ -726,6 +755,13 @@ export function createCalculationBundleFixture(rootDirectory: string): {
           allocationFraction: 1,
         },
       ],
+    }),
+    writeGzipArtifact({
+      directory: bundleDirectory,
+      kind: "source_closure",
+      relativePath: "source/source-closure.ndjson.gz",
+      schemaVersion: "tiangong.source-closure.bundle.v1",
+      records: sourceClosureRecords,
     }),
     writeGzipArtifact({
       directory: bundleDirectory,
@@ -833,7 +869,6 @@ export function createCalculationBundleFixture(rootDirectory: string): {
   const manifestPath = path.join(bundleDirectory, "manifest.json");
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
-  const sourceClosure = writeSourceClosure(sourceClosureDirectory);
   return {
     bundleDirectory,
     manifestPath,

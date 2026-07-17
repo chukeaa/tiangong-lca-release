@@ -32,6 +32,7 @@
       }
     },
     "profileLockHash": { "$ref": "#/$defs/sha256" },
+    "target": { "$ref": "#/$defs/target" },
     "calculationBundle": {
       "type": "object",
       "additionalProperties": false,
@@ -90,6 +91,15 @@
         "sha256": { "$ref": "#/$defs/sha256" },
         "byteSize": { "$ref": "#/$defs/nonNegativeInteger" },
         "mediaType": { "type": "string", "minLength": 1 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetId", "targetFingerprint"],
+      "properties": {
+        "targetId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "targetFingerprint": { "$ref": "#/$defs/sha256" }
       }
     },
     "dataset": {

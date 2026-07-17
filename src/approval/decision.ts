@@ -5,14 +5,24 @@ import { readJsonFile, sha256File, writeJsonAtomic } from "../io/files.js";
 import { normalizeUuid } from "../identity/uuid.js";
 import { releaseWorkspaceLayout } from "../workspace/layout.js";
 
-export type ApprovalDecision = {
-  schemaVersion: "tiangong.release.approval-decision.v1";
+type ApprovalDecisionFields = {
   releaseRunId: string;
   publishPlanHash: string;
   decision: "approve";
   reason?: string;
   expiresAt?: string;
 };
+
+export type ApprovalDecisionV1 = ApprovalDecisionFields & {
+  schemaVersion: "tiangong.release.approval-decision.v1";
+};
+
+export type ApprovalDecisionV2 = ApprovalDecisionFields & {
+  schemaVersion: "tiangong.release.approval-decision.v2";
+  targetFingerprint: string;
+};
+
+export type ApprovalDecision = ApprovalDecisionV1 | ApprovalDecisionV2;
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
@@ -25,6 +35,7 @@ export function assertApprovalDecision(value: unknown): ApprovalDecision {
     "schemaVersion",
     "releaseRunId",
     "publishPlanHash",
+    "targetFingerprint",
     "decision",
     "reason",
     "expiresAt",
@@ -33,19 +44,36 @@ export function assertApprovalDecision(value: unknown): ApprovalDecision {
     throw new Error("approval_decision_unknown_field");
   }
   if (
-    source.schemaVersion !== "tiangong.release.approval-decision.v1" ||
+    (source.schemaVersion !== "tiangong.release.approval-decision.v1" &&
+      source.schemaVersion !== "tiangong.release.approval-decision.v2") ||
     source.decision !== "approve" ||
     typeof source.publishPlanHash !== "string" ||
     !SHA256_PATTERN.test(source.publishPlanHash)
   ) {
     throw new Error("approval_decision_contract_invalid");
   }
+  if (
+    source.schemaVersion === "tiangong.release.approval-decision.v2" &&
+    (typeof source.targetFingerprint !== "string" ||
+      !SHA256_PATTERN.test(source.targetFingerprint))
+  ) {
+    throw new Error("approval_decision_target_invalid");
+  }
+  if (
+    source.schemaVersion === "tiangong.release.approval-decision.v1" &&
+    source.targetFingerprint !== undefined
+  ) {
+    throw new Error("approval_decision_target_invalid");
+  }
   const decision: ApprovalDecision = {
-    schemaVersion: "tiangong.release.approval-decision.v1",
+    schemaVersion: source.schemaVersion,
     releaseRunId: normalizeUuid(String(source.releaseRunId)),
     publishPlanHash: source.publishPlanHash,
+    ...(source.schemaVersion === "tiangong.release.approval-decision.v2"
+      ? { targetFingerprint: String(source.targetFingerprint) }
+      : {}),
     decision: "approve",
-  };
+  } as ApprovalDecision;
   if (source.reason !== undefined) {
     if (
       typeof source.reason !== "string" ||
@@ -72,13 +100,38 @@ function assertDecisionBinding(
   decision: ApprovalDecision,
   releaseRunId: string,
   publishPlanHash: string,
+  targetFingerprint?: string,
 ): void {
   if (
     decision.releaseRunId !== normalizeUuid(releaseRunId) ||
-    decision.publishPlanHash !== publishPlanHash
+    decision.publishPlanHash !== publishPlanHash ||
+    (targetFingerprint !== undefined &&
+      (decision.schemaVersion !== "tiangong.release.approval-decision.v2" ||
+        decision.targetFingerprint !== targetFingerprint)) ||
+    (targetFingerprint === undefined &&
+      decision.schemaVersion !== "tiangong.release.approval-decision.v1")
   ) {
     throw new Error("approval_decision_binding_mismatch");
   }
+}
+
+function planTargetFingerprint(
+  plan: Record<string, unknown>,
+): string | undefined {
+  if (plan.target === undefined) return undefined;
+  if (
+    !plan.target ||
+    typeof plan.target !== "object" ||
+    Array.isArray(plan.target)
+  ) {
+    throw new Error("publish_plan_target_invalid");
+  }
+  const fingerprint = (plan.target as Record<string, unknown>)
+    .targetFingerprint;
+  if (typeof fingerprint !== "string" || !SHA256_PATTERN.test(fingerprint)) {
+    throw new Error("publish_plan_target_invalid");
+  }
+  return fingerprint;
 }
 
 export async function applyApprovalDecision(input: {
@@ -94,14 +147,15 @@ export async function applyApprovalDecision(input: {
   const plan = readJsonFile<Record<string, unknown>>(layout.publishPlan);
   const planHash = String(plan.planHash ?? "");
   const releaseRunId = String(plan.releaseRunId ?? "");
+  const targetFingerprint = planTargetFingerprint(plan);
   const decision = assertApprovalDecision(input.value);
-  assertDecisionBinding(decision, releaseRunId, planHash);
+  assertDecisionBinding(decision, releaseRunId, planHash, targetFingerprint);
 
   if (existsSync(layout.approvalDecision)) {
     const existing = assertApprovalDecision(
       readJsonFile<unknown>(layout.approvalDecision),
     );
-    assertDecisionBinding(existing, releaseRunId, planHash);
+    assertDecisionBinding(existing, releaseRunId, planHash, targetFingerprint);
     if (
       canonicalize(existing as unknown as JsonValue) !==
       canonicalize(decision as unknown as JsonValue)
@@ -146,6 +200,7 @@ export function readApprovalDecision(runDirectory: string): ApprovalDecision {
     decision,
     String(plan.releaseRunId ?? ""),
     String(plan.planHash ?? ""),
+    planTargetFingerprint(plan),
   );
   return decision;
 }

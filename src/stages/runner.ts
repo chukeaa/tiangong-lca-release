@@ -60,9 +60,11 @@ import {
 } from "../publication/remote-stages.js";
 import {
   ExternalCommandError,
+  localToolEnvironment,
   runJsonCommand,
   tidasToolsExecutable,
 } from "../tools/external.js";
+import { targetPlanReference } from "../target/profile.js";
 import {
   formatDatasetVersion,
   parseDatasetVersion,
@@ -708,6 +710,7 @@ async function invokeTidasTool(
         executable: tidasToolsExecutable(),
         args,
         cwd: layout.root,
+        env: localToolEnvironment(),
       }),
       failed: false,
     };
@@ -1031,6 +1034,7 @@ async function buildPackagesStage(
     profileLockHash: readReleaseRun(layout.root).profileLockHash,
     calculationBundleHash: request.calculationBundle.bundleContentHash,
     artifactSetHash,
+    ...(request.target ? { target: targetPlanReference(request.target) } : {}),
     datasets: datasets.map((dataset: Record<string, any>) => ({
       datasetType: dataset.datasetType,
       role: dataset.role,
@@ -1064,6 +1068,7 @@ async function buildPackagesStage(
       processCount: manifest.scope.processCount,
     },
     profileLockHash: readReleaseRun(layout.root).profileLockHash,
+    ...(request.target ? { target: targetPlanReference(request.target) } : {}),
     calculationBundle: {
       calculationId: manifest.calculationId,
       bundleContentHash: lock.bundleContentHash,
@@ -1343,6 +1348,7 @@ export async function runReleaseStage(
 export function releaseRunSummary(runDirectory: string) {
   const run = readReleaseRun(runDirectory);
   const layout = releaseWorkspaceLayout(runDirectory);
+  const request = readRequest(layout);
   const counts = Object.fromEntries(
     ["pending", "running", "passed", "blocked", "failed", "skipped"].map(
       (status) => [
@@ -1372,6 +1378,7 @@ export function releaseRunSummary(runDirectory: string) {
   return {
     schemaVersion: "tiangong.release-status.v1",
     releaseRunId: run.releaseRunId,
+    target: request.target ? targetPlanReference(request.target) : null,
     status: run.status,
     complete: counts.passed + counts.skipped === run.stages.length,
     partial:
@@ -1388,14 +1395,18 @@ export function releaseRunSummary(runDirectory: string) {
 
 export function releasePlan(runDirectory: string) {
   const run = readReleaseRun(runDirectory);
+  const request = readRequest(releaseWorkspaceLayout(runDirectory));
+  const target = request.target ? targetPlanReference(request.target) : null;
   return {
     schemaVersion: "tiangong.release-plan.v1",
     releaseRunId: run.releaseRunId,
     requestHash: run.requestHash,
     profileLockHash: run.profileLockHash,
+    target,
     planHash: canonicalSha256({
       requestHash: run.requestHash,
       profileLockHash: run.profileLockHash,
+      target,
       stages: [...STAGE_IDS],
     }),
     stages: run.stages.map((stage, index) => ({

@@ -28,6 +28,7 @@ const canonicalKinds: CalculationBundleArtifactKind[] = [
   "lci",
   "lcia",
   "coverage",
+  "source_closure",
 ];
 
 export type BundleArtifactVerification = {
