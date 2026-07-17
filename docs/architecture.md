@@ -1,3 +1,31 @@
+---
+title: Release Core Architecture
+docType: architecture
+scope: repo
+status: active
+authoritative: true
+owner: release
+language: en
+whenToUse:
+  - when changing Release Run stages, materialization, publication handoff, or readback
+  - when deciding cross-repository boundaries for Worker, tidas-tools, CLI, Database, Edge, and Next
+whenToUpdate:
+  - when stage ordering, dependency direction, publication authority, or workspace integration changes
+checkPaths:
+  - docs/architecture.md
+  - AGENTS.md
+  - .docpact/config.yaml
+  - specs/**
+  - src/**
+lastReviewedAt: 2026-07-17
+lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
+lastReviewedNote: "Documented Release Core workspace integration during initial Docpact onboarding; runtime architecture is unchanged."
+related:
+  - ../AGENTS.md
+  - ../.docpact/config.yaml
+  - ../README.md
+---
+
 # Architecture
 
 The executable flow is:
@@ -15,6 +43,10 @@ Worker Calculation Bundle
 Calculation and publication are separate. A completed calculation may be previewed and downloaded without creating a public release. Publication is possible only after canonical artifacts, validation, closure, semantic round-trip, an immutable publish plan, and durable approval all match.
 
 The relational platform stores release/index/hash/status/approval/audit facts. Generated datasets and packages remain immutable objects and never become ordinary editable Process or LifecycleModel rows.
+
+## Workspace integration boundary
+
+`lca-workspace` integrates this repository as the `release` child repository and pins an exact commit. Release Core remains the owner of local release orchestration; root workspace governance owns only cataloging, routing, branch-policy facts, and the submodule pointer. The current canonical remote is the private `chukeaa/tiangong-lca-release` repository until a separately approved ownership migration changes that URL.
 
 ## Remote stage boundary
 
