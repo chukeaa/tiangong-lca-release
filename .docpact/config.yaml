@@ -1,0 +1,248 @@
+version: 1
+layout: repo
+lastReviewedAt: "2026-07-17"
+lastReviewedCommit: "460c6ddd8425d5441a386cf2f1c5da41dd8ced05"
+
+catalog:
+  repos:
+    - id: release
+      path: .
+      canonicalRepo: chukeaa/tiangong-lca-release
+      entryDoc: AGENTS.md
+      workflowDocs:
+        - docs/architecture.md
+        - README.md
+      workspaceIntegrationRequired: true
+
+ownership:
+  domains:
+    - id: repo-governance-and-docs
+      paths:
+        include:
+          - AGENTS.md
+          - README.md
+          - docs/**
+          - .docpact/**
+          - .gitignore
+          - .env.example
+      ownerRepo: release
+    - id: release-contracts-identity-and-versioning
+      paths:
+        include:
+          - specs/**
+          - src/canonical/**
+          - src/contracts/**
+          - src/identity/**
+          - src/versioning/**
+      ownerRepo: release
+    - id: release-run-orchestration-and-materialization
+      paths:
+        include:
+          - src/bundle/**
+          - src/io/**
+          - src/materialization/**
+          - src/source/**
+          - src/stages/**
+          - src/tools/**
+          - src/validation/**
+          - src/workspace/**
+      ownerRepo: release
+    - id: approval-publication-and-command-surface
+      paths:
+        include:
+          - src/approval/**
+          - src/publication/**
+          - src/cli.ts
+          - src/index.ts
+      ownerRepo: release
+    - id: tests-build-and-automation
+      paths:
+        include:
+          - package.json
+          - tsconfig.json
+          - tsconfig.build.json
+          - scripts/**
+          - test/**
+          - .github/workflows/ci.yml
+      ownerRepo: release
+
+coverage:
+  include:
+    - AGENTS.md
+    - README.md
+    - docs/**
+    - .docpact/**
+    - .gitignore
+    - .env.example
+    - specs/**
+    - src/**
+    - package.json
+    - tsconfig.json
+    - tsconfig.build.json
+    - scripts/**
+    - test/**
+    - .github/workflows/ci.yml
+  exclude:
+    - .git/**
+    - .docpact/runs/**
+    - node_modules/**
+    - dist/**
+    - coverage/**
+    - .release/**
+    - package-lock.json
+    - "*.log"
+
+freshness:
+  warn_after_commits: 40
+  warn_after_days: 60
+  critical_after_days: 120
+
+routing:
+  intents:
+    release-contracts:
+      paths:
+        - specs/**
+        - src/canonical/**
+        - src/contracts/**
+        - src/identity/**
+        - src/versioning/**
+        - docs/architecture.md
+    release-run-orchestration:
+      paths:
+        - src/bundle/**
+        - src/io/**
+        - src/source/**
+        - src/stages/**
+        - src/workspace/**
+        - docs/architecture.md
+    materialization-and-validation:
+      paths:
+        - src/materialization/**
+        - src/tools/**
+        - src/validation/**
+        - specs/**
+        - docs/architecture.md
+    approval-and-publication:
+      paths:
+        - src/approval/**
+        - src/publication/**
+        - src/cli.ts
+        - README.md
+        - docs/architecture.md
+    validation-and-automation:
+      paths:
+        - package.json
+        - tsconfig.json
+        - tsconfig.build.json
+        - scripts/**
+        - test/**
+        - .github/workflows/ci.yml
+    proof:
+      paths:
+        - specs/**
+        - src/**
+        - test/**
+        - scripts/**
+        - package.json
+        - .github/workflows/ci.yml
+    repo-docs:
+      paths:
+        - AGENTS.md
+        - README.md
+        - docs/**
+        - .docpact/**
+        - .env.example
+    root-integration:
+      paths:
+        - AGENTS.md
+        - .docpact/config.yaml
+        - docs/architecture.md
+
+docInventory:
+  include:
+    - AGENTS.md
+    - README.md
+    - .docpact/config.yaml
+    - docs/architecture.md
+
+repo:
+  id: release
+  owner: release
+
+rules:
+  - id: release-bootstrap-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: AGENTS.md
+        kind: doc-contract
+      - path: .docpact/config.yaml
+        kind: doc-ai-layer
+      - path: docs/architecture.md
+        kind: architecture
+    requiredDocs:
+      - path: AGENTS.md
+        mode: review_or_update
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/architecture.md
+        mode: review_or_update
+    reason: Repository guidance, machine-readable routing, and retained architecture must stay aligned.
+  - id: release-landing-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: README.md
+        kind: repo-landing
+      - path: .env.example
+        kind: operator-env-template
+    requiredDocs:
+      - path: AGENTS.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+      - path: .docpact/config.yaml
+        mode: review_or_update
+    reason: User-facing setup and security guidance must match the repository contract.
+  - id: release-runtime-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: specs/**
+        kind: release-contract
+      - path: src/**
+        kind: runtime-code
+    requiredDocs:
+      - path: AGENTS.md
+        mode: review_or_update
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/architecture.md
+        mode: review_or_update
+    reason: Release contracts and orchestration behavior must remain consistent with ownership, routing, and architecture guidance.
+  - id: release-validation-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: .gitignore
+        kind: generated-runtime-exclusion
+      - path: package.json
+        kind: build-contract
+      - path: tsconfig.json
+        kind: build-contract
+      - path: tsconfig.build.json
+        kind: build-contract
+      - path: scripts/**
+        kind: validation-tooling
+      - path: test/**
+        kind: test-proof
+      - path: .github/workflows/ci.yml
+        kind: automation
+    requiredDocs:
+      - path: AGENTS.md
+        mode: review_or_update
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/architecture.md
+        mode: review_or_update
+    reason: Local and CI proof surfaces must remain aligned with the documented validation boundary.

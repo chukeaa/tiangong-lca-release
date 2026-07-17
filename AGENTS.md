@@ -11,18 +11,41 @@ whenToUse:
   - when deciding whether logic belongs in Release, Worker, tidas-tools, tidas-sdk, CLI, Database, Edge, or Next
 whenToUpdate:
   - when repository ownership, branch policy, stage contracts, or validation gates change
+  - when Docpact ownership, coverage, routing, or review rules change
 checkPaths:
   - AGENTS.md
   - README.md
+  - .docpact/config.yaml
+  - docs/architecture.md
   - specs/**
   - src/**
+  - scripts/**
   - test/**
   - package.json
+  - .github/workflows/ci.yml
+lastReviewedAt: 2026-07-17
+lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
+lastReviewedNote: "Added the initial repo-layout Docpact contract for lca-workspace onboarding; runtime and publication boundaries are unchanged."
+related:
+  - .docpact/config.yaml
+  - docs/architecture.md
+  - README.md
 ---
 
 # Repository Contract
 
 `tiangong-lca-release` is the Agent-first control plane for deterministic TianGong LCI/LCIA releases. It consumes an immutable Calculation Bundle and frozen source closure, derives Model/Result identities and versions, orchestrates TIDAS/ILCD materialization and validation, records resumable stage evidence, and hands an approved publish plan to the public `tiangong-lca` CLI.
+
+## Governance entry points
+
+Load repository guidance in this order:
+
+1. `AGENTS.md` for ownership, hard boundaries, runtime facts, and validation expectations;
+2. `.docpact/config.yaml` for machine-readable catalog, ownership, coverage, routing, and documentation-impact rules;
+3. `docs/architecture.md` for stage and remote-publication boundaries;
+4. `README.md` for the operator-facing command and security surface.
+
+This repository uses Docpact `layout: repo`. It is integrated into `lca-workspace` as the `release` child repository, while the current canonical GitHub repository remains the private `chukeaa/tiangong-lca-release` repository until an explicit ownership migration is approved.
 
 ## Ownership
 
