@@ -75,16 +75,16 @@ async function prepareRun(
   const root = mkdtempSync(
     path.join(tmpdir(), "tiangong-release-publication-"),
   );
-  const previousTidas = process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
+  const previousTidas = process.env.TIANGONG_TIDAS_EXECUTABLE;
   const previousCli = process.env.TIANGONG_LCA_CLI_EXECUTABLE;
   const previousApiKey = process.env.TIANGONG_LCA_API_KEY;
   const previousApiBaseUrl = process.env.TIANGONG_LCA_API_BASE_URL;
   const previousPublishableKey =
     process.env.TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY;
-  process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE = copyExecutable(
+  process.env.TIANGONG_TIDAS_EXECUTABLE = copyExecutable(
     root,
-    "fake-tidas-release-tool.mjs",
-    "fake-tidas-release-tool",
+    "fake-tidas.mjs",
+    "tidas",
   );
   process.env.TIANGONG_LCA_CLI_EXECUTABLE = copyExecutable(
     root,
@@ -126,7 +126,7 @@ async function prepareRun(
   );
   const restore = () => {
     for (const [name, value] of [
-      ["TIANGONG_TIDAS_TOOLS_EXECUTABLE", previousTidas],
+      ["TIANGONG_TIDAS_EXECUTABLE", previousTidas],
       ["TIANGONG_LCA_CLI_EXECUTABLE", previousCli],
       ["TIANGONG_LCA_API_KEY", previousApiKey],
       ["TIANGONG_LCA_API_BASE_URL", previousApiBaseUrl],

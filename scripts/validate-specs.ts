@@ -96,4 +96,25 @@ const fixtureTarget = targets.targets.find(
 );
 assert.match(fixtureTarget.apiBaseUrl, /^https:\/\/[^/]+\.invalid\//u);
 
+const tidasAdapter = readJson("specs/tidas-release-adapter.json");
+assert.equal(tidasAdapter.minimumBinaryVersion, "0.1.0");
+assert.equal(tidasAdapter.operationReportSchema, "tidas.operation-report.v1");
+assert.equal(tidasAdapter.releaseReportSchema, "tidas.release-report.v1");
+assert.deepEqual(tidasAdapter.actions, [
+  "validate-tidas",
+  "convert-ilcd",
+  "validate-ilcd",
+  "semantic-roundtrip",
+  "build-packages",
+]);
+assert.deepEqual(tidasAdapter.exitCodes, {
+  success: 0,
+  dataIssues: 2,
+  usage: 64,
+  unavailable: 69,
+  internal: 70,
+  io: 74,
+  cancelled: 130,
+});
+
 process.stdout.write("Release specs: valid\n");

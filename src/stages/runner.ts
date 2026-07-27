@@ -51,7 +51,6 @@ import {
   resolveGeneratedVersionSet,
   type PreviousReleaseDataset,
 } from "../versioning/descriptors.js";
-import { validateCanonicalTidasTree } from "../validation/tidas.js";
 import { numericParityReport } from "../validation/numeric.js";
 import {
   approvalStage,
@@ -59,11 +58,9 @@ import {
   readbackVerifyStage,
 } from "../publication/remote-stages.js";
 import {
-  ExternalCommandError,
-  localToolEnvironment,
-  runJsonCommand,
-  tidasToolsExecutable,
-} from "../tools/external.js";
+  runTidasReleaseAction,
+  type TidasReleaseInvocation,
+} from "../tools/tidas.js";
 import { targetPlanReference } from "../target/profile.js";
 import {
   formatDatasetVersion,
@@ -92,6 +89,7 @@ type StageResult = {
   blockers?: StageRecord["blockers"];
   decisions?: string[];
   nextCommands?: string[];
+  toolVersions?: Record<string, string>;
   status?: "passed" | "blocked";
 };
 
@@ -638,10 +636,13 @@ async function finalizeCanonicalArtifactsStage(
 async function validateTidasStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<StageResult> {
-  const report = validateCanonicalTidasTree(layout.canonicalTidas);
+  const validation = await invokeTidasRelease(layout, "validate-tidas", [
+    "--input-dir",
+    layout.canonicalTidas,
+  ]);
   const tidasArtifact = await writeStageJsonArtifact(
     path.join(layout.reports, "tidas-validation-report.json"),
-    report,
+    validation.report,
   );
   const { lock, manifest } = readBundleFromLock(layout);
   const bundleDirectory = bundleDirectoryForManifest(lock.manifestPath);
@@ -660,11 +661,11 @@ async function validateTidasStage(
     path.join(layout.reports, "numeric-parity-report.json"),
     parity,
   );
-  if (report.status !== "passed" || parity.status !== "passed") {
+  if (validation.failed || parity.status !== "passed") {
     return {
       status: "blocked",
       summary:
-        "Canonical TIDAS datasets failed schema, runtime, or numeric parity validation.",
+        "Canonical TIDAS datasets failed native validation or numeric parity validation.",
       inputHashes: {
         canonicalDatasetIndex: await sha256File(layout.canonicalDatasetIndex),
       },
@@ -675,19 +676,24 @@ async function validateTidasStage(
       artifacts: [tidasArtifact, parityArtifact],
       blockers: [
         {
-          code: "tidas_validation_failed",
+          code: validation.code ?? "tidas_validation_failed",
           message:
             "Resolve every error in reports/tidas-validation-report.json and rerun.",
           subject: layout.canonicalTidas,
         },
       ],
+      toolVersions: {
+        release: "0.1.0",
+        tidas: validation.version,
+      },
       nextCommands: [
         `tiangong-release run-stage --run-dir ${layout.root} --stage validate-tidas`,
       ],
     };
   }
   return {
-    summary: "Canonical TIDAS datasets passed schema and runtime validation.",
+    summary:
+      "Rust tidas validated the canonical TIDAS tree and Release Core proved numeric parity.",
     inputHashes: {
       canonicalDatasetIndex: await sha256File(layout.canonicalDatasetIndex),
     },
@@ -696,30 +702,24 @@ async function validateTidasStage(
       numericParity: parityArtifact.sha256,
     },
     artifacts: [tidasArtifact, parityArtifact],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: validation.version,
+    },
     nextCommands: nextCommand(layout.root, "validate-tidas"),
   };
 }
 
-async function invokeTidasTool(
+async function invokeTidasRelease(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
+  action: string,
   args: string[],
-): Promise<{ result: JsonValue; failed: boolean; code?: string }> {
-  try {
-    return {
-      result: await runJsonCommand({
-        executable: tidasToolsExecutable(),
-        args,
-        cwd: layout.root,
-        env: localToolEnvironment(),
-      }),
-      failed: false,
-    };
-  } catch (error) {
-    if (error instanceof ExternalCommandError && error.result) {
-      return { result: error.result, failed: true, code: error.code };
-    }
-    throw error;
-  }
+): Promise<TidasReleaseInvocation> {
+  return runTidasReleaseAction({
+    action,
+    args,
+    cwd: layout.root,
+  });
 }
 
 function blockedToolGate(input: {
@@ -728,6 +728,7 @@ function blockedToolGate(input: {
   report: StageArtifact;
   layout: ReturnType<typeof releaseWorkspaceLayout>;
   summary: string;
+  tidasVersion: string;
 }): StageResult {
   return {
     status: "blocked",
@@ -741,6 +742,10 @@ function blockedToolGate(input: {
         subject: input.stageId,
       },
     ],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: input.tidasVersion,
+    },
     nextCommands: [
       `tiangong-release run-stage --run-dir ${input.layout.root} --stage ${input.stageId}`,
     ],
@@ -750,27 +755,26 @@ function blockedToolGate(input: {
 async function convertIlcdStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<StageResult> {
-  const toolValidation = await invokeTidasTool(layout, [
-    "validate-tidas",
+  const toolValidation = await invokeTidasRelease(layout, "validate-tidas", [
     "--input-dir",
     layout.canonicalTidas,
   ]);
   const validationArtifact = await writeStageJsonArtifact(
-    path.join(layout.reports, "tidas-tools-validation-report.json"),
-    toolValidation.result,
+    path.join(layout.reports, "tidas-release-validation-report.json"),
+    toolValidation.report,
   );
   if (toolValidation.failed) {
     return blockedToolGate({
       stageId: "convert-ilcd",
-      code: toolValidation.code ?? "tidas_tools_validation_failed",
+      code: toolValidation.code ?? "tidas_validation_failed",
       report: validationArtifact,
       layout,
       summary:
-        "tidas-tools rejected the canonical TIDAS tree before conversion.",
+        "Rust tidas rejected the canonical TIDAS tree before conversion.",
+      tidasVersion: toolValidation.version,
     });
   }
-  const conversion = await invokeTidasTool(layout, [
-    "convert-ilcd",
+  const conversion = await invokeTidasRelease(layout, "convert-ilcd", [
     "--input-dir",
     layout.canonicalTidas,
     "--output-dir",
@@ -778,7 +782,7 @@ async function convertIlcdStage(
   ]);
   const conversionArtifact = await writeStageJsonArtifact(
     path.join(layout.reports, "ilcd-conversion-report.json"),
-    conversion.result,
+    conversion.report,
   );
   if (conversion.failed) {
     return blockedToolGate({
@@ -787,11 +791,12 @@ async function convertIlcdStage(
       report: conversionArtifact,
       layout,
       summary: "Canonical TIDAS to ILCD conversion failed.",
+      tidasVersion: conversion.version,
     });
   }
   return {
     summary:
-      "tidas-tools validated the canonical tree and converted it to ILCD.",
+      "Rust tidas validated the canonical tree and converted it to ILCD.",
     inputHashes: {
       canonicalDatasetIndex: await sha256File(layout.canonicalDatasetIndex),
     },
@@ -800,6 +805,10 @@ async function convertIlcdStage(
       conversion: conversionArtifact.sha256,
     },
     artifacts: [validationArtifact, conversionArtifact],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: conversion.version,
+    },
     nextCommands: nextCommand(layout.root, "convert-ilcd"),
   };
 }
@@ -807,14 +816,13 @@ async function convertIlcdStage(
 async function validateIlcdStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<StageResult> {
-  const validation = await invokeTidasTool(layout, [
-    "validate-ilcd",
+  const validation = await invokeTidasRelease(layout, "validate-ilcd", [
     "--input-dir",
     layout.ilcd,
   ]);
   const artifact = await writeStageJsonArtifact(
     path.join(layout.reports, "ilcd-validation-report.json"),
-    validation.result,
+    validation.report,
   );
   if (validation.failed) {
     return blockedToolGate({
@@ -823,6 +831,7 @@ async function validateIlcdStage(
       report: artifact,
       layout,
       summary: "ILCD schema validation failed.",
+      tidasVersion: validation.version,
     });
   }
   return {
@@ -834,6 +843,10 @@ async function validateIlcdStage(
     },
     outputHashes: { validation: artifact.sha256 },
     artifacts: [artifact],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: validation.version,
+    },
     nextCommands: nextCommand(layout.root, "validate-ilcd"),
   };
 }
@@ -841,8 +854,7 @@ async function validateIlcdStage(
 async function semanticRoundtripStage(
   layout: ReturnType<typeof releaseWorkspaceLayout>,
 ): Promise<StageResult> {
-  const roundtrip = await invokeTidasTool(layout, [
-    "semantic-roundtrip",
+  const roundtrip = await invokeTidasRelease(layout, "semantic-roundtrip", [
     "--tidas-dir",
     layout.canonicalTidas,
     "--ilcd-dir",
@@ -850,7 +862,7 @@ async function semanticRoundtripStage(
   ]);
   const artifact = await writeStageJsonArtifact(
     path.join(layout.reports, "semantic-roundtrip-report.json"),
-    roundtrip.result,
+    roundtrip.report,
   );
   if (roundtrip.failed) {
     return blockedToolGate({
@@ -860,6 +872,7 @@ async function semanticRoundtripStage(
       layout,
       summary:
         "TIDAS to ILCD semantic round-trip changed normalized dataset content.",
+      tidasVersion: roundtrip.version,
     });
   }
   return {
@@ -873,6 +886,10 @@ async function semanticRoundtripStage(
     },
     outputHashes: { roundtrip: artifact.sha256 },
     artifacts: [artifact],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: roundtrip.version,
+    },
     nextCommands: nextCommand(layout.root, "semantic-roundtrip"),
   };
 }
@@ -939,12 +956,9 @@ async function buildPackagesStage(
       nextCommands: [],
     };
   }
-  const packaging = await invokeTidasTool(layout, [
-    "build-packages",
+  const packaging = await invokeTidasRelease(layout, "build-packages", [
     "--tidas-dir",
     layout.canonicalTidas,
-    "--ilcd-dir",
-    layout.ilcd,
     "--dataset-index",
     layout.canonicalDatasetIndex,
     "--output-dir",
@@ -956,7 +970,7 @@ async function buildPackagesStage(
   );
   const packageArtifact = await writeStageJsonArtifact(
     packageReportPath,
-    packaging.result,
+    packaging.report,
   );
   if (packaging.failed) {
     return blockedToolGate({
@@ -966,21 +980,24 @@ async function buildPackagesStage(
       layout,
       summary:
         "Release package closure or deterministic ZIP construction failed.",
+      tidasVersion: packaging.version,
     });
   }
 
-  const packageResult = packaging.result as Record<string, any>;
+  const packageResult = packaging.release?.build as
+    Record<string, any> | undefined;
   if (
+    !packageResult ||
     !Array.isArray(packageResult.packages) ||
     packageResult.packages.length !== 4
   ) {
     throw new Error("release_package_cardinality_invalid");
   }
   const packages = packageResult.packages.map((item: Record<string, any>) => ({
-    profileId: item.profileId,
+    profileId: item.profile_id,
     format: item.format,
-    selfContained: item.selfContained,
-    closureHash: item.closureHash,
+    selfContained: item.self_contained,
+    closureHash: item.closure_sha256,
     artifact: workspaceArtifactReference(
       layout,
       item.artifact.path,
@@ -1025,7 +1042,7 @@ async function buildPackagesStage(
   const previous = readJsonFile<Record<string, unknown>>(
     layout.previousManifest,
   );
-  const artifactSetHash = String(packageResult.artifactSetHash);
+  const artifactSetHash = String(packageResult.artifact_set_sha256);
   const version = releaseVersion(previous, artifactSetHash);
   const publishPlanBody = {
     schemaVersion: "tiangong.release.publish-plan-input.v1",
@@ -1153,6 +1170,10 @@ async function buildPackagesStage(
       artifactSetHash,
     },
     artifacts: [packageArtifact, manifestArtifact, planArtifact],
+    toolVersions: {
+      release: "0.1.0",
+      tidas: packaging.version,
+    },
     nextCommands: nextCommand(layout.root, "build-packages"),
   };
 }
@@ -1300,6 +1321,7 @@ export async function runReleaseStage(
       inputHashes: result.inputHashes ?? {},
       outputHashes: result.outputHashes ?? {},
       artifacts: result.artifacts ?? [],
+      toolVersions: result.toolVersions ?? run.stages[index]!.toolVersions,
       warnings: result.warnings ?? [],
       blockers: result.blockers ?? [],
       decisions: result.decisions ?? [],

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "tiangong.release.tidas-adapter.v1",
+  "minimumBinaryVersion": "0.1.0",
+  "defaultExecutable": "tidas",
+  "executableOverride": "TIANGONG_TIDAS_EXECUTABLE",
+  "operationReportSchema": "tidas.operation-report.v1",
+  "releaseReportSchema": "tidas.release-report.v1",
+  "actions": [
+    "validate-tidas",
+    "convert-ilcd",
+    "validate-ilcd",
+    "semantic-roundtrip",
+    "build-packages"
+  ],
+  "exitCodes": {
+    "success": 0,
+    "dataIssues": 2,
+    "usage": 64,
+    "unavailable": 69,
+    "internal": 70,
+    "io": 74,
+    "cancelled": 130
+  },
+  "fallbacks": []
+}

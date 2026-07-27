@@ -8,8 +8,8 @@ import { initializeReleaseWorkspace } from "../src/workspace/run-store.js";
 import { createCalculationBundleFixture } from "./support/bundle-fixture.js";
 
 const REAL_TOOLS_EXECUTABLE =
-  process.env.TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE ??
-  process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
+  process.env.TIANGONG_TIDAS_INTEGRATION_EXECUTABLE ??
+  process.env.TIANGONG_TIDAS_EXECUTABLE;
 
 const PACKAGE_STAGES = [
   "resolve-calculation-bundle",
@@ -31,19 +31,19 @@ const PACKAGE_STAGES = [
 ] as const;
 
 test(
-  "real tidas-tools validates, round-trips, and packages a complete release closure",
+  "real Rust tidas validates, round-trips, and packages a complete release closure",
   {
     skip: REAL_TOOLS_EXECUTABLE
       ? false
-      : "set TIANGONG_TIDAS_TOOLS_INTEGRATION_EXECUTABLE or TIANGONG_TIDAS_TOOLS_EXECUTABLE to run",
+      : "set TIANGONG_TIDAS_INTEGRATION_EXECUTABLE or TIANGONG_TIDAS_EXECUTABLE to run",
   },
   async () => {
     const root = mkdtempSync(
       path.join(tmpdir(), "tiangong-release-real-tools-integration-"),
     );
-    const previousExecutable = process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
+    const previousExecutable = process.env.TIANGONG_TIDAS_EXECUTABLE;
     try {
-      process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE = REAL_TOOLS_EXECUTABLE!;
+      process.env.TIANGONG_TIDAS_EXECUTABLE = REAL_TOOLS_EXECUTABLE!;
       const fixture = createCalculationBundleFixture(root);
       const runDirectory = path.join(root, "run");
       initializeReleaseWorkspace({
@@ -73,8 +73,13 @@ test(
       ]) {
         const report = JSON.parse(
           readFileSync(path.join(runDirectory, "reports", reportName), "utf8"),
-        ) as { status: string };
-        assert.equal(report.status, "passed", reportName);
+        ) as Record<string, any>;
+        assert.equal(
+          report.schema_version,
+          "tidas.operation-report.v1",
+          reportName,
+        );
+        assert.equal(report.status, "succeeded", reportName);
       }
 
       const manifest = JSON.parse(
@@ -105,9 +110,9 @@ test(
       );
     } finally {
       if (previousExecutable === undefined) {
-        delete process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE;
+        delete process.env.TIANGONG_TIDAS_EXECUTABLE;
       } else {
-        process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE = previousExecutable;
+        process.env.TIANGONG_TIDAS_EXECUTABLE = previousExecutable;
       }
       rmSync(root, { recursive: true, force: true });
     }

@@ -35,14 +35,15 @@ data-manager calculation package ID
   -> actor-scoped Calculation Bundle projection and exact downloads
   -> frozen manifest, source closure, and target-bound Release Request
   -> local Release Run stages and cache
-  -> tidas-sdk programmatic validation
-  -> tidas-tools conversion / closure / deterministic ZIP
+  -> Rust tidas release validation / conversion / round-trip / closure / deterministic ZIP
   -> tiangong-lca actor-scoped remote commands
   -> Database / Edge publication truth
   -> independent readback
 ```
 
 Calculation and publication are separate. A completed calculation may be previewed and downloaded without creating a public release. Publication is possible only after canonical artifacts, validation, closure, semantic round-trip, an immutable publish plan, and durable approval all match.
+
+Stages 13–17 delegate their domain gates to the unified native `tidas release` surface and accept only the versioned `tidas.operation-report.v1` plus nested `tidas.release-report.v1` contracts. Release Core keeps orchestration, bundle-to-dataset numerical parity, stage evidence, manifest and publish-plan construction, approval, publication, and readback. The local adapter passes no publication credentials or Python environment assumptions and has no legacy executable fallback.
 
 ## Operator intake boundary
 
