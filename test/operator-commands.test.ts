@@ -53,7 +53,7 @@ test("doctor, bootstrap, runs list, and exact candidate form a read-only operato
   const secret = "operator-secret-sentinel-must-not-persist";
   const names = [
     "TIANGONG_LCA_CLI_EXECUTABLE",
-    "TIANGONG_TIDAS_TOOLS_EXECUTABLE",
+    "TIANGONG_TIDAS_EXECUTABLE",
     "TIANGONG_LCA_API_BASE_URL",
     "TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY",
     "TIANGONG_LCA_API_KEY",
@@ -68,10 +68,10 @@ test("doctor, bootstrap, runs list, and exact candidate form a read-only operato
       "fake-tiangong-lca.mjs",
       "fake-tiangong-lca",
     );
-    process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE = copyExecutable(
+    process.env.TIANGONG_TIDAS_EXECUTABLE = copyExecutable(
       root,
-      "fake-tidas-release-tool.mjs",
-      "fake-tidas-release-tool",
+      "fake-tidas.mjs",
+      "tidas",
     );
     process.env.TIANGONG_LCA_API_BASE_URL =
       "https://release.invalid/functions/v1";

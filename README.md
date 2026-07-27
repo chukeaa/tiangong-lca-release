@@ -48,7 +48,7 @@ TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY
 
 The actor must have the live platform role `data_product_manager`. Authentication is performed by `tiangong-lca`; Edge and Database make the final authorization decision for every private read and state transition.
 
-Only actor-scoped `tiangong-lca` commands receive the protected remote environment. Local `tidas-tools` validation, conversion, and packaging processes run with a minimal non-credential environment allowlist.
+Only actor-scoped `tiangong-lca` commands receive the protected remote environment. Local Rust `tidas release` validation, conversion, round-trip, closure, and packaging processes run with a minimal non-credential environment allowlist.
 
 Public target facts are versioned in `specs/release-targets.json`. Bootstrap freezes the selected target ID, API base URL, publishable-key SHA-256, and derived target fingerprint into the Release Request. The publish plan and v2 approval repeat that fingerprint. Before every remote frontier, the executable recomputes the current environment binding and rejects any mismatch before calling the public CLI.
 
@@ -62,7 +62,9 @@ npm ci
 npm run prepush:gate
 ```
 
-The repository deliberately does not link an old CLI implementation. Point `TIANGONG_LCA_CLI_EXECUTABLE` at a release-capable `tiangong-lca` build and `TIANGONG_TIDAS_TOOLS_EXECUTABLE` at the exact TIDAS release tool. Neither override is a credential.
+The repository deliberately does not link an old CLI implementation. Point `TIANGONG_LCA_CLI_EXECUTABLE` at a release-capable `tiangong-lca` build and, when pinning a local native artifact, point `TIANGONG_TIDAS_EXECUTABLE` at Rust `tidas` v0.1.0 or newer. The default executable name is `tidas`; neither override is a credential.
+
+Release stages 13–17 invoke only the unified `tidas release` command family. The adapter requires `tidas.operation-report.v1` with a matching nested `tidas.release-report.v1`, preserves the Rust diagnostic code and exit class in stage evidence, and records the observed binary version. Stable Rust exit classes are success `0`, data issues `2`, usage `64`, unavailable `69`, internal `70`, I/O `74`, and cancelled `130`. There is no Python package, legacy executable, or implicit fallback path.
 
 For source operation with clean JSON stdout:
 
@@ -113,7 +115,7 @@ The four deterministic ZIPs are:
 - standalone LifecycleModel/result full closure in TIDAS;
 - standalone LifecycleModel/result full closure in ILCD.
 
-Packaging never authenticates or mutates remote publication state.
+Packaging never authenticates or mutates remote publication state. `tidas release build-packages` atomically publishes the four archives; a failed retry leaves the preceding package bytes and Release Core publish plan unchanged.
 
 ## Approval, publication, and readback
 

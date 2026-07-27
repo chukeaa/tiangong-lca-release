@@ -65,7 +65,7 @@ This repository owns:
 This repository does not own:
 
 - Worker solving or Calculation Bundle production;
-- TIDAS/ILCD schemas, standalone conversion, validation, or deterministic ZIP implementation;
+- TIDAS/ILCD schemas, standalone conversion, validation, or deterministic ZIP implementation, which are invoked through the versioned Rust `tidas release` contract;
 - SDK generation;
 - remote authentication, direct SQL/REST mutation, RLS, or publication truth;
 - frontend behavior.
@@ -97,7 +97,7 @@ Route those concerns respectively to Worker, `tidas-tools`, `tidas-sdk`, `tiango
 
 ## Validation
 
-Changes to identity or canonicalization require fixed-vector tests. Changes to versioning require same-input replay, major/minor, collision, and non-convergence tests. Changes to stages require resume/cache/failure evidence. Materialization/package changes require TIDAS schema, ILCD XSD, semantic round-trip, full closure, cross-package canonical-content, and numerical parity proof.
+Changes to identity or canonicalization require fixed-vector tests. Changes to versioning require same-input replay, major/minor, collision, and non-convergence tests. Changes to stages require resume/cache/failure evidence. Materialization/package changes require Rust `tidas release` TIDAS schema, ILCD XSD, semantic round-trip, full closure, cross-package canonical-content, and numerical parity proof. Release Core must validate the versioned `tidas.operation-report.v1` and nested `tidas.release-report.v1` contracts and must not provide a Python or legacy executable fallback.
 
 Remote publication changes additionally require exact-plan approval, manager-denial, partial-failure resume, four-artifact independent download/hash verification, post-readback status, and credential non-persistence tests. Run status advances through `ready_for_approval -> approved -> published -> verified`; a passed successor permanently seals its predecessors.
 

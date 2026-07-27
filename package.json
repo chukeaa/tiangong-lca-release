@@ -23,9 +23,6 @@
     "test:coverage": "node --import tsx --test --experimental-test-coverage test/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@tiangong-lca/tidas-sdk": "^0.1.45"
-  },
   "devDependencies": {
     "@types/node": "^24.0.14",
     "ajv": "^8.17.1",

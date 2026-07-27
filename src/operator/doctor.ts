@@ -13,8 +13,8 @@ import {
   runJsonCommand,
   runTextCommand,
   tiangongCliExecutable,
-  tidasToolsExecutable,
 } from "../tools/external.js";
+import { tidasExecutable } from "../tools/tidas.js";
 
 type DoctorCheck = {
   id: string;
@@ -181,8 +181,8 @@ export async function releaseDoctor(input: {
   checks.push(cliCheck);
   checks.push(
     await toolCheck({
-      id: "tidas-tools",
-      executable: tidasToolsExecutable(),
+      id: "tidas",
+      executable: tidasExecutable(),
       cwd,
     }),
   );

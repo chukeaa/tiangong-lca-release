@@ -83,11 +83,20 @@ export async function runJsonCommand(input: {
       if (exitCode !== 0) {
         result ??= parseResult(stderrText);
         const record = (result ?? {}) as Record<string, any>;
+        const diagnostic = Array.isArray(record.diagnostics)
+          ? (record.diagnostics[0] as Record<string, unknown> | undefined)
+          : undefined;
         const code = String(
-          record.error?.code ?? record.code ?? "external_command_failed",
+          record.error?.code ??
+            diagnostic?.code ??
+            record.code ??
+            "external_command_failed",
         );
         const message = String(
-          (record.error?.message ?? record.message ?? stderrText) ||
+          (record.error?.message ??
+            diagnostic?.message ??
+            record.message ??
+            stderrText) ||
             `${input.executable} failed.`,
         );
         reject(new ExternalCommandError({ code, message, exitCode, result }));
@@ -103,11 +112,20 @@ export async function runJsonCommand(input: {
         );
         return;
       }
-      if (result.status === "failed") {
+      if (
+        result.status === "failed" ||
+        result.status === "cancelled" ||
+        result.status === "completed-with-issues"
+      ) {
         const record = result as Record<string, any>;
-        const code = String(record.error?.code ?? "external_command_failed");
+        const diagnostic = Array.isArray(record.diagnostics)
+          ? (record.diagnostics[0] as Record<string, unknown> | undefined)
+          : undefined;
+        const code = String(
+          record.error?.code ?? diagnostic?.code ?? "external_command_failed",
+        );
         const message = String(
-          (record.error?.message ?? stderrText) ||
+          (record.error?.message ?? diagnostic?.message ?? stderrText) ||
             `${input.executable} failed.`,
         );
         reject(new ExternalCommandError({ code, message, exitCode, result }));
@@ -200,8 +218,6 @@ export function localToolEnvironment(
     "LC_ALL",
     "LC_CTYPE",
     "TZ",
-    "PYTHONUTF8",
-    "PYTHONIOENCODING",
     "SYSTEMROOT",
     "WINDIR",
     "PATHEXT",
@@ -211,12 +227,6 @@ export function localToolEnvironment(
       const value = source[name];
       return value === undefined ? [] : [[name, value]];
     }),
-  );
-}
-
-export function tidasToolsExecutable(): string {
-  return (
-    process.env.TIANGONG_TIDAS_TOOLS_EXECUTABLE?.trim() || "tidas-release-tool"
   );
 }
 

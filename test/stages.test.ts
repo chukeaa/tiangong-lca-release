@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  LifeCycleModelSchema,
-  ProcessSchema,
-  validateWithZod,
-} from "@tiangong-lca/tidas-sdk";
+import { fileURLToPath } from "node:url";
 import { readDatasetDescriptors } from "../src/materialization/io.js";
 import { releaseRunSummary, runReleaseStage } from "../src/stages/runner.js";
 import {
@@ -24,7 +26,15 @@ const PROFILE_LOCK = {
 
 test("release workspace verifies a bundle, graph evidence, identity vectors, and previous state", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "tiangong-release-"));
+  const previousExecutable = process.env.TIANGONG_TIDAS_EXECUTABLE;
   try {
+    const executable = path.join(root, "tidas");
+    copyFileSync(
+      fileURLToPath(new URL("./fixtures/fake-tidas.mjs", import.meta.url)),
+      executable,
+    );
+    chmodSync(executable, 0o755);
+    process.env.TIANGONG_TIDAS_EXECUTABLE = executable;
     const fixture = createCalculationBundleFixture(root);
     const runDirectory = path.join(root, "run");
     initializeReleaseWorkspace({
@@ -75,11 +85,6 @@ test("release workspace verifies a bundle, graph evidence, identity vectors, and
     assert.equal(model.version, "01.00.000");
     assert.equal(result.version, "01.00.000");
     assert.equal(
-      validateWithZod(model.document, LifeCycleModelSchema).success,
-      true,
-    );
-    assert.equal(validateWithZod(result.document, ProcessSchema).success, true);
-    assert.equal(
       (model.document as any).lifeCycleModelDataSet.lifeCycleModelInformation
         .dataSetInformation.referenceToResultingProcess["@refObjectId"],
       result.uuid,
@@ -99,6 +104,11 @@ test("release workspace verifies a bundle, graph evidence, identity vectors, and
     assert.equal(summary.complete, false);
     assert.equal(summary.nextStage, "convert-ilcd");
   } finally {
+    if (previousExecutable === undefined) {
+      delete process.env.TIANGONG_TIDAS_EXECUTABLE;
+    } else {
+      process.env.TIANGONG_TIDAS_EXECUTABLE = previousExecutable;
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });
