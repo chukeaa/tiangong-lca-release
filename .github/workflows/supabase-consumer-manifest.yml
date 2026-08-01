@@ -1,24 +1,22 @@
-name: CI
+name: Supabase consumer manifest
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  quality-gate:
+  exact-source-closure:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout actual delivery commit
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Resolve canonical main provenance
         run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
@@ -33,5 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run pre-push gate
-        run: npm run prepush:gate
+      - name: Run manifest positive and negative tests
+        run: node --import tsx --test test/supabase-consumer-manifest.test.ts
+
+      - name: Scan actual HEAD and prove exact set plus zero governed-byte drift
+        run: npm run consumer-manifest:verify

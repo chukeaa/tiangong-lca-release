@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "3d1bc4edd49e62cfb8518248e096b561a2be65d2"
+lastReviewedAt: "2026-08-02"
+lastReviewedCommit: "f8d37018d898d23a51655272d129417eb9fad13a"
 
 catalog:
   repos:
@@ -31,6 +31,7 @@ ownership:
       paths:
         include:
           - specs/**
+          - contracts/**
           - src/canonical/**
           - src/contracts/**
           - src/identity/**
@@ -66,7 +67,7 @@ ownership:
           - tsconfig.build.json
           - scripts/**
           - test/**
-          - .github/workflows/ci.yml
+          - .github/workflows/*.yml
       ownerRepo: release
 
 coverage:
@@ -79,13 +80,14 @@ coverage:
     - .env.example
     - .agents/skills/**
     - specs/**
+    - contracts/**
     - src/**
     - package.json
     - tsconfig.json
     - tsconfig.build.json
     - scripts/**
     - test/**
-    - .github/workflows/ci.yml
+    - .github/workflows/*.yml
   exclude:
     - .git/**
     - .docpact/runs/**
@@ -143,15 +145,16 @@ routing:
         - tsconfig.build.json
         - scripts/**
         - test/**
-        - .github/workflows/ci.yml
+        - .github/workflows/*.yml
     proof:
       paths:
         - specs/**
+        - contracts/**
         - src/**
         - test/**
         - scripts/**
         - package.json
-        - .github/workflows/ci.yml
+        - .github/workflows/*.yml
     repo-docs:
       paths:
         - AGENTS.md
@@ -246,9 +249,11 @@ rules:
         kind: build-contract
       - path: scripts/**
         kind: validation-tooling
+      - path: contracts/**
+        kind: machine-verifiable-contract
       - path: test/**
         kind: test-proof
-      - path: .github/workflows/ci.yml
+      - path: .github/workflows/*.yml
         kind: automation
     requiredDocs:
       - path: AGENTS.md

@@ -16,10 +16,14 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - specs/**
+  - contracts/supabase-consumer-manifest.v3.json
+  - contracts/supabase-consumer-manifest.v3.schema.json
+  - scripts/verify-supabase-consumer-manifest.ts
   - src/**
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
-lastReviewedNote: "Added deterministic calculation-package bootstrap, versioned target binding, compact operator reports, and the Codex publication frontier."
+  - .github/workflows/supabase-consumer-manifest.yml
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedNote: "Reviewed the indirect Supabase consumer topology, AST exact-set proof, and external delivery-commit binding for Issue #9."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -88,3 +92,9 @@ The three remote stages use only the public `tiangong-lca release` command famil
 ```
 
 The control plane inherits the protected environment when spawning the CLI, but command arguments and workspace artifacts contain no credential. Prepare and publish use deterministic idempotency keys. Signed upload retry is confined to the same content-addressed identity, while finalize re-verifies bytes. A later passed stage seals all predecessors, preventing an old plan or package stage from being replayed after approval or publication.
+
+## Supabase consumer evidence boundary
+
+Release Core has no direct PostgREST, PostgreSQL/SQL, PGMQ, Cron, Realtime, or Supabase CLI database consumer. Its remote dependency is deliberately indirect: a versioned Functions gateway profile, actor-scoped `tiangong-lca release` commands whose authorization remains authoritative in Edge/Database, and one opaque signed-storage download whose bytes are independently verified.
+
+`contracts/supabase-consumer-manifest.v3.json` is candidate evidence for that boundary. `scripts/verify-supabase-consumer-manifest.ts` reads regular files from the audited Git tree, derives every occurrence with the TypeScript AST, then independently scans the actual delivery HEAD and requires the governed source-tree bytes and bidirectional occurrence set to match exactly. The manifest therefore does not embed its own delivery SHA: an external verifier must bind the emitted actual `deliveryCommit` and exact manifest/schema hashes. This avoids a self-referential old-commit pin that could remain green after later consumer source changes. The evidence is non-authorizing and remains insufficient without database-engine exact-byte consumption and a real joint Supabase lifecycle test.

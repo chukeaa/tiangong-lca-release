@@ -16,12 +16,16 @@ checkPaths:
   - .env.example
   - .agents/skills/tiangong-release-operator/**
   - specs/release-targets.json
+  - contracts/supabase-consumer-manifest.v3.json
+  - contracts/supabase-consumer-manifest.v3.schema.json
+  - scripts/verify-supabase-consumer-manifest.ts
   - src/cli.ts
   - src/operator/**
   - src/target/**
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: fc3ae3c8a31b9a4e2b85e8cd4b9857756c2695f8
-lastReviewedNote: "Documented the explicit-target Codex operator workflow and target-bound publication frontier."
+  - .github/workflows/supabase-consumer-manifest.yml
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedNote: "Documented the candidate Supabase consumer manifest and actual-delivery-HEAD verification boundary for Issue #9."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -51,6 +55,8 @@ The actor must have the live platform role `data_product_manager`. Authenticatio
 Only actor-scoped `tiangong-lca` commands receive the protected remote environment. Local Rust `tidas release` validation, conversion, round-trip, closure, and packaging processes run with a minimal non-credential environment allowlist.
 
 Public target facts are versioned in `specs/release-targets.json`. Bootstrap freezes the selected target ID, API base URL, publishable-key SHA-256, and derived target fingerprint into the Release Request. The publish plan and v2 approval repeat that fingerprint. Before every remote frontier, the executable recomputes the current environment binding and rejects any mismatch before calling the public CLI.
+
+The machine-verifiable candidate inventory at `contracts/supabase-consumer-manifest.v3.json` records this repository's complete indirect Supabase surface: versioned Functions gateway profiles, actor-scoped `tiangong-lca release` commands, the bounded dynamic dispatch helper, and signed bundle-manifest download. The verifier derives occurrences from the actual Git HEAD with the TypeScript AST, requires exact governed-source bytes relative to the audited source snapshot, and binds the schema bytes and canonical origin. It fails closed on direct PostgREST/SQL/PGMQ/Cron/Realtime or unresolved dynamic access. The manifest is non-authorizing and cannot approve a database freeze, migration, hosted mutation, or production mutation.
 
 The ignored repository-local `.env` is loaded automatically by the executable when present. Keep it mode `0600` and never commit it.
 

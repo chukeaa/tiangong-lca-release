@@ -1,0 +1,308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong-lca.dev/contracts/release-supabase-consumer-manifest.v3.schema.json",
+  "title": "TianGong Release Supabase consumer manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema",
+    "version",
+    "repository",
+    "manifestSchema",
+    "sourceSnapshot",
+    "delivery",
+    "authority",
+    "occurrences",
+    "absenceProof",
+    "summary"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./supabase-consumer-manifest.v3.schema.json"
+    },
+    "schema": {
+      "const": "tiangong.supabase-consumer-manifest.v3"
+    },
+    "version": {
+      "const": 3
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "canonicalOrigin"],
+      "properties": {
+        "slug": {
+          "const": "chukeaa/tiangong-lca-release"
+        },
+        "canonicalOrigin": {
+          "const": "git@github.com:chukeaa/tiangong-lca-release.git"
+        }
+      }
+    },
+    "manifestSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "contracts/supabase-consumer-manifest.v3.schema.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derivation",
+        "sourceTreeCommit",
+        "sourceTreeSha256",
+        "pathPatterns",
+        "governedFiles",
+        "symlinkPolicy",
+        "nonRegularFilePolicy",
+        "setEquality"
+      ],
+      "properties": {
+        "derivation": {
+          "const": "git-tree-typescript-ast-v3"
+        },
+        "sourceTreeCommit": {
+          "$ref": "#/$defs/commit"
+        },
+        "sourceTreeSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pathPatterns": {
+          "const": ["src/**/*.ts", "specs/release-targets.json"]
+        },
+        "governedFiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "mode", "sha256"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^(src/.+\\.ts|specs/release-targets\\.json)$"
+              },
+              "mode": {
+                "enum": ["100644", "100755"]
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "symlinkPolicy": {
+          "const": "reject"
+        },
+        "nonRegularFilePolicy": {
+          "const": "reject"
+        },
+        "setEquality": {
+          "const": "bidirectional-exact"
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseCommit",
+        "targetBranch",
+        "deliveryCommit",
+        "deliveryCommitAuthority",
+        "headResolution",
+        "governedSourcePolicy"
+      ],
+      "properties": {
+        "baseCommit": {
+          "$ref": "#/$defs/commit"
+        },
+        "targetBranch": {
+          "const": "main"
+        },
+        "deliveryCommit": {
+          "type": "null"
+        },
+        "deliveryCommitAuthority": {
+          "const": "external-verifier-must-bind-actual-head"
+        },
+        "headResolution": {
+          "const": "scan-actual-git-head"
+        },
+        "governedSourcePolicy": {
+          "const": "exact-bytes-equal-source-snapshot"
+        }
+      }
+    },
+    "authority": {
+      "const": {
+        "status": "candidate",
+        "authorizesDatabaseFreeze": false,
+        "authorizesDatabaseMigration": false,
+        "authorizesHostedMutation": false,
+        "authorizesProductionMutation": false
+      }
+    },
+    "occurrences": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "absenceProof": {
+      "const": {
+        "zeroOccurrenceTransports": [
+          "postgrest-from-rpc-schema",
+          "direct-postgresql-sql",
+          "dynamic-sql",
+          "pgmq",
+          "cron",
+          "realtime",
+          "supabase-cli"
+        ],
+        "forbiddenCredentials": ["service-role", "supabase-secret-key"],
+        "enforcement": "typescript-ast-fail-closed"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "byTransport", "byCredential"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byTransport": {
+          "$ref": "#/$defs/countMap"
+        },
+        "byCredential": {
+          "$ref": "#/$defs/countMap"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "countMap": {
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "file",
+        "line",
+        "span",
+        "operation",
+        "transport",
+        "credential",
+        "role",
+        "schema",
+        "object",
+        "signature",
+        "acl",
+        "sourceClass"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^occ-[0-9a-f]{20}$"
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^(src/.+\\.ts|specs/release-targets\\.json)$"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "span": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "operation": {
+          "enum": ["call", "configure", "dispatch", "download"]
+        },
+        "transport": {
+          "enum": [
+            "supabase-functions-gateway",
+            "tiangong-lca-cli",
+            "signed-storage-url"
+          ]
+        },
+        "credential": {
+          "enum": [
+            "actor-session-api-key",
+            "publishable-key-profile",
+            "signed-download-url"
+          ]
+        },
+        "role": {
+          "enum": [
+            "data_product_manager",
+            "credential-brokered",
+            "no-database-role"
+          ]
+        },
+        "schema": {
+          "enum": [
+            "indirect-cli-edge-contract",
+            "storage",
+            "supabase-functions"
+          ]
+        },
+        "object": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceClass": {
+          "enum": ["runtime", "versioned-target-profile"]
+        }
+      }
+    }
+  }
+}

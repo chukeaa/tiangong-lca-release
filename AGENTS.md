@@ -22,11 +22,14 @@ checkPaths:
   - src/**
   - scripts/**
   - test/**
+  - contracts/supabase-consumer-manifest.v3.json
+  - contracts/supabase-consumer-manifest.v3.schema.json
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
-lastReviewedNote: "Added the explicit-target Codex operator workflow, deterministic calculation-package bootstrap, and target-bound publication frontier."
+  - .github/workflows/supabase-consumer-manifest.yml
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedNote: "Reviewed the candidate Supabase consumer manifest, actual-HEAD drift proof, and non-authorizing external-verifier boundary for Issue #9."
 related:
   - .docpact/config.yaml
   - docs/architecture.md
@@ -84,6 +87,7 @@ Route those concerns respectively to Worker, `tidas-tools`, `tidas-sdk`, `tiango
 - Never rerun an earlier stage after a successor has passed; recovery may only retry the current frontier with the same immutable identities.
 - Never treat partial closure or a legacy LCIA-only package as a Release v1 package.
 - Large artifacts go to files/object storage, never JSON stdout.
+- Treat `contracts/supabase-consumer-manifest.v3.json` only as candidate, non-authorizing evidence. Its verifier must scan the actual Git HEAD, bind the schema bytes and canonical origin, and reject any drift in consumer-governed source bytes from the audited source-tree commit.
 
 ## Runtime and Branch Facts
 
@@ -102,3 +106,5 @@ Changes to identity or canonicalization require fixed-vector tests. Changes to v
 Remote publication changes additionally require exact-plan approval, manager-denial, partial-failure resume, four-artifact independent download/hash verification, post-readback status, and credential non-persistence tests. Run status advances through `ready_for_approval -> approved -> published -> verified`; a passed successor permanently seals its predecessors.
 
 Operator-intake changes additionally require deterministic bootstrap replay, Calculation Bundle and frozen source-closure integrity, explicit target mismatch denial before the first remote call, bounded candidate/list reports, no signed-URL persistence, and proof that legacy targetless runs remain usable only for local stages.
+
+Supabase consumer-boundary changes require AST-derived bidirectional exact-set evidence for every actor-scoped CLI, functions-gateway, or signed-storage occurrence; negative proof for direct PostgREST, PostgreSQL/SQL, PGMQ, Cron, Realtime, dynamic bypass, symlink/non-regular input, and forged location/operation metadata; and an external verifier that binds the candidate manifest bytes to the actual delivery commit. This repository-local evidence never substitutes for the database-owned verifier or a real joint Supabase lifecycle qualification.

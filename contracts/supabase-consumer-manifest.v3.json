@@ -1,0 +1,535 @@
+{
+  "$schema": "./supabase-consumer-manifest.v3.schema.json",
+  "schema": "tiangong.supabase-consumer-manifest.v3",
+  "version": 3,
+  "repository": {
+    "slug": "chukeaa/tiangong-lca-release",
+    "canonicalOrigin": "git@github.com:chukeaa/tiangong-lca-release.git"
+  },
+  "manifestSchema": {
+    "path": "contracts/supabase-consumer-manifest.v3.schema.json",
+    "sha256": "21a8e6f1a867da747eccd15cc9503da3a5e46ec4f0c8bd5e48090b78ff48821a"
+  },
+  "sourceSnapshot": {
+    "derivation": "git-tree-typescript-ast-v3",
+    "sourceTreeCommit": "f8d37018d898d23a51655272d129417eb9fad13a",
+    "sourceTreeSha256": "d7351ca14fbc23d1fb0a5e2a5038771c38fc48503bcc876ee7d5820ca49e741f",
+    "pathPatterns": ["src/**/*.ts", "specs/release-targets.json"],
+    "governedFiles": [
+      {
+        "path": "specs/release-targets.json",
+        "mode": "100644",
+        "sha256": "b1bfd2dc7b2db3a71fa4ae587e0fc0a772ea79e8a5019b86fd8e80bffa5fced0"
+      },
+      {
+        "path": "src/approval/decision.ts",
+        "mode": "100644",
+        "sha256": "f7d5c72b1c84290e926bc1a1812136e378e287c191d2a541fea8621e8f0c2ba7"
+      },
+      {
+        "path": "src/bundle/manifest.ts",
+        "mode": "100644",
+        "sha256": "0323e00db7c06765b5996122d9d40599eef0eca5a15393c3bbba3dcc64b84e97"
+      },
+      {
+        "path": "src/bundle/ndjson.ts",
+        "mode": "100644",
+        "sha256": "3dce6a714c0db7dc15f56942765738dfc365f6c17606cc300c17dcde546c29c5"
+      },
+      {
+        "path": "src/bundle/types.ts",
+        "mode": "100644",
+        "sha256": "b961c19420d5f9cff8b50c559a8c684d674f6fc55229b653453389c7c586b688"
+      },
+      {
+        "path": "src/bundle/verify.ts",
+        "mode": "100644",
+        "sha256": "c5e77c36e820519d33ae24ae180b46b4e7aba5f2a46d2817df2bd1f4964ddadb"
+      },
+      {
+        "path": "src/canonical/jcs.ts",
+        "mode": "100644",
+        "sha256": "ddf7658a24f06348f5b4d74065986743693649d93c0b1e91ed5bc765ec6ea897"
+      },
+      {
+        "path": "src/cli.ts",
+        "mode": "100644",
+        "sha256": "8b42c6ec4c37e99e86b5efff7779cf59118f0549cdbcd8dd0faf40eb03ab8e21"
+      },
+      {
+        "path": "src/contracts/json.ts",
+        "mode": "100644",
+        "sha256": "bb766d31f1525e047cac5c05455261c30c38968072ce1d279c5c772cae3d9abb"
+      },
+      {
+        "path": "src/identity/identity.ts",
+        "mode": "100644",
+        "sha256": "5b782c533a66c25d3b415457f3e02cdd4b1360fce0fab810300f5804e22a9f8b"
+      },
+      {
+        "path": "src/identity/quantitative-reference.ts",
+        "mode": "100644",
+        "sha256": "506e01959ed19de9097426b32fcd69ff9480a2f489530d1a0caff837486b66d6"
+      },
+      {
+        "path": "src/identity/uuid.ts",
+        "mode": "100644",
+        "sha256": "d219a9dd9f813a6ee5f6d7114db915625d8daa1766032d2e8ffef854fbd60d3f"
+      },
+      {
+        "path": "src/index.ts",
+        "mode": "100644",
+        "sha256": "8ee6aba76dbc18005300ce30bbd9dfd088c300604e74e814e89c2ba4a9b346cc"
+      },
+      {
+        "path": "src/io/files.ts",
+        "mode": "100644",
+        "sha256": "5a641b1e645abbd1c193c8db7ed36369dfce31f3a2331999d453e4ecd5bc3fef"
+      },
+      {
+        "path": "src/materialization/finalize.ts",
+        "mode": "100644",
+        "sha256": "e327728e8238f912cfa26d95d0072688255ae7d30ae7d83e83afc898f78a2582"
+      },
+      {
+        "path": "src/materialization/io.ts",
+        "mode": "100644",
+        "sha256": "d9240a92a6ed9845b463c3dbe53403389da04e7a640f7df4d60ef1e3e7af74b5"
+      },
+      {
+        "path": "src/materialization/tidas.ts",
+        "mode": "100644",
+        "sha256": "230897bbec32031420b19e2a23db9a73ef68b7daf55b42d38b5b283f11b23e18"
+      },
+      {
+        "path": "src/materialization/types.ts",
+        "mode": "100644",
+        "sha256": "286974698a1c22a4af02165055dd26b884a5dc969278dcd853ab799f0487681c"
+      },
+      {
+        "path": "src/operator/bootstrap.ts",
+        "mode": "100644",
+        "sha256": "729b1cdcc9656af4b46d5668f87051c7170e1717a099a94e32d5b8e4d784e0e7"
+      },
+      {
+        "path": "src/operator/candidate.ts",
+        "mode": "100644",
+        "sha256": "59597a0a412aaa122ad2588f36ac7ec949f461e45a4f187e33d7928ad861c46a"
+      },
+      {
+        "path": "src/operator/doctor.ts",
+        "mode": "100644",
+        "sha256": "9840ed26a35e74a5d72362870cc2c47ae91885ae386b8d3fee9f2d0e20de897d"
+      },
+      {
+        "path": "src/operator/runs.ts",
+        "mode": "100644",
+        "sha256": "916ea9eabf79825a8aedfe33316f43a5952a02cef923677b4c7d615f906e1910"
+      },
+      {
+        "path": "src/publication/remote-stages.ts",
+        "mode": "100644",
+        "sha256": "be5615002d47e25c919c82d5ed539053121f0ab19fa04c4dfa058452ec5c75d1"
+      },
+      {
+        "path": "src/source/closure.ts",
+        "mode": "100644",
+        "sha256": "68d8e1be1f43cb561d5c0330f6622e5b164d7cb39c882f84a12f22fdfc2c5744"
+      },
+      {
+        "path": "src/stages/catalog.ts",
+        "mode": "100644",
+        "sha256": "465e6fbb11f33151c9fc4540b0056d7f787b086b0c1f80d66e1120be2900b085"
+      },
+      {
+        "path": "src/stages/runner.ts",
+        "mode": "100644",
+        "sha256": "d83e98d3cedf69fa4381d39ba7bc151cb8cf04d66afa6bde5bf6a308cc7fd447"
+      },
+      {
+        "path": "src/stages/types.ts",
+        "mode": "100644",
+        "sha256": "bf8ab75c648739fc8a3ae381d95be7877d630dd5b74a1830458042ff47fb09c7"
+      },
+      {
+        "path": "src/target/frontier.ts",
+        "mode": "100644",
+        "sha256": "2cb753d227b7e21be3661729214c27c4193976676dc11e68660ea3d01a727605"
+      },
+      {
+        "path": "src/target/profile.ts",
+        "mode": "100644",
+        "sha256": "8bdea6358d855142995001bf1648899aaa9d83d70852403cfbd3dcf9e51bf1d9"
+      },
+      {
+        "path": "src/tools/external.ts",
+        "mode": "100644",
+        "sha256": "366c3db8f6e3baa7bbbf12427bcbde79d6cda97889f99dfc4223eaf16f2a168b"
+      },
+      {
+        "path": "src/tools/tidas.ts",
+        "mode": "100644",
+        "sha256": "e3d45f30d1768b40a65f47591d7c2d04c51127ea3d17ad7d77e6b931de1a2128"
+      },
+      {
+        "path": "src/validation/numeric.ts",
+        "mode": "100644",
+        "sha256": "9f705b50c859c3ecfa971bfa24837cc5076c8d59fa4a2c07c1cc2dcb0a323db0"
+      },
+      {
+        "path": "src/versioning/dataset-version.ts",
+        "mode": "100644",
+        "sha256": "f13eac22e68622f77d8dc04d033c42734ae70783ac878e1f7dd42553a4765cb7"
+      },
+      {
+        "path": "src/versioning/descriptors.ts",
+        "mode": "100644",
+        "sha256": "61a0c6a1f80dfff9c55e6d332345e3312ec40c3fb9adf7d0bbad4754d06399fd"
+      },
+      {
+        "path": "src/workspace/layout.ts",
+        "mode": "100644",
+        "sha256": "7c48c9217d291babc7b871d61bf43221271113adfbbf1f38ce391096bbe2372c"
+      },
+      {
+        "path": "src/workspace/run-store.ts",
+        "mode": "100644",
+        "sha256": "fc206fffa51dd6cf63ecec93f0fbcd9c2cf9bb02a5517073ababc3ee824df2b6"
+      }
+    ],
+    "symlinkPolicy": "reject",
+    "nonRegularFilePolicy": "reject",
+    "setEquality": "bidirectional-exact"
+  },
+  "delivery": {
+    "baseCommit": "f8d37018d898d23a51655272d129417eb9fad13a",
+    "targetBranch": "main",
+    "deliveryCommit": null,
+    "deliveryCommitAuthority": "external-verifier-must-bind-actual-head",
+    "headResolution": "scan-actual-git-head",
+    "governedSourcePolicy": "exact-bytes-equal-source-snapshot"
+  },
+  "authority": {
+    "status": "candidate",
+    "authorizesDatabaseFreeze": false,
+    "authorizesDatabaseMigration": false,
+    "authorizesHostedMutation": false,
+    "authorizesProductionMutation": false
+  },
+  "occurrences": [
+    {
+      "id": "occ-e6aa2957d4af083aa9dd",
+      "file": "specs/release-targets.json",
+      "line": 7,
+      "span": {
+        "start": 193,
+        "end": 248
+      },
+      "operation": "configure",
+      "transport": "supabase-functions-gateway",
+      "credential": "publishable-key-profile",
+      "role": "credential-brokered",
+      "schema": "supabase-functions",
+      "object": "production.functions-v1",
+      "signature": "https://<project-ref>.supabase.co/functions/v1",
+      "acl": "publishable-key fingerprint plus actor session; no secret/service-role credential",
+      "sourceClass": "versioned-target-profile"
+    },
+    {
+      "id": "occ-5f9154022f636217ed64",
+      "file": "specs/release-targets.json",
+      "line": 13,
+      "span": {
+        "start": 470,
+        "end": 508
+      },
+      "operation": "configure",
+      "transport": "supabase-functions-gateway",
+      "credential": "publishable-key-profile",
+      "role": "credential-brokered",
+      "schema": "supabase-functions",
+      "object": "fixture.functions-v1",
+      "signature": "https://<project-ref>.supabase.co/functions/v1",
+      "acl": "publishable-key fingerprint plus actor session; no secret/service-role credential",
+      "sourceClass": "versioned-target-profile"
+    },
+    {
+      "id": "occ-d6404cc0665da4be4364",
+      "file": "src/operator/bootstrap.ts",
+      "line": 183,
+      "span": {
+        "start": 4771,
+        "end": 5063
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.calculation-bundle",
+      "signature": "cli:tiangong-lca release calculation-bundle",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-f3cf2fd6ce8bafea989b",
+      "file": "src/operator/bootstrap.ts",
+      "line": 235,
+      "span": {
+        "start": 6130,
+        "end": 6274
+      },
+      "operation": "download",
+      "transport": "signed-storage-url",
+      "credential": "signed-download-url",
+      "role": "no-database-role",
+      "schema": "storage",
+      "object": "calculation-bundle-manifest",
+      "signature": "signed-url:GET application/octet-stream",
+      "acl": "opaque short-lived URL issued by actor-scoped CLI projection; exact byte size and SHA-256 required",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-ae8a1ef5c926028860d0",
+      "file": "src/operator/bootstrap.ts",
+      "line": 276,
+      "span": {
+        "start": 7457,
+        "end": 7807
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.calculation-artifact",
+      "signature": "cli:tiangong-lca release calculation-artifact",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-a6f8ff7aa84d097e7224",
+      "file": "src/operator/doctor.ts",
+      "line": 81,
+      "span": {
+        "start": 2116,
+        "end": 2497
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.calculation-bundle",
+      "signature": "cli:tiangong-lca release calculation-bundle",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-e133d1aa02dd69ae024e",
+      "file": "src/publication/remote-stages.ts",
+      "line": 119,
+      "span": {
+        "start": 3646,
+        "end": 5210
+      },
+      "operation": "dispatch",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.<bounded-action>",
+      "signature": "dynamic-cli-helper:approve|artifact-download|finalize|prepare|publish|readback-verify|status|upload",
+      "acl": "only literal reviewed release actions may reach the actor-scoped CLI helper",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-bfdf930361029c909fc3",
+      "file": "src/publication/remote-stages.ts",
+      "line": 509,
+      "span": {
+        "start": 16940,
+        "end": 17118
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.prepare",
+      "signature": "cli:tiangong-lca release prepare",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-2ccabbbb8218e453d1b3",
+      "file": "src/publication/remote-stages.ts",
+      "line": 540,
+      "span": {
+        "start": 17971,
+        "end": 18146
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.upload",
+      "signature": "cli:tiangong-lca release upload",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-5b326d086f9c34541451",
+      "file": "src/publication/remote-stages.ts",
+      "line": 566,
+      "span": {
+        "start": 18749,
+        "end": 18930
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.finalize",
+      "signature": "cli:tiangong-lca release finalize",
+      "acl": "caller=data_product_manager; downstream artifact finalization remains service-only after Edge byte/hash verification",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-6d347eb6f2322707e2cc",
+      "file": "src/publication/remote-stages.ts",
+      "line": 593,
+      "span": {
+        "start": 19710,
+        "end": 19890
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.approve",
+      "signature": "cli:tiangong-lca release approve",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-8af1e1d64f3458b7cc4f",
+      "file": "src/publication/remote-stages.ts",
+      "line": 683,
+      "span": {
+        "start": 22636,
+        "end": 22822
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.publish",
+      "signature": "cli:tiangong-lca release publish",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-53e8c32b6b77d4c77376",
+      "file": "src/publication/remote-stages.ts",
+      "line": 826,
+      "span": {
+        "start": 27452,
+        "end": 27643
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.status",
+      "signature": "cli:tiangong-lca release status",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-7452a500f1e8dcfa2fa2",
+      "file": "src/publication/remote-stages.ts",
+      "line": 849,
+      "span": {
+        "start": 28295,
+        "end": 28481
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.artifact-download",
+      "signature": "cli:tiangong-lca release artifact-download",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-3fe8237e8dbf5b91b640",
+      "file": "src/publication/remote-stages.ts",
+      "line": 895,
+      "span": {
+        "start": 29680,
+        "end": 29868
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.readback-verify",
+      "signature": "cli:tiangong-lca release readback-verify",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    },
+    {
+      "id": "occ-15da967132d2454cf50d",
+      "file": "src/publication/remote-stages.ts",
+      "line": 911,
+      "span": {
+        "start": 30225,
+        "end": 30415
+      },
+      "operation": "call",
+      "transport": "tiangong-lca-cli",
+      "credential": "actor-session-api-key",
+      "role": "data_product_manager",
+      "schema": "indirect-cli-edge-contract",
+      "object": "release.status",
+      "signature": "cli:tiangong-lca release status",
+      "acl": "caller=data_product_manager; Edge and Database remain authoritative for capability authorization",
+      "sourceClass": "runtime"
+    }
+  ],
+  "absenceProof": {
+    "zeroOccurrenceTransports": [
+      "postgrest-from-rpc-schema",
+      "direct-postgresql-sql",
+      "dynamic-sql",
+      "pgmq",
+      "cron",
+      "realtime",
+      "supabase-cli"
+    ],
+    "forbiddenCredentials": ["service-role", "supabase-secret-key"],
+    "enforcement": "typescript-ast-fail-closed"
+  },
+  "summary": {
+    "total": 16,
+    "byTransport": {
+      "signed-storage-url": 1,
+      "supabase-functions-gateway": 2,
+      "tiangong-lca-cli": 13
+    },
+    "byCredential": {
+      "actor-session-api-key": 13,
+      "publishable-key-profile": 2,
+      "signed-download-url": 1
+    }
+  }
+}
