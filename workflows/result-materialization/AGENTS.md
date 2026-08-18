@@ -37,6 +37,7 @@ related:
 - 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
 - 只把通过验证的 canonical dataset collection 交给 Release Workflow。
+- Worker Calculation Bundle v2 的 content hash 必须在原始 canonical manifest bytes 上移除顶层 `bundleContentHash` 后验证；不得先把任意 JSON number 转成 JavaScript `number` 再重序列化，因为超出安全整数范围时会改变证据字节。
 
 ## 输入最低要求
 

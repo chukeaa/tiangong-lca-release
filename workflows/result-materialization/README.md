@@ -140,7 +140,7 @@ node cli.mjs materialize-models \
   --json
 ```
 
-`intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。输出目录存在时拒绝覆盖。
+`intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。输出目录存在时拒绝覆盖。
 
 `materialize-results` 接受显式 root 范围，并自动把每个 root 的 direct provider `Q` 纳入 required Result set。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，不包含 schema/version 字段；Result profile、LCI/LCIA 数值、方法集、计算任务、source version 和生成时间也都不进入 UUID，而通过外层 identity evidence、profile、semantic hash、dataset version 和 provenance 表达。命令先解析整个 Result version set，再冻结 `result-catalog.json`。
 

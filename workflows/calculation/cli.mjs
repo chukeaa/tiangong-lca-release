@@ -21,10 +21,20 @@ import {
 } from "./contracts/default-profile.mjs";
 import { replyTemplateFor } from "./reply-template-registry.mjs";
 import { recommendResultSetName } from "./contracts/result-set-name.mjs";
+import {
+  CalculationBundleStoreError,
+  createCalculationBundleStore,
+  downloadCalculationBundle,
+} from "./adapters/calculation-bundle-store.mjs";
+import {
+  EnvironmentBootstrapError,
+  syncDataPlaneEnvironment,
+} from "./runtime/environment-bootstrap.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
 const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
+const WORKSPACE_ENV = fileURLToPath(new URL("../../../.env", import.meta.url));
 const REPOSITORY_CONTEXT = fileURLToPath(
   new URL("../../.release", import.meta.url),
 );
@@ -43,6 +53,9 @@ Usage:
   ${COMMAND} calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode <mode> --method <uuid>@<version> --idempotency-key <key> --confirm-start
   ${COMMAND} calculation get --job-id <uuid> [--format human|json]
   ${COMMAND} calculation-bundle list [--limit 20] [--format human|json]
+  ${COMMAND} calculation-bundle get --package-id <uuid> [--format human|json]
+  ${COMMAND} calculation-bundle download --package-id <uuid> [--out-dir <path>] [--concurrency 8] [--include-products] [--format human|json]
+  ${COMMAND} environment sync [--workspace-env <path>] --confirm-sync [--format human|json]
   ${COMMAND} worker logs --job-id <uuid> [--environment <name>] [--since <journal-time>]
 
 Behavior:
@@ -51,13 +64,18 @@ Behavior:
   create  Creates a remote ResultSet only with --confirm-create and records its ID.
   closure get  Reads one exact Closure Check and reports whether its evidence can bind a calculation.
   calculation get  Reads database-backed task status first and recommends Worker logs only for diagnosis.
-  calculation-bundle list  Verifies recent Package candidates and lists only Bundles available to the actor.
+  calculation-bundle list  Lists bounded Bundle metadata through direct read-only SQL; no signed URLs.
+  calculation-bundle get  Reads one exact Package/Bundle through parameterized read-only SQL.
+  calculation-bundle download  Downloads and verifies one exact Bundle directly from S3.
+  environment sync  Copies only missing data-plane keys from the workspace ignored .env.
 
 Examples:
   ${COMMAND} result-set list --limit 20 --format json
   ${COMMAND} result-set get --result-set-id 123e4567-e89b-42d3-a456-426614174000
   ${COMMAND} result-set create --name "Steel baseline" --confirm-create
   ${COMMAND} calculation-bundle list --limit 20 --format json
+  ${COMMAND} calculation-bundle get --package-id 28932bc0-dcb0-4819-901a-5eaefcc51433
+  ${COMMAND} calculation-bundle download --package-id 28932bc0-dcb0-4819-901a-5eaefcc51433
 `;
 
 const EXIT_CODES = {
@@ -71,6 +89,13 @@ const EXIT_CODES = {
   invalid_result_set_reference: 8,
   capability_unavailable: 9,
   local_context_write_failed: 10,
+  data_plane_configuration_required: 11,
+  database_read_failed: 12,
+  package_not_found: 13,
+  calculation_bundle_not_available: 14,
+  artifact_download_failed: 15,
+  artifact_integrity_mismatch: 16,
+  bundle_manifest_binding_mismatch: 17,
 };
 
 function parseFlags(args) {
@@ -84,9 +109,21 @@ function parseFlags(args) {
       );
     }
     const key = token.slice(2);
-    if (key === "confirm-create" || key === "confirm-start") {
-      values[key === "confirm-create" ? "confirmCreate" : "confirmStart"] =
-        true;
+    if (
+      [
+        "confirm-create",
+        "confirm-start",
+        "confirm-sync",
+        "include-products",
+      ].includes(key)
+    ) {
+      const property = {
+        "confirm-create": "confirmCreate",
+        "confirm-start": "confirmStart",
+        "confirm-sync": "confirmSync",
+        "include-products": "includeProducts",
+      }[key];
+      values[property] = true;
       continue;
     }
     const value = args[index + 1];
@@ -102,6 +139,10 @@ function parseFlags(args) {
     else if (key === "result-set-id") values.resultSetId = value;
     else if (key === "name") values.name = value;
     else if (key === "job-id") values.jobId = value;
+    else if (key === "package-id") values.packageId = value;
+    else if (key === "out-dir") values.outDir = value;
+    else if (key === "workspace-env") values.workspaceEnv = value;
+    else if (key === "concurrency") values.concurrency = Number(value);
     else if (key === "closure-check-id") values.closureCheckId = value;
     else if (key === "coverage-mode") values.coverageMode = value;
     else if (key === "idempotency-token") values.idempotencyToken = value;
@@ -184,7 +225,15 @@ function failure(command, error) {
           ]
         : code === "remote_outcome_unknown"
           ? [`${COMMAND} result-set list --format json`]
-          : [];
+          : code === "data_plane_configuration_required"
+            ? [`${COMMAND} environment sync --confirm-sync`]
+            : command === "calculation-bundle.list"
+              ? [`${COMMAND} calculation-bundle list --limit 20`]
+              : error?.details?.packageId
+                ? [
+                    `${COMMAND} calculation-bundle get --package-id ${error.details.packageId}`,
+                  ]
+                : [];
   const output = {
     schemaVersion: CLI_SCHEMA,
     ok: false,
@@ -257,6 +306,9 @@ export async function runCli(
     fetchImpl = globalThis.fetch,
     contextRoot = REPOSITORY_CONTEXT,
     now = () => new Date(),
+    bundleStoreFactory = createCalculationBundleStore,
+    bundleDownloader = downloadCalculationBundle,
+    environmentSynchronizer = syncDataPlaneEnvironment,
   } = {},
 ) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -266,8 +318,41 @@ export async function runCli(
 
   let command = "result-set.unknown";
   let format = "human";
+  let recoveryPackageId;
   try {
     const [family, action, ...rest] = argv;
+    if (family === "environment" && action === "sync") {
+      command = "environment.sync";
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      if (!flags.confirmSync)
+        throw new ResultSetOperationError(
+          "confirmation_required",
+          "Copying data-plane credentials into the Release .env requires --confirm-sync",
+        );
+      const data = await environmentSynchronizer({
+        source: flags.workspaceEnv ?? WORKSPACE_ENV,
+        target: REPOSITORY_ENV,
+      });
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data,
+        completeness: {
+          status: data.missingSourceKeys.length ? "partial" : "complete",
+          valuesExposed: false,
+        },
+        nextActions: [`${COMMAND} calculation-bundle list --limit 20`],
+      };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `Release data-plane environment synchronized\n\nSummary:\n- Copied keys: ${data.copiedKeys.join(", ") || "none"}\n- Preserved keys: ${data.preservedKeys.join(", ") || "none"}\n- Missing source keys: ${data.missingSourceKeys.join(", ") || "none"}\n- Secret values exposed: no\n\nNext:\n- ${result.nextActions[0]}\n- Reply using template: ${result.replyTemplate.path}\n`,
+      );
+      return 0;
+    }
     if (family === "worker" && action === "logs") {
       command = "worker.logs";
       const flags = parseFlags(rest);
@@ -347,43 +432,112 @@ export async function runCli(
       );
       return 0;
     }
-    if (family === "calculation-bundle" && action === "list") {
-      command = "calculation-bundle.list";
+    if (
+      family === "calculation-bundle" &&
+      ["list", "get", "download"].includes(action)
+    ) {
+      command = `calculation-bundle.${action}`;
       const flags = parseFlags(rest);
       format = flags.format ?? "human";
+      if (["get", "download"].includes(action) && !isUuid(flags.packageId))
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--package-id must be an exact UUID",
+        );
+      recoveryPackageId = flags.packageId;
       const limit = flags.limit ?? 20;
-      if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      if (
+        action === "list" &&
+        (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      )
         throw new ResultSetOperationError(
           "invalid_request",
           "--limit must be an integer from 1 to 200",
         );
-      const { items, lookup, exclusions } = await createCalculationTaskApi({
-        env,
-        fetchImpl,
-      }).listCalculationBundles(limit);
+      if (
+        action === "download" &&
+        flags.concurrency !== undefined &&
+        (!Number.isInteger(flags.concurrency) ||
+          flags.concurrency < 1 ||
+          flags.concurrency > 32)
+      )
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--concurrency must be an integer from 1 to 32",
+        );
+      const store = bundleStoreFactory({ env });
+      if (action === "download") {
+        const metadata = await store.get(flags.packageId, {
+          includeLocators: true,
+        });
+        const outDir =
+          flags.outDir ??
+          fileURLToPath(
+            new URL(
+              `../../.release/calculation/bundles/${flags.packageId}/`,
+              import.meta.url,
+            ),
+          );
+        const downloaded = await bundleDownloader({
+          metadata,
+          outDir,
+          env,
+          concurrency: flags.concurrency ?? 8,
+          includeProducts: flags.includeProducts === true,
+        });
+        const result = {
+          schemaVersion: CLI_SCHEMA,
+          ok: true,
+          command,
+          data: {
+            packageId: metadata.packageId,
+            packageVersion: metadata.packageVersion,
+            bundle: metadata.bundle,
+            bundleDirectory: downloaded.bundleDirectory,
+            receiptPath: downloaded.receiptPath,
+            verification: downloaded.receipt.verification,
+            artifactCount: downloaded.receipt.artifactCount,
+            productDownloadCount: downloaded.receipt.productDownloadCount,
+          },
+          completeness: {
+            status: "complete",
+            source: "direct_database_and_s3",
+            signedUrlsCreated: false,
+          },
+          nextActions: [
+            `node workflows/result-materialization/cli.mjs intake --bundle ${JSON.stringify(downloaded.bundleDirectory)} --out-dir <path> --json`,
+          ],
+        };
+        result.replyTemplate = replyTemplateFor(command, { ok: true });
+        stdout.write(
+          format === "json"
+            ? `${JSON.stringify(result)}\n`
+            : `Calculation Bundle downloaded and verified\n\nSummary:\n- Package: ${metadata.packageId}\n- Bundle directory: ${downloaded.bundleDirectory}\n- Artifacts: ${downloaded.receipt.artifactCount}\n- Products: ${downloaded.receipt.productDownloadCount}\n- Receipt: ${downloaded.receiptPath}\n- Signed URLs created: no\n\nNext:\n- ${result.nextActions[0]}\n- Reply using template: ${result.replyTemplate.path}\n`,
+        );
+        return 0;
+      }
+      const operation =
+        action === "list"
+          ? await store.list(limit)
+          : { item: await store.get(flags.packageId) };
+      const items = action === "list" ? operation.items : [operation.item];
       const result = {
         schemaVersion: CLI_SCHEMA,
         ok: true,
         command,
-        data: { items },
-        completeness: {
-          status: lookup.complete ? "complete" : "bounded",
-          returned: items.length,
-          lookup,
-          exclusions,
-        },
-        warnings: exclusions.length
-          ? [
-              {
-                code: "bundle_candidates_excluded",
-                message: `${exclusions.length} recent Package candidate(s) did not expose an available Calculation Bundle`,
+        data: action === "list" ? { items } : operation.item,
+        completeness:
+          action === "list"
+            ? operation.completeness
+            : {
+                status: "complete",
+                selector: "exact_package_id",
+                source: "direct_read_only_database",
               },
-            ]
-          : [],
+        warnings: [],
         nextActions: items.length
           ? [
-              `${COMMAND} calculation get --job-id ${items[0].calculation.jobId}`,
-              "Continue Result Materialization with an exact packageId from this list",
+              `${COMMAND} calculation-bundle download --package-id ${items[0].packageId}`,
             ]
           : ["Inspect recent Calculation tasks or start a new Calculation"],
       };
@@ -391,16 +545,16 @@ export async function runCli(
       stdout.write(
         format === "json"
           ? `${JSON.stringify(result)}\n`
-          : `Available Calculation Bundles (${items.length})\n\nSummary:\n${
+          : `${action === "list" ? `Calculation Bundles (${items.length})` : "Calculation Bundle found"}\n\nSummary:\n${
               items.length
                 ? items
                     .map(
                       (item) =>
-                        `- ${item.calculation.resultSetName ?? item.calculation.title ?? "Unnamed calculation"} | Package ${item.packageId} | Job ${item.calculation.jobId} | ${item.productDownloads.length} downloads`,
+                        `- Package ${item.packageId} | ${item.packageStatus} | ${item.bundle.artifactCount} artifacts | ${item.productDownloadCount} products`,
                     )
                     .join("\n")
-                : "- No verified available Calculation Bundle was found in the bounded recent task feed"
-            }\n- Completeness: ${lookup.complete ? "complete for the scanned feed" : "bounded"}; scanned ${lookup.tasksScanned} tasks, ${lookup.excludedPackages} Package candidates excluded\n\nNext:\n${result.nextActions.map((entry) => `- ${entry}`).join("\n")}\n- Reply using template: ${result.replyTemplate.path}\n`,
+                : "- No Calculation Bundle metadata found"
+            }\n- Source: direct read-only database\n- Signed URLs created: no\n\nNext:\n${result.nextActions.map((entry) => `- ${entry}`).join("\n")}\n- Reply using template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }
@@ -567,7 +721,7 @@ export async function runCli(
     ) {
       throw new ResultSetOperationError(
         "invalid_request",
-        "Expected result-set list/get/create, closure start/get, calculation start/get, calculation-bundle list, or worker logs; use --help for examples",
+        "Expected result-set list/get/create, closure start/get, calculation start/get, calculation-bundle list/get/download, environment sync, or worker logs; use --help for examples",
       );
     }
     command = `result-set.${action}`;
@@ -627,10 +781,20 @@ export async function runCli(
     return 0;
   } catch (error) {
     let normalized = error;
+    if (recoveryPackageId && error && typeof error === "object") {
+      error.details = {
+        ...(error.details ?? {}),
+        packageId: recoveryPackageId,
+        retrySafe: true,
+        calculationRetryRequired: false,
+      };
+    }
     if (
       !(error instanceof ResultSetOperationError) &&
       !(error instanceof ResultSetApiError) &&
       !(error instanceof ResultSetContractError) &&
+      !(error instanceof CalculationBundleStoreError) &&
+      !(error instanceof EnvironmentBootstrapError) &&
       error?.name !== "ActorSessionError"
     ) {
       normalized = new ResultSetOperationError(

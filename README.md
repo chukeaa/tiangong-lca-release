@@ -34,14 +34,14 @@ related:
 
 它帮助用户从任意已有节点继续工作，组织完整性验证、计算、数据集变换、打包和正式发布，同时保留每一步使用的精确输入、用户决定、验证证据、输出产物和恢复入口。
 
-这个项目不是另一个前端、计算引擎或数据库服务。它不要求修改 TianGong LCA 的其他仓库，而是把其他系统已经提供的能力视为外部能力，通过稳定接口调用。
+这个项目不是另一个前端、计算引擎或数据库服务。它不要求修改 TianGong LCA 的其他仓库，而是把其他系统已经提供的能力视为外部能力，通过适合其负载的稳定边界调用：业务控制动作使用 actor-scoped API，批量元数据使用参数化数据库数据面，大型 artifacts 使用 S3 数据面。
 
 ## 当前基线状态
 
 四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
 
 当前仓库以四个 Workflow 为活动基线。Calculation 已拥有 workflow-local ResultSet
-create/list/get、Closure Check 与计算任务提交、数据库优先的任务状态查询、可用 Calculation Bundle 列表，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
+create/list/get、Closure Check 与计算任务提交、数据库优先的任务状态查询、数据库/S3 Calculation Bundle list/get/download 数据面，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
 每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
 Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。
@@ -183,13 +183,16 @@ Workflow 的说明和边界先于实现。代码属于某个 Workflow，但 Work
 
 本项目允许调用其他系统已经提供的能力，但不修改它们：
 
-| 外部能力                     | 本项目如何使用                                      |
-| ---------------------------- | --------------------------------------------------- |
-| ResultSet、Closure、计算任务 | 通过现有 actor-scoped API 或命令调用                |
-| Worker 计算                  | 只提交任务、查询状态和读取产物，不实现或修改 Worker |
-| TIDAS/ILCD 验证与转换        | 调用已有可执行工具，不导入其他仓库源码              |
-| Database / Edge              | 作为权限和远程状态权威，不直接访问数据库            |
-| 公共发布                     | 通过已有 actor-scoped 发布入口，不使用 service-role |
+| 外部能力                     | 本项目如何使用                                           |
+| ---------------------------- | -------------------------------------------------------- |
+| ResultSet、Closure、计算任务 | 通过现有 actor-scoped API 或命令调用                     |
+| Worker 计算                  | 只提交任务、查询状态和读取产物，不实现或修改 Worker      |
+| TIDAS/ILCD 验证与转换        | 调用已有可执行工具，不导入其他仓库源码                   |
+| Database / Edge              | Edge 承担控制面；数据库承担受控批量查询和 staging 数据面 |
+| Object Storage               | 通过受控 S3 数据面传输大型 immutable artifacts           |
+| 公共发布                     | 通过已有 actor-scoped 发布入口，不使用 service-role      |
+
+数据库/S3 数据面 credential 只能存在于 ignored `.env` 或受保护环境中；查询必须参数化、有界，CLI 不输出连接串、secret、内部 locator 或 signed URL。Canonical 写入仍必须经过明确 Workflow 契约、用户授权以及 staging → validation → promotion 边界。
 
 如果某项所需能力当前没有稳定入口，对应 Workflow 必须报告 `capability_unavailable`，而不是悄悄修改其他仓库或绕过权限边界。
 
@@ -236,4 +239,4 @@ Agent 不能替代用户决定：
 - 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
 - 当前分支：`codex/issue-11-workflow-control-plane`
 - 当前阶段：Calculation Workflow 正在按已确认能力逐步实现
-- 运行时状态：ResultSet create/list/get、Closure/计算提交和 Worker job 日志委托已由 `workflows/calculation` 本地拥有；任务状态跟踪与 bundle 下载仍待实现
+- 运行时状态：ResultSet create/list/get、Closure/计算提交、数据库任务状态、数据库/S3 Bundle list/get/download 和 Worker job 日志委托已由 `workflows/calculation` 本地拥有

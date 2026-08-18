@@ -61,8 +61,9 @@ related:
 
 - 不修改其他仓库。
 - 不导入其他仓库的内部源码。
-- 不直接访问远程数据库。
-- 不使用 Supabase service-role 或 secret key。
+- Workflow 可在自己的明确数据面 adapter 中使用 ignored `.env` 的数据库/S3 凭据执行参数化、有界、可审计的批量读写；控制面动作仍使用 actor-scoped API。
+- 未经 Workflow 契约和用户明确授权，不得直接修改 canonical 业务表；写入应使用 staging、验证和原子提升边界。
+- 不记录、打印或把数据库/S3/Supabase secret 放入命令参数。
 - 不记录、打印或持久化用户凭据和 signed URL。
 - 只通过现有 actor-scoped API、CLI 或本地确定性工具调用外部能力。
 - 能力不存在时返回明确 blocker，不扩大任务范围。

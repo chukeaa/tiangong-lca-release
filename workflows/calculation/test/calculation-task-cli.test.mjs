@@ -436,102 +436,137 @@ test("calculation get recommends Worker logs only for diagnostic states", async 
   assert.match(result.nextActions[0], /workspace_ops\.cli worker job/);
 });
 
-test("calculation-bundle list verifies Package candidates and omits signed URLs", async () => {
+const bundleMetadata = {
+  packageId: uuid,
+  packageVersion: "lcia-result-test",
+  packageStatus: "preview_ready",
+  snapshotId: uuid,
+  resultId: jobId,
+  createdAt: "2026-08-18T00:00:00Z",
+  bundle: {
+    schemaVersion: "tiangong.calculation-bundle.v2",
+    bundleContentHash: "a".repeat(64),
+    manifestSha256: "b".repeat(64),
+    manifestByteSize: 123,
+    artifactCount: 140,
+  },
+  availableImpactCategories: [uuid],
+  productDownloads: [],
+};
+
+test("calculation-bundle list uses the direct database store and exposes no locators", async () => {
   const stdout = buffer();
-  const legacyPackageId = "323e4567-e89b-42d3-a456-426614174000";
-  const calls = [];
+  let receivedLimit;
   const code = await runCli(
     ["calculation-bundle", "list", "--limit", "20", "--format", "json"],
     {
       stdout: stdout.stream,
-      env: {
-        ...env,
-        TIANGONG_LCA_RELEASE_COMMAND_URL:
-          "https://example.invalid/release-commands",
-      },
-      fetchImpl: async (url, options) => {
-        const body = JSON.parse(options.body);
-        calls.push({ url, body });
-        if (body.action === "list_task_feed")
-          return Response.json({
-            ok: true,
-            data: {
-              items: [
-                {
-                  jobId,
-                  jobKind: "lcia_result.package_build",
-                  workerStatus: "completed",
-                  domainStatus: "passed",
-                  domainValidity: "valid",
-                  title: "Current calculation",
-                  resultSetId: uuid,
-                  resultSetName: "Current ResultSet",
-                  resultPackageId: uuid,
-                  projectionUpdatedAt: "2026-08-18T00:03:00Z",
-                },
-                {
-                  jobId: legacyPackageId,
-                  jobKind: "lcia_result.package_build",
-                  workerStatus: "completed",
-                  resultPackageId: legacyPackageId,
-                },
-              ],
-              nextCursor: null,
+      env: {},
+      bundleStoreFactory: () => ({
+        async list(limit) {
+          receivedLimit = limit;
+          return {
+            items: [bundleMetadata],
+            completeness: {
+              status: "complete",
+              limit,
+              returned: 1,
+              mayHaveMore: false,
+              source: "direct_read_only_database",
             },
-          });
-        if (body.packageId === legacyPackageId)
-          return Response.json(
-            {
-              ok: false,
-              code: "calculation_bundle_not_available",
-              message: "Legacy Package has no Bundle",
+          };
+        },
+      }),
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.equal(receivedLimit, 20);
+  assert.equal(result.command, "calculation-bundle.list");
+  assert.equal(result.data.items.length, 1);
+  assert.equal(result.data.items[0].packageId, uuid);
+  assert.equal(result.data.items[0].bundle.artifactCount, 140);
+  assert.equal(result.completeness.status, "complete");
+  assert.equal(result.replyTemplate.id, "calculation-bundle-listed");
+  assert.doesNotMatch(stdout.value(), /artifactUrl|signedDownloadUrl|CONN/);
+});
+
+test("calculation-bundle get uses an exact Package and points to local download", async () => {
+  const stdout = buffer();
+  let selector;
+  const code = await runCli(
+    ["calculation-bundle", "get", "--package-id", uuid, "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env: {},
+      bundleStoreFactory: () => ({
+        async get(packageId, options) {
+          selector = { packageId, options };
+          return bundleMetadata;
+        },
+      }),
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.deepEqual(selector, { packageId: uuid, options: undefined });
+  assert.equal(result.command, "calculation-bundle.get");
+  assert.equal(result.completeness.selector, "exact_package_id");
+  assert.match(result.nextActions[0], /calculation-bundle download/);
+  assert.equal(result.replyTemplate.id, "calculation-bundle-inspected");
+});
+
+test("calculation-bundle download returns local verified handoff without locators", async () => {
+  const stdout = buffer();
+  let downloadInput;
+  const code = await runCli(
+    [
+      "calculation-bundle",
+      "download",
+      "--package-id",
+      uuid,
+      "--out-dir",
+      "/tmp/calculation-bundle-test",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: stdout.stream,
+      env: { S3_SECRET_ACCESS_KEY: "must-not-leak" },
+      bundleStoreFactory: () => ({
+        async get() {
+          return {
+            ...bundleMetadata,
+            storage: { manifestUrl: "s3://private/manifest.json" },
+          };
+        },
+      }),
+      bundleDownloader: async (input) => {
+        downloadInput = input;
+        return {
+          bundleDirectory: input.outDir,
+          receiptPath: `${input.outDir}/download-receipt.json`,
+          receipt: {
+            verification: {
+              manifest: "verified",
+              artifacts: "verified",
+              products: "not_requested",
             },
-            { status: 404 },
-          );
-        return Response.json({
-          ok: true,
-          data: {
-            packageId: uuid,
-            packageVersion: "01.00.000",
-            snapshotId: uuid,
-            resultId: legacyPackageId,
-            calculationBundle: {
-              schemaVersion: "tiangong.calculation-bundle.v2",
-              bundleContentHash: "a".repeat(64),
-              manifestUrl: "https://signed.invalid/manifest?secret=yes",
-            },
-            availableImpactCategories: [uuid],
-            productDownloads: [
-              {
-                role: "lcia_results_xlsx",
-                group: "results",
-                fileName: "lcia-results.xlsx",
-                mediaType:
-                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                sha256: "b".repeat(64),
-                byteSize: 123,
-                recordCount: 10,
-                signedDownloadUrl: "https://signed.invalid/file?secret=yes",
-              },
-            ],
+            artifactCount: 140,
+            productDownloadCount: 0,
           },
-        });
+        };
       },
     },
   );
   const result = JSON.parse(stdout.value());
   assert.equal(code, 0);
-  assert.equal(calls.length, 3);
-  assert.equal(calls[0].url, env.TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL);
-  assert.equal(calls[1].url, "https://example.invalid/release-commands");
-  assert.equal(result.command, "calculation-bundle.list");
-  assert.equal(result.data.items.length, 1);
-  assert.equal(result.data.items[0].packageId, uuid);
-  assert.equal(result.data.items[0].calculation.jobId, jobId);
-  assert.equal(result.completeness.lookup.excludedPackages, 1);
-  assert.equal(result.completeness.status, "complete");
-  assert.equal(result.replyTemplate.id, "calculation-bundle-listed");
-  assert.doesNotMatch(stdout.value(), /signed\.invalid/);
+  assert.equal(downloadInput.concurrency, 8);
+  assert.equal(downloadInput.includeProducts, false);
+  assert.equal(result.command, "calculation-bundle.download");
+  assert.equal(result.data.artifactCount, 140);
+  assert.equal(result.replyTemplate.id, "calculation-bundle-downloaded");
+  assert.doesNotMatch(stdout.value(), /must-not-leak|s3:\/\/private/);
 });
 
 test("calculation-bundle list validates its bound before network access", async () => {

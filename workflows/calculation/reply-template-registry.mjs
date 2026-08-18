@@ -75,6 +75,34 @@ const templates = Object.freeze({
     "calculation-bundle-listed.md",
     ["data.items", "completeness", "warnings", "nextActions"],
   ],
+  "calculation-bundle.get": [
+    "calculation-bundle-inspected",
+    "calculation-bundle-inspected.md",
+    ["data.packageId", "data.bundle", "completeness", "nextActions"],
+  ],
+  "calculation-bundle.download": [
+    "calculation-bundle-downloaded",
+    "calculation-bundle-downloaded.md",
+    [
+      "data.packageId",
+      "data.bundleDirectory",
+      "data.receiptPath",
+      "data.verification",
+      "data.artifactCount",
+      "data.productDownloadCount",
+      "nextActions",
+    ],
+  ],
+  "environment.sync": [
+    "data-plane-environment-synchronized",
+    "data-plane-environment-synchronized.md",
+    [
+      "data.copiedKeys",
+      "data.preservedKeys",
+      "data.missingSourceKeys",
+      "nextActions",
+    ],
+  ],
   "worker.logs": [
     "worker-log-delegated",
     "worker-log-delegated.md",

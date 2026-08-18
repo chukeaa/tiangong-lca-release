@@ -66,6 +66,14 @@ Workflow
 
 Workflow 拥有意图整理、动作选择、本地证据和恢复上下文。外部系统继续拥有远程鉴权、任务状态、计算真相和发布事实。
 
+外部访问分为三个平面：
+
+- 控制面：actor-scoped Edge/API/RPC，负责业务动作、权限、任务、审批和原子状态转换；
+- 数据库数据面：参数化、有界的批量读取，以及未来明确授权后的 staging 写入；
+- artifact 数据面：S3 manifest、partition、Parquet、NDJSON 和 package 的本地传输与完整性校验。
+
+不得为了保持“所有访问都经过 Edge”而让交互接口逐条搬运大型数据或串行签发大量 URL。数据面 adapter 仍须隐藏 credential、内部 locator 和连接细节，并由 Workflow 契约限定允许的查询、目标和写入阶段。
+
 ## Workflow 之间的关系
 
 四个 Workflow 通过精确产物引用连接，而不是互相共享 mutable state：
@@ -127,4 +135,4 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 
 四个根 Workflow 的拆分已经得到用户确认。每个可执行入口由所属 Workflow 本地拥有，不建立仓库级聚合 CLI。
 
-Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get、Closure/Calculation 提交、数据库优先的任务状态查询和可用 Calculation Bundle 发现。Bundle 发现先从数据库任务投影取得精确 Package 候选，再通过 actor-scoped Release API 验证，不扫描 Worker 或对象存储，也不把 signed URL 放入列表输出。外部 payload 统一经 provider compatibility adapter 转为 Release-owned 最小引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。
+Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get、Closure/Calculation 提交、数据库优先的任务状态查询，以及数据库/S3 Calculation Bundle 数据面。Bundle list/get 直接执行参数化只读 SQL；download 通过精确 Package metadata 从 S3 有界并发下载并校验 manifest/artifacts，不调用重量级 Edge 签名路径，也不把 credential、object locator 或 signed URL 放入输出。外部 payload 统一经 provider compatibility adapter 转为 Release-owned 最小引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。

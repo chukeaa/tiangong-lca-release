@@ -73,6 +73,7 @@ related:
 - Result Process、LifecycleModel、identity/version 和 canonical dataset collection 的确定性 materialization；
 - Release Candidate、精确审批、发布编排和独立回读；
 - `tiangong-release` 操作入口及其有界 JSON 输出。
+- 面向批量、非常规数据处理的受控数据库/S3 数据面 adapter，包括参数化只读查询、本地 artifact 传输、完整性验证，以及后续明确授权的 staging 写入。
 
 本仓库不拥有：
 
@@ -86,10 +87,11 @@ related:
 
 ## 硬边界
 
-- 不使用 Supabase service-role、secret key 或直接 SQL。
+- 不把数据库连接串、S3 credential、Supabase service-role 或其他 secret 放入源码、stdout、命令参数或恢复产物。
+- 允许所属 Workflow 通过 ignored `.env` 使用受控数据库/S3 数据面；SQL 必须参数化、有界并声明读写模式。未经 Workflow 契约和用户明确授权，不得直接修改 canonical 业务表；批量写入应采用 staging、验证和原子提升边界。
 - 不导入其他 workspace 子仓的内部源码。
 - 不解码、打印、持久化或放入命令参数的用户凭据。
-- 不持久化 signed URL。
+- 不持久化 signed URL；本地批量 artifact 传输优先使用受控 S3 数据面，避免逐 artifact 签名。
 - 不从 mutable `latest` 推断缺失的 identity、version、graph 或 method。
 - 不让 LLM 直接生成最终数值、hash 或发布证据。
 - 不把 transport success 当作 domain validity、publication 或 readback success。
@@ -123,5 +125,5 @@ related:
 - 根 README 清楚表达项目目标和四个 Workflow；
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
-- Calculation 的 ResultSet create/list/get、Closure/计算提交和 Worker 日志委托保持 workflow-local，确认、provider compatibility、内部最小引用、恢复和错误路径测试通过；
+- Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
 - 当前变更通过仓库门禁并形成独立 Git commit。

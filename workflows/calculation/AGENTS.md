@@ -65,7 +65,9 @@ related:
 - 未显式选择时使用当前 Calculation profile：`global_eligible`、完整的 25 个 reviewed LCIA `{id, version}` identities，以及独立的 Climate change/GWP 默认展示类别 `6209b35f-9447-40b5-b68c-a1099e3674a0`；Closure 与 Calculation 必须使用同一完整方法集。输出必须披露 defaulted inputs，显式参数优先。
 - Worker job 日志必须委托给根 workspace 的 `python -m workspace_ops.cli worker job`；本 Workflow 只输出精确命令，不复制服务器配置、SSH 或 journal 逻辑。
 - Calculation 日常状态观察必须先使用精确 Job ID 的 actor-scoped 数据库 task feed；queued/running 继续轮询该投影，只有 failed/blocked/stale 或 Worker/domain 终态不一致时才把 `workspace_ops` 日志列为优先诊断动作。日志不得覆盖数据库投影的产品状态权威性。
-- 可用 Calculation Bundle 列表必须先从 actor-scoped 数据库 task feed 发现带 `resultPackageId` 的候选，再通过精确 Package ID 的 `get_calculation_bundle` 验证；不得直接扫描 Worker 或对象存储。列表不得输出或持久化 signed URL，并必须披露扫描、排除和分页完整性。
+- Calculation Bundle list/get 使用 `CONN` 的参数化 read-only SQL；list 必须有 1–200 的显式边界，get 必须使用精确 Package UUID。不得调用会下载 manifest 并逐 artifact 签名的 Edge Bundle read，也不得把连接串、artifact locator 或 credential 投影到 CLI。
+- Bundle download 使用数据库中的精确 manifest/download metadata 和 allowlisted `S3_*` 配置直接访问单一配置 bucket；先校验 manifest size/hash/schema/content hash/artifact count，再以 1–32 的有界并发下载并校验每个 artifact。已存在文件只有完整性一致时才可复用，不一致时不得覆盖。
+- workspace → Release 环境同步只复制缺失的 `CONN`/`S3_*` 白名单，必须显式 `--confirm-sync`，不得打印值或覆盖 Release `.env` 中已有的非空值。
 - `workspace_ops qualification` 只用于生产等价发布资格门禁，不得当作线上 Closure Check 提交能力。
 
 ## 需要明确确认的动作
@@ -83,7 +85,7 @@ related:
 - 不从 mutable `latest` 推断缺失身份、版本或计算输入。
 - 不把任务 transport success 当作 domain validity。
 - 不把 Closure warning 自动解释为可忽略。
-- 不持久化 signed URL、access token 或用户 API key。
+- 不持久化 signed URL、access token、用户 API key、数据库连接串、S3 credential 或内部 object locator；本地 receipt 只保存稳定 identity、hash、数量、验证状态和本地路径。
 - 认证优先使用显式 actor JWT；否则从 `TIANGONG_LCA_API_KEY` 交换进程内短期 session。不得把 user API key 直接当 bearer、输出 token、建立第二套持久 session cache，或在不同 API key 间静默回退。
 - 不因外部能力缺失修改其他仓库。
 

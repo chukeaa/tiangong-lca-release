@@ -21,6 +21,7 @@ import { extractZip } from "./zip.mjs";
 export async function createIntake({ bundle, outDir }) {
   const source = path.resolve(bundle);
   const target = path.resolve(outDir);
+  await mkdir(path.dirname(target), { recursive: true });
   const staging = await mkdtemp(`${target}.tmp-`);
   const bundleDir = path.join(staging, "calculation-bundle");
   try {
@@ -38,11 +39,7 @@ export async function createIntake({ bundle, outDir }) {
     const manifest = JSON.parse(manifestBytes);
     validateManifestShape(manifest);
     const declaredHash = manifest.bundleContentHash;
-    const hashInput = structuredClone(manifest);
-    delete hashInput.bundleContentHash;
-    const observedBundleHash = sha256Bytes(
-      Buffer.from(canonicalJson(hashInput).trimEnd()),
-    );
+    const observedBundleHash = workerBundleContentHash(manifestBytes);
     if (observedBundleHash !== declaredHash) {
       fail(
         "bundle_content_hash_mismatch",
@@ -128,6 +125,19 @@ export async function createIntake({ bundle, outDir }) {
     await rm(staging, { recursive: true, force: true });
     throw error;
   }
+}
+
+function workerBundleContentHash(manifestBytes) {
+  const text = manifestBytes.toString("utf8");
+  const pattern = /"bundleContentHash":"[0-9a-f]{64}",/g;
+  const matches = text.match(pattern);
+  if (matches?.length !== 1) {
+    fail(
+      "bundle_content_hash_field_invalid",
+      "Calculation Bundle manifest must contain one canonical top-level bundleContentHash field",
+    );
+  }
+  return sha256Bytes(Buffer.from(text.replace(pattern, "")));
 }
 
 async function locateManifest(root) {

@@ -69,6 +69,9 @@ npm --prefix workflows/calculation run --silent cli -- closure get --closure-che
 npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
 npm --prefix workflows/calculation run --silent cli -- calculation get --job-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- calculation-bundle list --limit 20
+npm --prefix workflows/calculation run --silent cli -- calculation-bundle get --package-id <uuid>
+npm --prefix workflows/calculation run --silent cli -- calculation-bundle download --package-id <uuid> --concurrency 8
+npm --prefix workflows/calculation run --silent cli -- environment sync --confirm-sync
 npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
 ```
 
@@ -160,15 +163,25 @@ ResultSet/Closure/Result Package identity 和投影更新时间。queued/running
 查询；只有 failed/blocked/stale，或 Worker completed 但 domain 未通过/无效时，才优先建议
 `workspace_ops worker job` 日志诊断。日志不覆盖数据库任务投影的产品状态权威性。
 
-`calculation-bundle list` 用于发现当前 actor 可以读取的 Calculation Bundle。它先读取数据库 Task
-Feed 中最近的 `lcia_result.package_build` 任务，只把带精确 `resultPackageId` 的记录作为候选，再对每个
-候选调用 `app_lca_release_commands` 的 `get_calculation_bundle` 做精确验证。只有读取成功的 Bundle 才会
-进入列表；旧 Package 的 `calculation_bundle_not_available` 会进入有界排除统计。命令默认返回 20 条、
-最大 200 条，并披露扫描数、候选数、排除数、远端 cursor 是否仍存在及列表是否完整。
+Calculation Bundle 使用本地数据面，不再让 Edge 为大量 artifact 串行生成 signed URL：
 
-列表只投影 Package/Job/ResultSet identity、Bundle schema/hash、影响类别和五类产品下载的稳定元数据，
-不输出或持久化 manifest/chunk/download signed URL。接口地址可由标准
-`TIANGONG_LCA_API_BASE_URL` 推导，也可通过 `TIANGONG_LCA_RELEASE_COMMAND_URL` 显式提供。
+- `environment sync --confirm-sync` 只把 workspace 根 ignored `.env` 中缺失的 `CONN`、
+  `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`
+  复制到 Release ignored `.env`；已有值不覆盖，变量值不进入 stdout；
+- `calculation-bundle list` 对 `private.lcia_result_packages` 执行参数化、read-only、有界 SQL，默认 20、
+  最大 200，只输出 Package/Bundle identity 和数量摘要；
+- `calculation-bundle get --package-id` 用精确 UUID 读取一个 Bundle 的稳定 metadata，不输出数据库连接、
+  S3 locator 或 signed URL；
+- `calculation-bundle download --package-id` 读取内部 manifest locator，通过配置的 S3 bucket 直接下载
+  manifest 和 manifest 声明的 artifacts，默认 8 并发、允许 1–32；每个文件都校验 byte size 和 SHA-256，
+  已存在且校验一致的文件可恢复复用，不一致则 fail closed，不静默覆盖；
+- `--include-products` 可额外下载数据库声明的五类产品文件；默认只下载 Result Materialization 所需的
+  canonical Bundle artifacts。
+
+下载输出位于 `.release/calculation/bundles/<packageId>/`，包含原始 `calculation-bundle.json`、manifest
+声明的相对路径和 `download-receipt.json`。receipt 记录 Package/Bundle identity、数量、验证状态和本地
+路径，不包含 credential、内部 object locator 或 signed URL。下载成功后才提示进入 Result
+Materialization；下载或校验失败时不提前询问 recipe/version/range，也不重新触发 Calculation。
 
 成功创建或精确读取后，Workflow 在
 `.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程
