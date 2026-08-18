@@ -1,0 +1,193 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { runCli } from "../cli.mjs";
+
+const env = {
+  TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL:
+    "https://example.supabase.co/functions/v1/app_data_product_commands",
+  TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_example",
+  TIANGONG_LCA_ACCESS_TOKEN: "header.payload.signature",
+};
+
+const externalResultSet = {
+  schemaVersion: "lcia.result-set.v1",
+  resultSetId: "123e4567-e89b-42d3-a456-426614174000",
+  name: "Steel baseline",
+  createdAt: "2026-08-18T08:00:00.000Z",
+};
+
+function outputBuffer() {
+  let value = "";
+  return {
+    stream: {
+      write(chunk) {
+        value += chunk;
+      },
+    },
+    value: () => value,
+  };
+}
+
+test("help keeps the CLI inside the Calculation workflow", async () => {
+  const stdout = outputBuffer();
+  const exitCode = await runCli(["--help"], { stdout: stdout.stream });
+  assert.equal(exitCode, 0);
+  assert.match(
+    stdout.value(),
+    /Manage the ResultSet entry point owned by workflows\/calculation/,
+  );
+  assert.doesNotMatch(stdout.value(), /tiangong-release calculation/);
+});
+
+test("list emits clean bounded JSON with a usable next action", async () => {
+  const stdout = outputBuffer();
+  const exitCode = await runCli(
+    ["result-set", "list", "--limit", "1", "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async () =>
+        Response.json({
+          ok: true,
+          command: "lcia_result_sets_list",
+          data: {
+            items: [
+              {
+                ...externalResultSet,
+                schemaVersion: "provider.result-set.v2",
+                additiveField: true,
+              },
+            ],
+          },
+        }),
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 0);
+  assert.equal(result.schemaVersion, "tiangong.calculation-cli-result.v1");
+  assert.equal(result.completeness.status, "bounded");
+  assert.equal(result.completeness.mayHaveMore, true);
+  assert.deepEqual(result.data.items[0], {
+    id: externalResultSet.resultSetId,
+    name: externalResultSet.name,
+    createdAt: externalResultSet.createdAt,
+    source: {
+      system: "tiangong-lca",
+      externalSchemaVersion: "provider.result-set.v2",
+    },
+  });
+  assert.match(result.nextActions[0], /result-set get/);
+  assert.equal(result.replyTemplate.id, "result-set-listed");
+  assert.equal(
+    result.replyTemplate.path,
+    "workflows/calculation/reply-templates/result-set-listed.md",
+  );
+});
+
+test("create requires confirmation before configuration or network access", async () => {
+  const stdout = outputBuffer();
+  let calls = 0;
+  const exitCode = await runCli(
+    ["result-set", "create", "--name", "Steel baseline", "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env: {},
+      fetchImpl: async () => {
+        calls += 1;
+        throw new Error("must not be called");
+      },
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 3);
+  assert.equal(result.error.code, "confirmation_required");
+  assert.equal(calls, 0);
+});
+
+test("create without a name recommends one before configuration or network access", async () => {
+  const stdout = outputBuffer();
+  let calls = 0;
+  const exitCode = await runCli(["result-set", "create", "--format", "json"], {
+    stdout: stdout.stream,
+    env: {},
+    now: () => new Date("2026-08-18T08:34:00.000Z"),
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("must not be called");
+    },
+  });
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 3);
+  assert.equal(result.error.code, "result_set_name_confirmation_required");
+  assert.equal(result.error.details.recommendedName, "ResultSet-20260818-1634");
+  assert.match(
+    result.nextActions[0],
+    /--name ResultSet-20260818-1634 --confirm-create/,
+  );
+  assert.equal(result.replyTemplate.id, "result-set-name-recommended");
+  assert.equal(calls, 0);
+});
+
+test("create persists the exact remote identity and returns its path", async (t) => {
+  const contextRoot = await mkdtemp(
+    path.join(os.tmpdir(), "release-result-set-cli-"),
+  );
+  t.after(() => rm(contextRoot, { recursive: true, force: true }));
+  const stdout = outputBuffer();
+  const exitCode = await runCli(
+    [
+      "result-set",
+      "create",
+      "--name",
+      "Steel baseline",
+      "--confirm-create",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: stdout.stream,
+      env,
+      contextRoot,
+      fetchImpl: async (_url, options) => {
+        assert.deepEqual(JSON.parse(options.body), {
+          action: "create_result_set",
+          name: "Steel baseline",
+        });
+        return Response.json({
+          ok: true,
+          command: "lcia_result_set_create",
+          data: externalResultSet,
+        });
+      },
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 0);
+  assert.equal(result.data.id, externalResultSet.resultSetId);
+  assert.equal(result.data.schemaVersion, undefined);
+  assert.match(result.contextPath, /\.json$/);
+  assert.equal(result.warnings[0].code, "create_not_idempotent");
+});
+
+test("invalid exact-ID input is rejected before configuration or network access", async () => {
+  const stdout = outputBuffer();
+  const exitCode = await runCli(
+    [
+      "result-set",
+      "get",
+      "--result-set-id",
+      "Steel baseline",
+      "--format",
+      "json",
+    ],
+    { stdout: stdout.stream, env: {} },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 2);
+  assert.equal(result.error.code, "invalid_request");
+  assert.match(result.error.message, /exact UUID/);
+});

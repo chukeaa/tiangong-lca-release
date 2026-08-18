@@ -5,100 +5,123 @@ scope: repo
 status: active
 authoritative: true
 owner: release
-language: en
+language: zh-CN
 whenToUse:
-  - when changing release identity, versioning, stage orchestration, materialization, package planning, approval handoff, or readback
-  - when deciding whether logic belongs in Release, Worker, tidas-tools, tidas-sdk, CLI, Database, Edge, or Next
+  - 当任务可能改变 Release 项目目标、根 Workflow、运行时、契约或验证时
+  - 当从 lca-workspace 路由工作到本仓库时
+  - 当需要决定一项能力属于本仓库还是外部系统时
 whenToUpdate:
-  - when repository ownership, branch policy, stage contracts, or validation gates change
-  - when Docpact ownership, coverage, routing, or review rules change
+  - 当项目目标、Workflow 边界、所有权、分支策略或验证门变化时
+  - 当 Docpact ownership、coverage、routing 或 rules 变化时
 checkPaths:
   - AGENTS.md
   - README.md
   - .docpact/config.yaml
   - docs/architecture.md
-  - .agents/skills/tiangong-release-operator/**
-  - specs/**
-  - src/**
-  - scripts/**
-  - test/**
+  - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
-lastReviewedNote: "Added the explicit-target Codex operator workflow, deterministic calculation-package bootstrap, and target-bound publication frontier."
+lastReviewedAt: 2026-08-18
+lastReviewedCommit: 7e77eba31e6eed7ca79572e2217e80a8b15256f3
+lastReviewedNote: "Kept runtime ownership workflow-local and isolated provider ResultSet schemas behind a Release-owned reference."
 related:
+  - README.md
   - .docpact/config.yaml
   - docs/architecture.md
-  - README.md
+  - workflows/README.md
 ---
 
 # Repository Contract
 
-`tiangong-lca-release` is the Agent-first control plane for deterministic TianGong LCI/LCIA releases. It consumes an immutable Calculation Bundle and frozen source closure, derives Model/Result identities and versions, orchestrates TIDAS/ILCD materialization and validation, records resumable stage evidence, and hands an approved publish plan to the public `tiangong-lca` CLI.
+`tiangong-lca-release` 是面向人和 Agent 的本地数据产品工作台。它通过根目录 Workflow 组织 Calculation、Dataset Transformation、Result Materialization 和 Release，调用其他系统已经存在的能力，但不要求修改其他仓库。
 
-## Governance entry points
+## 当前实施基线
 
-Load repository guidance in this order:
+旧 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。不得恢复旧 20-stage runtime、默认兼容层或长期 legacy 目录。
 
-1. `AGENTS.md` for ownership, hard boundaries, runtime facts, and validation expectations;
-2. `.docpact/config.yaml` for machine-readable catalog, ownership, coverage, routing, and documentation-impact rules;
-3. `docs/architecture.md` for stage and remote-publication boundaries;
-4. `README.md` for the operator-facing command and security surface.
-5. `.agents/skills/tiangong-release-operator/SKILL.md` when Codex is operating a release rather than changing implementation.
+后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
 
-This repository uses Docpact `layout: repo`. It is integrated into `lca-workspace` as the `release` child repository, while the current canonical GitHub repository remains the private `chukeaa/tiangong-lca-release` repository until an explicit ownership migration is approved.
+## 加载顺序
 
-## Ownership
+1. `AGENTS.md`：仓库所有权、硬边界和确认状态；
+2. `README.md`：项目目标、四个 Workflow 和待确认点；
+3. `.docpact/config.yaml`：机器可读 ownership、routing、coverage 和 rules；
+4. `workflows/AGENTS.md`：所有 Workflow 的共享契约；
+5. 目标 `workflows/<name>/AGENTS.md`；
+6. 目标 `workflows/<name>/README.md`；
+7. 只有在目标 Workflow 开始实现后，才读取该目录新增的源码、规格和测试。
 
-This repository owns:
+## Workflow 结构
 
-- Release Run workspaces and the 20-stage state machine;
-- F3 Calculation Bundle, Release Manifest, identity, profile, stage, and decision contracts;
-- UUIDv5 identity and dataset-version planning;
-- one-hop LifecycleModel and Result Process materialization orchestration;
-- content-addressed local cache and artifact ledger;
-- package-plan, approval-plan, publish handoff, and readback aggregation;
-- the `tiangong-release` executable and its human/JSON output contract.
-- versioned release-target profiles, deterministic package bootstrap, compact candidate reports, and the repository-local Codex operator skill.
+本仓库当前有四个顶层 Workflow：
 
-This repository does not own:
+- `workflows/calculation`：ResultSet、Closure、计算任务和 Calculation Bundle；
+- `workflows/dataset-transformation`：模型空间组合、结果聚合和字段声明；
+- `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
+- `workflows/release`：package、candidate、approval、publish 和 readback。
 
-- Worker solving or Calculation Bundle production;
-- TIDAS/ILCD schemas, standalone conversion, validation, or deterministic ZIP implementation, which are invoked through the versioned Rust `tidas release` contract;
-- SDK generation;
-- remote authentication, direct SQL/REST mutation, RLS, or publication truth;
-- frontend behavior.
+完整性验证属于 Calculation；LCI/LCIA Result Process 和 LifecycleModel 生成属于 Result Materialization；Packaging 属于 Release。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。
 
-Route those concerns respectively to Worker, `tidas-tools`, `tidas-sdk`, `tiangong-lca-cli` / Database / Edge, and Next.
+## 所有权
 
-## Hard Boundaries
+本仓库拥有：
 
-- Never use a Supabase secret/service-role credential.
-- Never decode, print, persist, or forward `TIANGONG_LCA_API_KEY`; invoke `tiangong-lca` with the inherited protected environment.
-- Never write generated Model/Result datasets to ordinary authoring tables.
-- Never infer missing graph, exchange, provider, method, or version facts from mutable database `latest` state.
-- Never publish without an exact durable plan hash and a successful independent readback.
-- Never infer a release target or mutable latest run; freeze the target fingerprint during bootstrap and use an exact run directory.
-- Never begin a remote action unless the current environment, frozen request, publish plan, and v2 approval all bind the same target fingerprint.
-- Never rerun an earlier stage after a successor has passed; recovery may only retry the current frontier with the same immutable identities.
-- Never treat partial closure or a legacy LCIA-only package as a Release v1 package.
-- Large artifacts go to files/object storage, never JSON stdout.
+- 根目录 Workflow 的说明、Agent 契约、产物、恢复和实现；
+- 本地工作上下文、外部资源引用和 artifact lineage；
+- Agent 对用户意图的整理、候选方案和待确认问题；
+- 确定性 Transformation/Package spec 的本地实现；
+- Result Process、LifecycleModel、identity/version 和 canonical dataset collection 的确定性 materialization；
+- Release Candidate、精确审批、发布编排和独立回读；
+- `tiangong-release` 操作入口及其有界 JSON 输出。
 
-## Runtime and Branch Facts
+本仓库不拥有：
 
-- Node: `>=24 <25`
-- package manager: `npm`
-- branch model: M1, `main` is the daily and release trunk
-- local baseline: `npm run lint`, `npm test`, `npm run build`
-- full local gate: `npm run prepush:gate`
-- runtime workspaces: `.release/workspaces/<release-run-id>/` and always gitignored
-- operator entrypoint: `npm run --silent release -- <command> --json`; a repository-local ignored `.env` is loaded only by the executable
+- Next 页面行为；
+- Worker 求解器和远程任务生命周期；
+- Database schema、RLS、权限和发布事实；
+- Edge Function 业务实现；
+- 其他仓库的 CLI、TIDAS schema、SDK 或打包算法源码。
 
-## Validation
+其他系统只作为外部能力被调用。缺少能力时停止并报告，不扩大修改范围。
 
-Changes to identity or canonicalization require fixed-vector tests. Changes to versioning require same-input replay, major/minor, collision, and non-convergence tests. Changes to stages require resume/cache/failure evidence. Materialization/package changes require Rust `tidas release` TIDAS schema, ILCD XSD, semantic round-trip, full closure, cross-package canonical-content, and numerical parity proof. Release Core must validate the versioned `tidas.operation-report.v1` and nested `tidas.release-report.v1` contracts and must not provide a Python or legacy executable fallback.
+## 硬边界
 
-Remote publication changes additionally require exact-plan approval, manager-denial, partial-failure resume, four-artifact independent download/hash verification, post-readback status, and credential non-persistence tests. Run status advances through `ready_for_approval -> approved -> published -> verified`; a passed successor permanently seals its predecessors.
+- 不使用 Supabase service-role、secret key 或直接 SQL。
+- 不导入其他 workspace 子仓的内部源码。
+- 不解码、打印、持久化或放入命令参数的用户凭据。
+- 不持久化 signed URL。
+- 不从 mutable `latest` 推断缺失的 identity、version、graph 或 method。
+- 不让 LLM 直接生成最终数值、hash 或发布证据。
+- 不把 transport success 当作 domain validity、publication 或 readback success。
+- 不把派生数据自动写入普通 authoring tables。
+- 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
+- 未经精确内容和 target 审批不得远程发布。
 
-Operator-intake changes additionally require deterministic bootstrap replay, Calculation Bundle and frozen source-closure integrity, explicit target mismatch denial before the first remote call, bounded candidate/list reports, no signed-URL persistence, and proof that legacy targetless runs remain usable only for local stages.
+## Runtime 与分支事实
+
+- Node：`>=24 <25`
+- package manager：`npm`
+- branch model：M1
+- daily trunk / routine PR base：`main`
+- 当前工作分支：`codex/issue-11-workflow-control-plane`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
+- 本地运行产物根目录：`.release/`，必须 gitignored
+- 当前文档基线验证门：`npm run prepush:gate`
+
+## 文档规则
+
+- 根 `README.md` 只描述当前项目目标和跨 Workflow 关系。
+- `workflows/README.md` 只做 Workflow 导航。
+- `workflows/AGENTS.md` 只拥有共享规则。
+- 每个子 Workflow 的 `README.md` 和 `AGENTS.md` 只描述该 Workflow。
+- 不把旧 20-stage 的纠正说明、事故或迁移叙事重新加入活动文档。
+- 只有仍有用的安全原则可以转写为当前 Workflow 规则。
+
+## 当前完成条件
+
+- 旧 runtime 和耦合配置已删除；
+- 根 README 清楚表达项目目标和四个 Workflow；
+- 每个 Workflow 有 README 和 AGENTS；
+- Docpact 能覆盖和路由 `workflows/**`；
+- Calculation 的 ResultSet create/list/get、Closure/计算提交和 Worker 日志委托保持 workflow-local，确认、provider compatibility、内部最小引用、恢复和错误路径测试通过；
+- 当前变更通过仓库门禁并形成独立 Git commit。

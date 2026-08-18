@@ -1,4 +1,0 @@
-interface:
-  display_name: "TianGong Release Operator"
-  short_description: "Operate deterministic LCI/LCIA release runs safely"
-  default_prompt: "Inspect and operate a TianGong LCI/LCIA release run using explicit targets and exact run directories."

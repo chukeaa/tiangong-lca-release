@@ -6,28 +6,14 @@
   "engines": {
     "node": ">=24 <25"
   },
-  "bin": {
-    "tiangong-release": "./dist/cli.js"
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "npm run typecheck && npm run format:check",
-    "prebuild": "npm run clean",
-    "release": "tsx src/cli.ts",
-    "prepush:gate": "npm run specs:validate && npm run lint && npm run test:coverage && npm run build",
-    "specs:validate": "tsx scripts/validate-specs.ts",
-    "test": "node --import tsx --test test/**/*.test.ts",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage test/**/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "lint": "npm run format:check",
+    "test": "npm --prefix workflows/calculation test",
+    "prepush:gate": "npm run format:check && npm test"
   },
   "devDependencies": {
-    "@types/node": "^24.0.14",
-    "ajv": "^8.17.1",
-    "prettier": "^3.6.2",
-    "tsx": "^4.20.6",
-    "typescript": "^5.8.3"
+    "prettier": "^3.6.2"
   }
 }
