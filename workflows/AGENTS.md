@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: 2118563ee5c9b2f4f8c2c15ea6470ebf8bdc59a1
+lastReviewedCommit: 0f88e33b66ef6a92249e29a78feede7269b03e3d
 lastReviewedNote: "Established shared Agent boundaries for root-level workflow packages."
 related:
   - ../AGENTS.md

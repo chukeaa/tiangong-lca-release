@@ -4,6 +4,10 @@ import test from "node:test";
 import { runCli } from "../cli.mjs";
 import { DEFAULT_CALCULATION_PROFILE } from "../contracts/default-profile.mjs";
 
+const defaultMethodIdentities = DEFAULT_CALCULATION_PROFILE.lciaMethods.map(
+  ({ id, version }) => ({ id, version }),
+);
+
 const uuid = "123e4567-e89b-42d3-a456-426614174000";
 const jobId = "223e4567-e89b-42d3-a456-426614174000";
 const env = {
@@ -163,7 +167,7 @@ test("closure submission uses and discloses the workflow default profile", async
         assert.equal(body.requestedScope.coverageMode, "global_eligible");
         assert.deepEqual(
           body.requestedScope.lciaMethods,
-          DEFAULT_CALCULATION_PROFILE.lciaMethods,
+          defaultMethodIdentities,
         );
         assert.equal(body.requestedScope.lciaMethods.length, 25);
         assert.deepEqual(body.requestedScope.lciaMethods[13], {
@@ -255,10 +259,7 @@ test("calculation default profile sends all reviewed methods and a separate disp
       fetchImpl: async (_url, options) => {
         const body = JSON.parse(options.body);
         assert.equal(body.lciaMethodSet.length, 25);
-        assert.deepEqual(
-          body.lciaMethodSet,
-          DEFAULT_CALCULATION_PROFILE.lciaMethods,
-        );
+        assert.deepEqual(body.lciaMethodSet, defaultMethodIdentities);
         assert.equal(
           body.defaultImpactCategory,
           DEFAULT_CALCULATION_PROFILE.defaultImpactCategory,
@@ -281,6 +282,25 @@ test("calculation default profile sends all reviewed methods and a separate disp
     "lciaMethods",
     "defaultImpactCategory",
   ]);
+});
+
+test("reviewed profile records human-readable method names and indicators", () => {
+  assert.equal(DEFAULT_CALCULATION_PROFILE.lciaMethods.length, 25);
+  assert.deepEqual(
+    DEFAULT_CALCULATION_PROFILE.lciaMethods.find(
+      ({ id }) => id === DEFAULT_CALCULATION_PROFILE.defaultImpactCategory,
+    ),
+    {
+      id: "6209b35f-9447-40b5-b68c-a1099e3674a0",
+      version: "01.00.000",
+      name: "Climate change",
+      indicator: "Radiative forcing as Global Warming Potential (GWP100)",
+    },
+  );
+  for (const method of DEFAULT_CALCULATION_PROFILE.lciaMethods) {
+    assert.ok(method.name);
+    assert.ok(method.indicator);
+  }
 });
 
 test("calculation submission succeeds with job-only identity before package materialization", async () => {

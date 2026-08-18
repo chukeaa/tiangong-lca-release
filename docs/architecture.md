@@ -18,7 +18,7 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: 2118563ee5c9b2f4f8c2c15ea6470ebf8bdc59a1
+lastReviewedCommit: 0f88e33b66ef6a92249e29a78feede7269b03e3d
 lastReviewedNote: "Defined provider-compatible adapters and Release-owned references for workflow-local ResultSet operations."
 related:
   - ../AGENTS.md

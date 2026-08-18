@@ -20,7 +20,7 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedCommit: 0f88e33b66ef6a92249e29a78feede7269b03e3d
 lastReviewedNote: "Confirmed four root-level Agent-operable workflows by separating Result Materialization from calculation, transformation, and release."
 related:
   - AGENTS.md
