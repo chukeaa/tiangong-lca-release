@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runCli } from "../cli.mjs";
+import { DEFAULT_CALCULATION_PROFILE } from "../contracts/default-profile.mjs";
 
 const uuid = "123e4567-e89b-42d3-a456-426614174000";
 const jobId = "223e4567-e89b-42d3-a456-426614174000";
@@ -160,9 +161,15 @@ test("closure submission uses and discloses the workflow default profile", async
       fetchImpl: async (_url, options) => {
         const body = JSON.parse(options.body);
         assert.equal(body.requestedScope.coverageMode, "global_eligible");
-        assert.deepEqual(body.requestedScope.lciaMethods, [
-          { id: "6209b35f-9447-40b5-b68c-a1099e3674a0", version: "01.00.000" },
-        ]);
+        assert.deepEqual(
+          body.requestedScope.lciaMethods,
+          DEFAULT_CALCULATION_PROFILE.lciaMethods,
+        );
+        assert.equal(body.requestedScope.lciaMethods.length, 25);
+        assert.deepEqual(body.requestedScope.lciaMethods[13], {
+          id: "b2ad66ce-c78d-11e6-9d9d-cec0c932ce01",
+          version: "03.00.014",
+        });
         return Response.json({
           ok: true,
           data: {
@@ -210,6 +217,7 @@ test("calculation submission binds the selected closure evidence", async () => {
         const body = JSON.parse(options.body);
         assert.equal(body.action, "create_build");
         assert.equal(body.closureCheckId, uuid);
+        assert.equal(body.defaultImpactCategory, uuid);
         return Response.json({
           ok: true,
           data: { buildId: uuid, workerJob: { jobId, status: "queued" } },
@@ -219,6 +227,60 @@ test("calculation submission binds the selected closure evidence", async () => {
   );
   assert.equal(code, 0);
   assert.equal(JSON.parse(stdout.value()).data.kind, "calculation");
+});
+
+test("calculation default profile sends all reviewed methods and a separate display default", async () => {
+  const stdout = buffer();
+  await runCli(
+    [
+      "calculation",
+      "start",
+      "--name",
+      "Reviewed catalog",
+      "--closure-check-id",
+      uuid,
+      "--requested-scope-hash",
+      "scope-hash",
+      "--policy-fingerprint",
+      "policy-hash",
+      "--idempotency-key",
+      "build-default-profile",
+      "--confirm-start",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        assert.equal(body.lciaMethodSet.length, 25);
+        assert.deepEqual(
+          body.lciaMethodSet,
+          DEFAULT_CALCULATION_PROFILE.lciaMethods,
+        );
+        assert.equal(
+          body.defaultImpactCategory,
+          DEFAULT_CALCULATION_PROFILE.defaultImpactCategory,
+        );
+        return Response.json({
+          ok: true,
+          data: { buildId: uuid, workerJob: { jobId, status: "queued" } },
+        });
+      },
+    },
+  );
+  const effectiveInput = JSON.parse(stdout.value()).data.effectiveInput;
+  assert.equal(effectiveInput.lciaMethods.length, 25);
+  assert.equal(
+    effectiveInput.defaultImpactCategory,
+    DEFAULT_CALCULATION_PROFILE.defaultImpactCategory,
+  );
+  assert.deepEqual(effectiveInput.defaultedInputs, [
+    "coverageMode",
+    "lciaMethods",
+    "defaultImpactCategory",
+  ]);
 });
 
 test("calculation submission succeeds with job-only identity before package materialization", async () => {

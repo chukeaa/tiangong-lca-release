@@ -362,12 +362,20 @@ export async function runCli(
             "invalid_request",
             "--closure-check-id must be an exact UUID",
           );
+        const defaultImpactCategory = lciaMethods.some(
+          ({ id }) => id === DEFAULT_CALCULATION_PROFILE.defaultImpactCategory,
+        )
+          ? DEFAULT_CALCULATION_PROFILE.defaultImpactCategory
+          : lciaMethods[0].id;
+        defaultedInputs.push("defaultImpactCategory");
         task = await taskApi.createCalculation({
           ...flags,
           coverageMode,
           processes,
           lciaMethods,
+          defaultImpactCategory,
         });
+        flags.defaultImpactCategory = defaultImpactCategory;
       }
       const logs = workspaceLogsCommand(task.jobId);
       const result = {
@@ -376,7 +384,14 @@ export async function runCli(
         command,
         data: {
           ...task,
-          effectiveInput: { coverageMode, lciaMethods, defaultedInputs },
+          effectiveInput: {
+            coverageMode,
+            lciaMethods,
+            ...(family === "calculation"
+              ? { defaultImpactCategory: flags.defaultImpactCategory }
+              : {}),
+            defaultedInputs,
+          },
         },
         completeness: { status: "submitted", terminalStateObserved: false },
         nextActions: [logs],
