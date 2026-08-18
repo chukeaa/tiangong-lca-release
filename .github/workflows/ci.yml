@@ -28,5 +28,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run pre-push gate
+      - name: Validate workflow documentation baseline
         run: npm run prepush:gate

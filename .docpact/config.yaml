@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "3d1bc4edd49e62cfb8518248e096b561a2be65d2"
+lastReviewedAt: "2026-08-18"
+lastReviewedCommit: "f8d37018d898d23a51655272d129417eb9fad13a"
 
 catalog:
   repos:
@@ -10,13 +10,14 @@ catalog:
       canonicalRepo: chukeaa/tiangong-lca-release
       entryDoc: AGENTS.md
       workflowDocs:
-        - docs/architecture.md
         - README.md
+        - workflows/README.md
+        - docs/architecture.md
       workspaceIntegrationRequired: true
 
 ownership:
   domains:
-    - id: repo-governance-and-docs
+    - id: repo-governance-docs-and-automation
       paths:
         include:
           - AGENTS.md
@@ -25,48 +26,34 @@ ownership:
           - .docpact/**
           - .gitignore
           - .env.example
-          - .agents/skills/**
-      ownerRepo: release
-    - id: release-contracts-identity-and-versioning
-      paths:
-        include:
-          - specs/**
-          - src/canonical/**
-          - src/contracts/**
-          - src/identity/**
-          - src/versioning/**
-      ownerRepo: release
-    - id: release-run-orchestration-and-materialization
-      paths:
-        include:
-          - src/bundle/**
-          - src/io/**
-          - src/materialization/**
-          - src/source/**
-          - src/stages/**
-          - src/operator/**
-          - src/tools/**
-          - src/validation/**
-          - src/workspace/**
-      ownerRepo: release
-    - id: approval-publication-and-command-surface
-      paths:
-        include:
-          - src/approval/**
-          - src/publication/**
-          - src/target/**
-          - src/cli.ts
-          - src/index.ts
-      ownerRepo: release
-    - id: tests-build-and-automation
-      paths:
-        include:
           - package.json
-          - tsconfig.json
-          - tsconfig.build.json
-          - scripts/**
-          - test/**
           - .github/workflows/ci.yml
+      ownerRepo: release
+    - id: shared-workflow-contract
+      paths:
+        include:
+          - workflows/README.md
+          - workflows/AGENTS.md
+      ownerRepo: release
+    - id: calculation-workflow
+      paths:
+        include:
+          - workflows/calculation/**
+      ownerRepo: release
+    - id: dataset-transformation-workflow
+      paths:
+        include:
+          - workflows/dataset-transformation/**
+      ownerRepo: release
+    - id: result-materialization-workflow
+      paths:
+        include:
+          - workflows/result-materialization/**
+      ownerRepo: release
+    - id: release-publication-workflow
+      paths:
+        include:
+          - workflows/release/**
       ownerRepo: release
 
 coverage:
@@ -77,21 +64,13 @@ coverage:
     - .docpact/**
     - .gitignore
     - .env.example
-    - .agents/skills/**
-    - specs/**
-    - src/**
+    - workflows/**
     - package.json
-    - tsconfig.json
-    - tsconfig.build.json
-    - scripts/**
-    - test/**
     - .github/workflows/ci.yml
   exclude:
     - .git/**
     - .docpact/runs/**
     - node_modules/**
-    - dist/**
-    - coverage/**
     - .release/**
     - package-lock.json
     - "*.log"
@@ -103,55 +82,31 @@ freshness:
 
 routing:
   intents:
-    release-contracts:
+    calculation-workflow:
       paths:
-        - specs/**
-        - src/canonical/**
-        - src/contracts/**
-        - src/identity/**
-        - src/versioning/**
-        - docs/architecture.md
-    release-run-orchestration:
-      paths:
-        - src/bundle/**
-        - src/io/**
-        - src/source/**
-        - src/stages/**
-        - src/operator/**
-        - src/workspace/**
-        - docs/architecture.md
-    materialization-and-validation:
-      paths:
-        - src/materialization/**
-        - src/tools/**
-        - src/validation/**
-        - specs/**
-        - docs/architecture.md
-    approval-and-publication:
-      paths:
-        - src/approval/**
-        - src/publication/**
-        - src/target/**
-        - src/cli.ts
-        - .agents/skills/tiangong-release-operator/**
+        - workflows/AGENTS.md
+        - workflows/calculation/**
         - README.md
-        - docs/architecture.md
+    dataset-transformation-workflow:
+      paths:
+        - workflows/AGENTS.md
+        - workflows/dataset-transformation/**
+        - README.md
+    result-materialization-workflow:
+      paths:
+        - workflows/AGENTS.md
+        - workflows/result-materialization/**
+        - README.md
+    release-workflow:
+      paths:
+        - workflows/AGENTS.md
+        - workflows/release/**
+        - README.md
     validation-and-automation:
       paths:
         - package.json
-        - tsconfig.json
-        - tsconfig.build.json
-        - scripts/**
-        - test/**
         - .github/workflows/ci.yml
-    proof:
-      paths:
-        - specs/**
-        - src/**
-        - test/**
-        - scripts/**
-        - package.json
-        - .github/workflows/ci.yml
+        - .docpact/config.yaml
     repo-docs:
       paths:
         - AGENTS.md
@@ -159,7 +114,7 @@ routing:
         - docs/**
         - .docpact/**
         - .env.example
-        - .agents/skills/**
+        - workflows/**
     root-integration:
       paths:
         - AGENTS.md
@@ -172,8 +127,10 @@ docInventory:
     - README.md
     - .docpact/config.yaml
     - docs/architecture.md
-  exclude:
-    - .agents/skills/**
+    - workflows/README.md
+    - workflows/AGENTS.md
+    - workflows/**/README.md
+    - workflows/**/AGENTS.md
 
 repo:
   id: release
@@ -190,16 +147,20 @@ rules:
         kind: doc-ai-layer
       - path: docs/architecture.md
         kind: architecture
-      - path: .agents/skills/tiangong-release-operator/**
-        kind: agent-workflow
     requiredDocs:
       - path: AGENTS.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+      - path: workflows/README.md
+        mode: review_or_update
+      - path: workflows/AGENTS.md
         mode: review_or_update
       - path: .docpact/config.yaml
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: Repository guidance, machine-readable routing, and retained architecture must stay aligned.
+    reason: Repository guidance, workflow navigation, machine-readable routing, and architecture must stay aligned.
   - id: release-landing-contract
     scope: repo
     repo: release
@@ -215,23 +176,85 @@ rules:
         mode: review_or_update
       - path: .docpact/config.yaml
         mode: review_or_update
-    reason: User-facing setup and security guidance must match the repository contract.
-  - id: release-runtime-contract
+    reason: User-facing purpose, current status, and security guidance must match the repository contract.
+  - id: release-workflow-shared-contract
     scope: repo
     repo: release
     triggers:
-      - path: specs/**
-        kind: release-contract
-      - path: src/**
-        kind: runtime-code
+      - path: workflows/README.md
+        kind: workflow-index
+      - path: workflows/AGENTS.md
+        kind: workflow-shared-contract
     requiredDocs:
+      - path: workflows/README.md
+        mode: review_or_update
+      - path: workflows/AGENTS.md
+        mode: review_or_update
       - path: AGENTS.md
         mode: review_or_update
-      - path: .docpact/config.yaml
+      - path: README.md
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: Release contracts and orchestration behavior must remain consistent with ownership, routing, and architecture guidance.
+      - path: .docpact/config.yaml
+        mode: review_or_update
+    reason: Shared workflow navigation and Agent rules must remain aligned with the repository contract and architecture.
+  - id: calculation-workflow-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: workflows/calculation/**
+        kind: calculation-workflow
+    requiredDocs:
+      - path: workflows/calculation/AGENTS.md
+        mode: review_or_update
+      - path: workflows/calculation/README.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+    reason: Calculation entry, validation, remote task, download, evidence, and recovery behavior must stay coherent.
+  - id: dataset-transformation-workflow-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: workflows/dataset-transformation/**
+        kind: dataset-transformation-workflow
+    requiredDocs:
+      - path: workflows/dataset-transformation/AGENTS.md
+        mode: review_or_update
+      - path: workflows/dataset-transformation/README.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+    reason: Transformation intent, frozen execution, field declarations, deterministic validation, and output boundaries must stay coherent.
+  - id: result-materialization-workflow-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: workflows/result-materialization/**
+        kind: result-materialization-workflow
+    requiredDocs:
+      - path: workflows/result-materialization/AGENTS.md
+        mode: review_or_update
+      - path: workflows/result-materialization/README.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+    reason: Result Process, LifecycleModel, identity/version planning, canonical dataset output, and validation behavior must stay coherent.
+  - id: release-publication-workflow-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: workflows/release/**
+        kind: release-workflow
+    requiredDocs:
+      - path: workflows/release/AGENTS.md
+        mode: review_or_update
+      - path: workflows/release/README.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+    reason: Package, candidate, approval, publication, and independent readback behavior must stay coherent.
   - id: release-validation-contract
     scope: repo
     repo: release
@@ -240,14 +263,6 @@ rules:
         kind: generated-runtime-exclusion
       - path: package.json
         kind: build-contract
-      - path: tsconfig.json
-        kind: build-contract
-      - path: tsconfig.build.json
-        kind: build-contract
-      - path: scripts/**
-        kind: validation-tooling
-      - path: test/**
-        kind: test-proof
       - path: .github/workflows/ci.yml
         kind: automation
     requiredDocs:
@@ -257,4 +272,4 @@ rules:
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: Local and CI proof surfaces must remain aligned with the documented validation boundary.
+    reason: The documentation baseline and repository-level validation entrypoints must stay aligned.

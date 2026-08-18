@@ -1,151 +1,229 @@
 ---
-title: TianGong LCA Release Operator Guide
+title: TianGong LCA Release 项目说明
 docType: guide
 scope: repo
 status: active
 authoritative: true
 owner: release
-language: en
+language: zh-CN
 whenToUse:
-  - when configuring or operating a deterministic LCI/LCIA release
-  - when bootstrapping, inspecting, packaging, approving, publishing, or verifying a Release Run
+  - 当需要理解 Release 项目的当前目标、工作流边界和确认状态时
+  - 当需要决定一项工作属于 Calculation、Dataset Transformation、Result Materialization 还是 Release Workflow 时
+  - 当准备实现、运行或审查任一 Release Workflow 时
 whenToUpdate:
-  - when the operator CLI, target binding, credential boundary, package profiles, or publication workflow changes
+  - 当项目目标、工作流划分、跨工作流关系或确认结论变化时
+  - 当新增、删除或重新定义根目录 workflows 子目录时
 checkPaths:
   - README.md
-  - .env.example
-  - .agents/skills/tiangong-release-operator/**
-  - specs/release-targets.json
-  - src/cli.ts
-  - src/operator/**
-  - src/target/**
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: fc3ae3c8a31b9a4e2b85e8cd4b9857756c2695f8
-lastReviewedNote: "Documented the explicit-target Codex operator workflow and target-bound publication frontier."
+  - AGENTS.md
+  - docs/architecture.md
+  - workflows/**
+  - .docpact/config.yaml
+lastReviewedAt: 2026-08-18
+lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedNote: "Confirmed four root-level Agent-operable workflows by separating Result Materialization from calculation, transformation, and release."
 related:
   - AGENTS.md
   - docs/architecture.md
-  - .agents/skills/tiangong-release-operator/SKILL.md
+  - workflows/README.md
 ---
 
 # TianGong LCA Release
 
-Agent-first control plane for deterministic, resumable LCI/LCIA releases.
+`tiangong-lca-release` 是一个面向人和 Agent 的本地数据产品工作台。
 
-The pipeline consumes a frozen `tiangong.calculation-bundle.v1` containing graph evidence, LCI/LCIA results, and an exact source closure. It builds one-hop LifecycleModels and Result Processes with stable UUID/version lineage, validates canonical TIDAS and ILCD variants, constructs four self-contained ZIPs, and publishes only through the actor-scoped `tiangong-lca` CLI.
+它帮助用户从任意已有节点继续工作，组织完整性验证、计算、数据集变换、打包和正式发布，同时保留每一步使用的精确输入、用户决定、验证证据、输出产物和恢复入口。
 
-## Security and target boundary
+这个项目不是另一个前端、计算引擎或数据库服务。它不要求修改 TianGong LCA 的其他仓库，而是把其他系统已经提供的能力视为外部能力，通过稳定接口调用。
 
-Remote access uses these environment variables:
+## 当前基线状态
+
+四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
+
+当前仓库是一个干净的 Workflow 文档基线。后续按照 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个优化；每个 Workflow 只在自己的目标和契约确认后增加实现、schemas、fixtures 和测试。
+
+在任何 Workflow 明确授权之前：
+
+- 不开始新的远程发布；
+- 不修改 Next、Worker、Database、Edge、CLI、tidas-tools 或其他仓库；
+- 不恢复旧 20-stage 代码作为默认实现。
+
+## 项目的四个 Workflow
 
 ```text
-TIANGONG_LCA_API_BASE_URL
-TIANGONG_LCA_API_KEY
-TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY
+workflows/
+├── calculation/
+├── dataset-transformation/
+├── result-materialization/
+└── release/
 ```
 
-`TIANGONG_LCA_API_KEY` is a password-equivalent user-session bootstrap. The release executable checks only that it is present and passes the protected environment to `tiangong-lca`; it never prints, decodes, puts it in command arguments, or persists it. Never use a Supabase service-role key.
+### 1. Calculation Workflow
 
-The actor must have the live platform role `data_product_manager`. Authentication is performed by `tiangong-lca`; Edge and Database make the final authorization decision for every private read and state transition.
+负责从“我要做一次计算”到“计算结果已经可靠地下载到本地”的完整过程。
 
-Only actor-scoped `tiangong-lca` commands receive the protected remote environment. Local Rust `tidas release` validation, conversion, round-trip, closure, and packaging processes run with a minimal non-credential environment allowlist.
+它包括：
 
-Public target facts are versioned in `specs/release-targets.json`. Bootstrap freezes the selected target ID, API base URL, publishable-key SHA-256, and derived target fingerprint into the Release Request. The publish plan and v2 approval repeat that fingerprint. Before every remote frontier, the executable recomputes the current environment binding and rejects any mismatch before calling the public CLI.
+- 创建一个有名称的远程 ResultSet，或接入已有 ResultSet；
+- 从已有 Closure Check、计算任务、结果包或 Calculation Bundle 继续；
+- 向用户确认数据范围和 LCIA 方法集；
+- 启动并跟踪线上完整性验证；
+- 展示验证报告、阻塞项和可恢复动作；
+- 在有效完整性证据的基础上启动计算；
+- 跟踪计算任务并下载、校验 Calculation Bundle；
+- 把远程资源身份和本地产物关联到同一个本地工作上下文。
 
-The ignored repository-local `.env` is loaded automatically by the executable when present. Keep it mode `0600` and never commit it.
+完整性验证不是独立的顶层 Workflow。它是 Calculation Workflow 中可以单独进入、重试和复用的关键节点。
 
-## Development
+详见 [Calculation Workflow](workflows/calculation/README.md)。
 
-```bash
-nvm use 24
-npm ci
-npm run prepush:gate
+### 2. Dataset Transformation Workflow
+
+负责从已有数据集或计算结果生成新的派生数据。
+
+它包括：
+
+- 选择精确的数据集、版本或计算产物；
+- 让 Agent 帮助用户表达变换目的、权重依据和字段填写意图；
+- 区分模型空间组合与结果空间聚合；
+- 形成可审查的变换草案；
+- 在所有语义问题解决后冻结确定性执行规格；
+- 通过确定性实现执行数值和文档变换；
+- 生成新的 Dataset Collection、LifecycleModel、Result Process 或其他明确产物；
+- 保存输入、权重、字段来源、验证结果和派生血缘。
+
+第一类重点案例是“选择若干数据集，按明确权重组合为一个新数据集，并声明 Process 或 LifecycleModel 字段如何填写”。
+
+详见 [Dataset Transformation Workflow](workflows/dataset-transformation/README.md)。
+
+### 3. Result Materialization Workflow
+
+负责把 Calculation Bundle 或派生结果确定性地组装为标准 LCA 数据集。
+
+它包括：
+
+- 选择 LCI Result Process、LCI + LCIA Result Process 或 LifecycleModel recipe；
+- 派生稳定 UUID lineage；
+- 读取上一版 manifest 并共同求解 dataset version；
+- 生成 Result Process 和可选 LifecycleModel；
+- 渲染精确 identity/version 引用；
+- 验证 TIDAS schema、引用闭合和数值一致性；
+- 输出 canonical dataset collection、dataset index 和 materialization manifest。
+
+LCI Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。
+
+详见 [Result Materialization Workflow](workflows/result-materialization/README.md)。
+
+### 4. Release Workflow
+
+负责把已经冻结并通过必要验证的数据产品组织为正式发布候选，并完成发布与独立回读。
+
+它包括：
+
+- 选择已经 materialize 并验证的 canonical dataset collection；
+- 决定包中包含哪些 dataset roots、result layers、closure 和 formats；
+- 生成可审查的 Package Plan 和 Release Candidate；
+- 执行 TIDAS/ILCD 验证、格式转换、语义 round-trip 和确定性打包；
+- 将人工决定绑定到精确 plan hash 和 target fingerprint；
+- 通过 actor-scoped 外部接口执行上传和发布；
+- 独立下载已发布产物并验证字节数、SHA-256 和终态。
+
+Packaging 不是独立的顶层 Workflow。它属于 Release Workflow 中发布之前的候选构建与验证阶段。
+
+详见 [Release Workflow](workflows/release/README.md)。
+
+## 四个 Workflow 如何组合
+
+```text
+Calculation
+  ResultSet -> Closure Evidence -> Calculation Bundle
+                                      |
+                                      +-------------------+
+                                                          |
+Dataset Transformation                                    |
+  Dataset / Calculation Bundle -> Derived Dataset --------+
+                                                          |
+Result Materialization                                    |
+  Frozen result/model -> Canonical Dataset Collection ----+
+                                                          |
+Release                                                   |
+  Frozen inputs -> Package Plan -> Candidate -> Publish <-+
 ```
 
-The repository deliberately does not link an old CLI implementation. Point `TIANGONG_LCA_CLI_EXECUTABLE` at a release-capable `tiangong-lca` build and, when pinning a local native artifact, point `TIANGONG_TIDAS_EXECUTABLE` at Rust `tidas` v0.1.0 or newer. The default executable name is `tidas`; neither override is a credential.
+它们没有一个共享的全局 stage number，也不要求每次从头执行。
 
-Release stages 13–17 invoke only the unified `tidas release` command family. The adapter requires `tidas.operation-report.v1` with a matching nested `tidas.release-report.v1`, preserves the Rust diagnostic code and exit class in stage evidence, and records the observed binary version. Stable Rust exit classes are success `0`, data issues `2`, usage `64`, unavailable `69`, internal `70`, I/O `74`, and cancelled `130`. There is no Python package, legacy executable, or implicit fallback path.
+每个 Workflow 都必须能够：
 
-For source operation with clean JSON stdout:
+1. 识别用户给出的已有资源；
+2. 判断哪些证据仍然有效；
+3. 展示当前允许的动作和阻塞原因；
+4. 只执行用户授权的当前动作；
+5. 保存足够信息，使另一位人或 Agent 可以从该节点继续。
 
-```bash
-npm run --silent release -- doctor --target production --json
-```
+## Workflow 不是纯脚本目录
 
-## Operator workflow
+每个 `workflows/<name>/` 是一个完整的 Agent 工作包，至少包含：
 
-Check the explicit target and actor first:
+- `README.md`：面向用户的目标、路线、产物和待确认问题；
+- `AGENTS.md`：面向 Agent 的操作契约、权限边界、证据要求和完成条件；
+- 后续按实际需要添加的契约、模板、示例、验证器和执行代码。
 
-```bash
-tiangong-release doctor --target production --json
-```
+Workflow 的说明和边界先于实现。代码属于某个 Workflow，但 Workflow 不等于代码文件夹。
 
-Bootstrap one deterministic run from an exact calculation package:
+## 与其他仓库的解耦原则
 
-```bash
-tiangong-release bootstrap --target production --package-id <package-uuid> --json
-```
+本项目允许调用其他系统已经提供的能力，但不修改它们：
 
-Bootstrap performs read/download operations only. It verifies the raw Calculation Bundle manifest and every artifact, materializes `source/source-closure.ndjson.gz` into a frozen local source tree, and derives the Release Run UUID from the package, calculation, bundle hash, profile lock, and target fingerprint. An identical retry reuses the same run; conflicting bytes cannot overwrite it. Signed URLs remain only in a deleted temporary projection.
+| 外部能力                     | 本项目如何使用                                      |
+| ---------------------------- | --------------------------------------------------- |
+| ResultSet、Closure、计算任务 | 通过现有 actor-scoped API 或命令调用                |
+| Worker 计算                  | 只提交任务、查询状态和读取产物，不实现或修改 Worker |
+| TIDAS/ILCD 验证与转换        | 调用已有可执行工具，不导入其他仓库源码              |
+| Database / Edge              | 作为权限和远程状态权威，不直接访问数据库            |
+| 公共发布                     | 通过已有 actor-scoped 发布入口，不使用 service-role |
 
-List runs without selecting one implicitly, then inspect an exact directory:
+如果某项所需能力当前没有稳定入口，对应 Workflow 必须报告 `capability_unavailable`，而不是悄悄修改其他仓库或绕过权限边界。
 
-```bash
-tiangong-release runs list --json
-tiangong-release candidate --run-dir .release/workspaces/<id> --json
-tiangong-release plan --run-dir .release/workspaces/<id> --json
-tiangong-release status --run-dir .release/workspaces/<id> --json
-tiangong-release next --run-dir .release/workspaces/<id> --json
-```
+## 人与 Agent 的分工
 
-Every run-specific command requires `--run-dir`; there is no mutable-latest fallback. `candidate` writes the bounded report `reports/release-candidate.json`, containing counts, hashes, findings, artifact paths, and next commands rather than large dataset arrays.
+Agent 可以：
 
-Run local validation and packaging:
+- 识别入口和已有产物；
+- 整理范围、候选路线和缺失信息；
+- 生成 Transformation 或 Package 草案；
+- 调用确定性工具；
+- 汇总验证证据和下一步选择。
 
-```bash
-tiangong-release validate --run-dir .release/workspaces/<id> --json
-tiangong-release package --run-dir .release/workspaces/<id> --json
-tiangong-release candidate --run-dir .release/workspaces/<id> --json
-```
+Agent 不能替代用户决定：
 
-The four deterministic ZIPs are:
+- ResultSet 名称和数据范围；
+- 是否启动线上完整性验证或计算；
+- 加权依据、功能单位和重要字段语义；
+- Release Candidate 的精确内容；
+- 正式发布授权。
 
-- unit-process full closure in TIDAS;
-- unit-process full closure in ILCD;
-- standalone LifecycleModel/result full closure in TIDAS;
-- standalone LifecycleModel/result full closure in ILCD.
+数值计算、格式验证、hash 校验和打包必须由确定性实现完成，不能由语言模型直接生成结果数字。
 
-Packaging never authenticates or mutates remote publication state. `tidas release build-packages` atomically publishes the four archives; a failed retry leaves the preceding package bytes and Release Core publish plan unchanged.
+## 已确认的结构
 
-## Approval, publication, and readback
+1. 顶层保留 `calculation`、`dataset-transformation`、`result-materialization`、`release` 四个 Workflow。
+2. 完整性验证属于 Calculation Workflow，但允许从 Closure Check 节点单独进入。
+3. LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 属于 Result Materialization 下的 recipe，不拆成三个顶层 Workflow。
+4. Packaging 属于 Release Workflow，不作为第五个顶层 Workflow。
+5. Materialization 中源 Unit Process、LifecycleModel 和 Result Process 保持不同身份，不把 LCI/LCIA 写回原始 Unit Process。
+6. Release 只消费已经 materialize 的 canonical datasets，不在打包过程中临时生成 Process/Model。
+7. 其他仓库保持不变；缺少能力时本项目明确停止并报告，而不是跨仓补实现。
 
-Human approval must bind the exact target fingerprint and `outputs/publish-plan.json` `planHash`:
+## 仍需确认的细节
 
-```json
-{
-  "schemaVersion": "tiangong.release.approval-decision.v2",
-  "releaseRunId": "<release-run-uuid>",
-  "publishPlanHash": "<64 lowercase hex characters>",
-  "targetFingerprint": "<64 lowercase hex characters>",
-  "decision": "approve",
-  "reason": "Reviewed the exact target, package hashes, and validation evidence."
-}
-```
+1. Dataset Transformation 的默认产物是否只保留在本地工作区，不直接写回线上 authoring tables。
+2. 加权组合默认优先生成 LifecycleModel 或 Derived Result，还是每次都由用户选择输出类型。
+3. Result Materialization 首版 recipe、one-hop 行为、Result Process lineage 和 previous manifest 规则。
+4. Release 首版 formats、package recipes、subset 限制和本地预览边界。
 
-Apply the immutable decision, publish that plan, then independently verify remote bytes:
+## 开发状态
 
-```bash
-tiangong-release decision apply --run-dir .release/workspaces/<id> --input approval.json --json
-tiangong-release publish --run-dir .release/workspaces/<id> --approve-plan <plan-hash> --json
-tiangong-release verify --run-dir .release/workspaces/<id> --json
-```
-
-Stage 18 revalidates all bindings before remote work, then performs idempotent `prepare -> upload -> finalize -> approve`. Stage 19 publishes only with the returned approval ID/hash. Stage 20 performs a fresh status read, downloads all four ZIPs into `outputs/readback-artifacts/`, verifies exact byte size and SHA-256, submits the readback receipt, and queries terminal status again.
-
-Failures leave a stage ledger entry and may be retried at the same frontier. A passed successor seals all predecessors. Terminal status progresses through `ready_for_approval`, `approved`, `published`, and `verified`.
-
-Remote request/receipt files contain IDs, hashes, public metadata, and storage references only. The combined proof is `reports/independent-readback-report.json`.
-
-## Codex operation
-
-The repository-local `.agents/skills/tiangong-release-operator/SKILL.md` teaches Codex the bounded workflow. Its default actions are doctor, bootstrap, list, candidate, plan, validation, and package. It requires an exact human confirmation of the current target fingerprint and plan hash before creating a v2 decision or beginning any remote mutation.
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
+- 当前分支：`codex/issue-11-workflow-control-plane`
+- 当前阶段：旧 runtime 已清理，准备逐个优化 Workflow
+- 运行时状态：尚无实现；每个 Workflow 独立确认后新增

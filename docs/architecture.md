@@ -1,90 +1,128 @@
 ---
-title: Release Core Architecture
+title: Release Workflow Architecture
 docType: architecture
 scope: repo
 status: active
 authoritative: true
 owner: release
-language: en
+language: zh-CN
 whenToUse:
-  - when changing Release Run stages, materialization, publication handoff, or readback
-  - when deciding cross-repository boundaries for Worker, tidas-tools, CLI, Database, Edge, and Next
+  - 当需要理解根 Workflow、外部系统、产物血缘和执行实现之间的关系时
+  - 当决定新文件、契约或代码属于哪个 Workflow 时
 whenToUpdate:
-  - when stage ordering, dependency direction, publication authority, or workspace integration changes
+  - 当 Workflow 拓扑、外部能力边界、artifact authority 或运行结构变化时
 checkPaths:
   - docs/architecture.md
   - AGENTS.md
+  - README.md
   - .docpact/config.yaml
-  - specs/**
-  - src/**
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: 460c6ddd8425d5441a386cf2f1c5da41dd8ced05
-lastReviewedNote: "Added deterministic calculation-package bootstrap, versioned target binding, compact operator reports, and the Codex publication frontier."
+  - workflows/**
+lastReviewedAt: 2026-08-18
+lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedNote: "Defined root workflow packages as the architecture and made executable code subordinate to confirmed workflow contracts."
 related:
   - ../AGENTS.md
-  - ../.docpact/config.yaml
   - ../README.md
+  - ../workflows/README.md
 ---
 
 # Architecture
 
-The executable flow is:
+## 架构单位
+
+本项目的主要架构单位是根目录 Workflow，而不是一个跨项目 stage machine，也不是 `src/` 中的模块目录。
 
 ```text
-data-manager calculation package ID
-  -> actor-scoped Calculation Bundle projection and exact downloads
-  -> frozen manifest, source closure, and target-bound Release Request
-  -> local Release Run stages and cache
-  -> Rust tidas release validation / conversion / round-trip / closure / deterministic ZIP
-  -> tiangong-lca actor-scoped remote commands
-  -> Database / Edge publication truth
-  -> independent readback
+Repository
+├── README.md                 # 项目目的与四个 Workflow 的关系
+├── AGENTS.md                 # 仓库契约
+├── workflows/                # 主要业务与 Agent 导航单位
+│   ├── calculation/
+│   ├── dataset-transformation/
+│   ├── result-materialization/
+│   └── release/
+├── docs/                     # 跨 Workflow 架构说明
+├── package.json              # 当前文档基线工具与验证入口
+└── .github/workflows/        # 仓库级验证
 ```
 
-Calculation and publication are separate. A completed calculation may be previewed and downloaded without creating a public release. Publication is possible only after canonical artifacts, validation, closure, semantic round-trip, an immutable publish plan, and durable approval all match.
+一个 Workflow 可以在自己的根目录下包含说明、Agent 契约、模板、schemas、fixtures、验证器和代码。不是所有 Workflow 都需要相同子目录，也不建立通用 Workflow DSL。
 
-Stages 13–17 delegate their domain gates to the unified native `tidas release` surface and accept only the versioned `tidas.operation-report.v1` plus nested `tidas.release-report.v1` contracts. Release Core keeps orchestration, bundle-to-dataset numerical parity, stage evidence, manifest and publish-plan construction, approval, publication, and readback. The local adapter passes no publication credentials or Python environment assumptions and has no legacy executable fallback.
-
-## Operator intake boundary
-
-`doctor --target <id>` validates the Node runtime, versioned public target profile, protected credential presence, CLI/tool availability, and a read-only manager authorization probe. It does not create or mutate a release.
-
-`bootstrap --target <id> --package-id <uuid>` asks `tiangong-lca` for the actor-scoped Calculation Bundle projection, keeps signed URLs in a temporary directory, downloads the exact raw manifest and every declared artifact, and re-verifies byte size, SHA-256, bundle content hash, scope, and required artifact kinds. The required `source_closure` NDJSON artifact is transformed into the repository's frozen source-tree contract without changing canonical document bytes.
-
-The Release Run UUID is UUIDv5-derived from immutable package, calculation, bundle, profile-lock, and target facts. The same input reuses the same workspace; no command chooses a mutable latest run. `runs list` is discovery only, while every run-specific operation requires an exact directory. `candidate` is the bounded F2 report surface for Agents and humans.
-
-The legacy `init` path remains readable for existing local runs. A run without a target binding may execute local stages, but it can never cross a remote frontier.
-
-The relational platform stores release/index/hash/status/approval/audit facts. Generated datasets and packages remain immutable objects and never become ordinary editable Process or LifecycleModel rows.
-
-## Workspace integration boundary
-
-`lca-workspace` integrates this repository as the `release` child repository and pins an exact commit. Release Core remains the owner of local release orchestration; root workspace governance owns only cataloging, routing, branch-policy facts, and the submodule pointer. The current canonical remote is the private `chukeaa/tiangong-lca-release` repository until a separately approved ownership migration changes that URL.
-
-## Remote stage boundary
-
-The target profile contains only public environment identity: target ID, API base URL, and the SHA-256 of the expected publishable key. Its canonical fingerprint is frozen in the Release Request, included in the publish-plan hash, and repeated by approval-decision v2. Immediately before any remote command, Release Core requires the current environment, request, publish plan, and approval to bind the same fingerprint. This is a local fail-closed guard in addition to actor authorization enforced by Edge and Database.
-
-The three remote stages use only the public `tiangong-lca release` command family:
+## 控制关系
 
 ```text
-18 approval
-  local exact-target and exact-plan v2 decision
-  -> prepare run
-  -> upload four content-addressed ZIPs
-  -> service-only artifact finalize after Edge byte/hash verification
-  -> actor approval
+用户
+  <-> Agent / Operator
+        -> Calculation Workflow
+        -> Dataset Transformation Workflow
+        -> Result Materialization Workflow
+        -> Release Workflow
 
-19 publish
-  durable approval ID/hash + exact plan hash
-  -> actor publication transaction
-
-20 readback-verify
-  fresh remote status
-  -> four signed downloads to a new local directory
-  -> local exact byte/hash comparison
-  -> database readback receipt
-  -> fresh terminal status
+Workflow
+  -> release-owned adapter
+  -> 已存在的 API / CLI / local executable
+  -> 外部权威系统
 ```
 
-The control plane inherits the protected environment when spawning the CLI, but command arguments and workspace artifacts contain no credential. Prepare and publish use deterministic idempotency keys. Signed upload retry is confined to the same content-addressed identity, while finalize re-verifies bytes. A later passed stage seals all predecessors, preventing an old plan or package stage from being replayed after approval or publication.
+Workflow 拥有意图整理、动作选择、本地证据和恢复上下文。外部系统继续拥有远程鉴权、任务状态、计算真相和发布事实。
+
+## Workflow 之间的关系
+
+四个 Workflow 通过精确产物引用连接，而不是互相共享 mutable state：
+
+```text
+Calculation Bundle -----------------------+
+                                          |
+Dataset Transformation Manifest ----------+--> Result Materialization
+                                                   |
+                                                   v
+                                       Canonical Dataset Collection
+                                                   |
+                                                   v
+                                           Release Candidate
+```
+
+一个 Workflow 可以建议用户进入另一个 Workflow，但不得自动把“建议下一步”解释成授权执行。
+
+## Artifact authority
+
+本项目需要区分：
+
+- Remote Resource：ResultSet、Closure Check、Worker Job、Result Package、Publication；
+- Local Artifact：下载的 manifest、dataset、report、package 和 readback 文件；
+- Semantic Draft：用户意图、字段建议、未决问题；
+- Frozen Spec：可执行的 Transformation、Package 或 Release Candidate；
+- Decision Evidence：绑定精确 subject hash 和 target 的用户决定。
+
+Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容 hash 标识。Draft 可修改；Frozen Spec 和已经执行的产物不可原地改写。
+
+## 恢复模型
+
+项目不保存一个全局 `currentStage`。每个 Workflow 自己保存：
+
+- 入口资源；
+- 已完成动作；
+- 当前观察到的外部状态；
+- 本地产物和证据；
+- 等待用户回答的问题；
+- 可执行动作；
+- blocker 与最早返回点。
+
+关闭终端或切换 Agent 后，通过精确资源 ID 和本地 evidence 恢复。
+
+## 实现边界
+
+目标确认后，运行时实现应遵守：
+
+- 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
+- Workflow 文档拥有行为语义，adapter 不拥有业务路线；
+- 确定性计算、验证和打包不得由 Agent 自行模拟；
+- 共享代码只提取已被多个 Workflow 实际复用的机制；
+- 不为目录对称而创建空抽象；
+- 不保留与新 Workflow 无关的旧 stage、schema 或测试。
+
+## 当前基线
+
+四个根 Workflow 的拆分已经得到用户确认。旧运行时代码和耦合配置已删除，Git 历史是唯一恢复路径。
+
+后续一次只优化一个 Workflow；只有该 Workflow 当前确认的说明、契约、实现和验证进入活动结构，避免尚未讨论的旧设计影响新决策。
