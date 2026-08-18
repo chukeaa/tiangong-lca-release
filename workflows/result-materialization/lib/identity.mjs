@@ -21,10 +21,9 @@ export function modelIdentity(rootProcessUuid, referenceFlowUuid) {
 
 export function resultIdentity(rootProcessUuid, referenceFlowUuid) {
   const document = {
-    schema: "tiangong-result-process-identity.v2",
+    schema: "tiangong-result-process-identity.v3",
     rootProcessUuid: rootProcessUuid.toLowerCase(),
     referenceFlowUuid: referenceFlowUuid.toLowerCase(),
-    resultProfileId: RESULT_PROFILE,
   };
   return {
     document,

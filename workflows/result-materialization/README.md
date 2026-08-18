@@ -142,7 +142,7 @@ node cli.mjs materialize-models \
 
 `intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。输出目录存在时拒绝覆盖。
 
-`materialize-results` 接受显式 root 范围，并自动把每个 root 的 direct provider `Q` 纳入 required Result set。`R(P)` 的 v2 稳定身份直接由 `U(P) UUID + reference flow UUID + result profile` 派生；LCI/LCIA 数值、计算任务、source version 和生成时间不进入 UUID。命令先解析整个 Result version set，再冻结 `result-catalog.json`。
+`materialize-results` 接受显式 root 范围，并自动把每个 root 的 direct provider `Q` 纳入 required Result set。`R(P)` 的 v3 稳定身份只由 `U(P) UUID + reference flow UUID` 派生；Result profile、LCI/LCIA 数值、方法集、计算任务、source version 和生成时间都不进入 UUID，而通过 profile、semantic hash、dataset version 和 provenance 表达。命令先解析整个 Result version set，再冻结 `result-catalog.json`。
 
 `materialize-models` 只读取同一 intake 和已冻结 Result Catalog，以精确 `R(P)@version` / `R(Q)@version` 生成 `resolved-one-hop-aggregated-background.v1` 的 `M(P)`。每条 direct provider edge 产生一个 provider process instance，并执行 TIDAS schema、Catalog dataset hash 和 one-hop inventory reconstruction 校验。
 
