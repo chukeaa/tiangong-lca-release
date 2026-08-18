@@ -105,19 +105,31 @@ M(P).dataSetInformation.referenceToResultingProcess
 
 `U(P)` 提供身份锚点、reference basis 和可继承 metadata；`R(P)` 的数值只来自已验证 Calculation Bundle。
 
-Generated Result identity 使用 `tiangong-result-process-identity.v3`：
+Generated Result UUIDv5 name 只包含业务身份：
 
 ```json
 {
-  "schema": "tiangong-result-process-identity.v3",
   "rootProcessUuid": "<U(P) UUID>",
   "referenceFlowUuid": "<reference flow UUID>"
 }
 ```
 
-它使用冻结的 Result namespace 做 UUIDv5。`R(P)` 不再通过 `M(P)` UUID 间接派生，因此 `U(P) -> R(P)` 是独立原子动作；Result/Model profile、LCI/LCIA 与方法集、任务 ID、source version 和 dataset version 都不进入 Result UUID。这些变化通过 dataset profile、semantic/version-significant hash、dataset version 和 provenance 表达。
+它使用冻结的 Result namespace 做 UUIDv5。name 中不放 `schema` 或 identity contract version，避免纯协议升级改变业务 lineage。`R(P)` 不再通过 `M(P)` UUID 间接派生，因此 `U(P) -> R(P)` 是独立原子动作；Result/Model profile、LCI/LCIA 与方法集、任务 ID、source version 和 dataset version 都不进入 Result UUID。这些变化通过 dataset profile、semantic/version-significant hash、dataset version 和 provenance 表达。
 
-如果未来必须让不同 system boundary 的 Result lineage 同时存在，应增加语义明确且有证据的 boundary identity 字段并升级 identity schema；不得使用泛化的 `resultProfileId` 把 recipe 或输出形态误当成业务身份。
+算法证据保存在 Result descriptor 外层，不参与 UUID name：
+
+```json
+{
+  "algorithm": "uuidv5",
+  "namespace": "6d130f3d-ca65-5a6f-a842-4b2f9c2f5461",
+  "name": {
+    "rootProcessUuid": "<U(P) UUID>",
+    "referenceFlowUuid": "<reference flow UUID>"
+  }
+}
+```
+
+如果未来必须让不同 system boundary 的 Result lineage 同时存在，应增加语义明确且有证据的 boundary identity 字段，并为改变后的 name contract 冻结新 namespace；不得使用泛化的 `resultProfileId` 把 recipe 或输出形态误当成业务身份。
 
 ### 2. `compose-model(P, finalized-result-catalog)`
 

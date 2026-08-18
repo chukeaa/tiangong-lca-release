@@ -110,7 +110,7 @@ export function renderResultProcess(context, axis, version) {
     uuid: identity.uuid,
     version,
     profile: RESULT_PROFILE,
-    identity: identity.document,
+    identity: identity.evidence,
     sourceProcess: structuredClone(axis.rootProcess),
     document: result,
     counts: { lci: lci.length, lcia: lcia.length },

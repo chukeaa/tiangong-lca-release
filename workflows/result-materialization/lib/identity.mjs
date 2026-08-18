@@ -21,12 +21,16 @@ export function modelIdentity(rootProcessUuid, referenceFlowUuid) {
 
 export function resultIdentity(rootProcessUuid, referenceFlowUuid) {
   const document = {
-    schema: "tiangong-result-process-identity.v3",
     rootProcessUuid: rootProcessUuid.toLowerCase(),
     referenceFlowUuid: referenceFlowUuid.toLowerCase(),
   };
   return {
     document,
+    evidence: {
+      algorithm: "uuidv5",
+      namespace: RESULT_NAMESPACE,
+      name: document,
+    },
     uuid: uuidv5(canonicalJson(document).trimEnd(), RESULT_NAMESPACE),
   };
 }

@@ -25,8 +25,12 @@ test("identity contracts reproduce frozen vectors", () => {
   );
   assert.equal(
     resultIdentity(PROCESS_ID, FLOW_ID).uuid,
-    "a52fcf90-9cc0-50a5-b75f-e84aaa7ebaf6",
+    "e69b636c-c09d-5584-a00e-5ae3380594de",
   );
+  assert.deepEqual(resultIdentity(PROCESS_ID, FLOW_ID).document, {
+    rootProcessUuid: PROCESS_ID,
+    referenceFlowUuid: FLOW_ID,
+  });
 });
 
 test("version policy reuses, bumps minor metadata, and bumps major semantics", () => {
@@ -210,7 +214,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   assert.equal(results.catalog.datasets.length, 2);
   assert.equal(
     results.catalog.datasets[0].uuid,
-    "a52fcf90-9cc0-50a5-b75f-e84aaa7ebaf6",
+    "e69b636c-c09d-5584-a00e-5ae3380594de",
   );
   const models = await materializeModels({
     intakeDir: intakePath,

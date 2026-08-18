@@ -62,7 +62,7 @@ related:
 ## 身份与版本
 
 - Identity 由稳定语义输入和 recipe profile 派生，不使用随机 UUID。
-- Generated `R(P)` v3 identity 只绑定 `U(P)` UUID 和 reference flow UUID，不依赖 `M(P)` UUID、Result profile、方法集或结果内容。
+- Generated `R(P)` UUIDv5 name 只包含 `U(P)` UUID 和 reference flow UUID，不包含 schema/version 字段，也不依赖 `M(P)` UUID、Result profile、方法集或结果内容；算法与 namespace 只保存在外层 identity evidence。
 - 版本规划必须考虑 semantic hash、version-significant hash 和引用版本。
 - 先统一解析并冻结 Result UUID/version set，再生成绑定精确 `R(Q)`/`R(P)` references 的 Model version set。
 - 相互引用的数据集作为集合求解版本，不能分别生成后查询 mutable `latest` 补引用。
