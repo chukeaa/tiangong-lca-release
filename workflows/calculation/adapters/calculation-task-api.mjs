@@ -102,6 +102,7 @@ export function createCalculationTaskApi({
           name: input.name,
           coverageMode: input.coverageMode,
           ...(input.processes.length ? { processes: input.processes } : {}),
+          defaultImpactCategory: input.defaultImpactCategory,
           lciaMethodSet: input.lciaMethods,
           idempotencyKey: input.idempotencyKey,
           closureCheckId: input.closureCheckId,

@@ -120,7 +120,14 @@ Check ID 和 Worker Job ID。只有无法确认最低稳定身份时才使用结
 未传 `--coverage-mode` 和 `--method` 时，当前 Workflow profile 使用：
 
 - coverage：`global_eligible`；
-- LCIA method：Climate change / GWP，`6209b35f-9447-40b5-b68c-a1099e3674a0@01.00.000`。
+- LCIA method set：当前已审核静态 catalog 中的完整 25 个精确 `{id, version}` identity；
+- default impact category：Climate change / GWP，`6209b35f-9447-40b5-b68c-a1099e3674a0`。
+
+默认影响类别只决定 Result Package 初始展示哪个结果，不缩小 Closure 或 Calculation 的方法范围。
+25 个 identity 及其精确版本由 `contracts/default-profile.mjs` 持有；Closure 和 Calculation 必须从
+同一 profile 取值，避免 certificate scope 与 build scope 不一致。该配置同时记录每个方法的
+英文名称和 impact indicator，供 Agent、文档和 CLI 展示；adapter 仍只向远程 scope 发送稳定的
+`{id, version}` identity，不把展示字段加入 provider 契约。
 
 JSON 结果的 `effectiveInput.defaultedInputs` 会明确列出采用默认值的字段。显式参数始终覆盖
 对应默认值；subset 仍必须提供至少一个 `--process`。
