@@ -68,6 +68,7 @@ npm --prefix workflows/calculation run --silent cli -- closure start --coverage-
 npm --prefix workflows/calculation run --silent cli -- closure get --closure-check-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
 npm --prefix workflows/calculation run --silent cli -- calculation get --job-id <uuid>
+npm --prefix workflows/calculation run --silent cli -- calculation-bundle list --limit 20
 npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
 ```
 
@@ -158,6 +159,16 @@ task feed，并只接受精确 Worker Job ID；输出 `workerStatus`、domain st
 ResultSet/Closure/Result Package identity 和投影更新时间。queued/running 状态的下一步仍是数据库状态
 查询；只有 failed/blocked/stale，或 Worker completed 但 domain 未通过/无效时，才优先建议
 `workspace_ops worker job` 日志诊断。日志不覆盖数据库任务投影的产品状态权威性。
+
+`calculation-bundle list` 用于发现当前 actor 可以读取的 Calculation Bundle。它先读取数据库 Task
+Feed 中最近的 `lcia_result.package_build` 任务，只把带精确 `resultPackageId` 的记录作为候选，再对每个
+候选调用 `app_lca_release_commands` 的 `get_calculation_bundle` 做精确验证。只有读取成功的 Bundle 才会
+进入列表；旧 Package 的 `calculation_bundle_not_available` 会进入有界排除统计。命令默认返回 20 条、
+最大 200 条，并披露扫描数、候选数、排除数、远端 cursor 是否仍存在及列表是否完整。
+
+列表只投影 Package/Job/ResultSet identity、Bundle schema/hash、影响类别和五类产品下载的稳定元数据，
+不输出或持久化 manifest/chunk/download signed URL。接口地址可由标准
+`TIANGONG_LCA_API_BASE_URL` 推导，也可通过 `TIANGONG_LCA_RELEASE_COMMAND_URL` 显式提供。
 
 成功创建或精确读取后，Workflow 在
 `.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程

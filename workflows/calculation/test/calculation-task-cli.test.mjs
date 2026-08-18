@@ -436,6 +436,121 @@ test("calculation get recommends Worker logs only for diagnostic states", async 
   assert.match(result.nextActions[0], /workspace_ops\.cli worker job/);
 });
 
+test("calculation-bundle list verifies Package candidates and omits signed URLs", async () => {
+  const stdout = buffer();
+  const legacyPackageId = "323e4567-e89b-42d3-a456-426614174000";
+  const calls = [];
+  const code = await runCli(
+    ["calculation-bundle", "list", "--limit", "20", "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env: {
+        ...env,
+        TIANGONG_LCA_RELEASE_COMMAND_URL:
+          "https://example.invalid/release-commands",
+      },
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body);
+        calls.push({ url, body });
+        if (body.action === "list_task_feed")
+          return Response.json({
+            ok: true,
+            data: {
+              items: [
+                {
+                  jobId,
+                  jobKind: "lcia_result.package_build",
+                  workerStatus: "completed",
+                  domainStatus: "passed",
+                  domainValidity: "valid",
+                  title: "Current calculation",
+                  resultSetId: uuid,
+                  resultSetName: "Current ResultSet",
+                  resultPackageId: uuid,
+                  projectionUpdatedAt: "2026-08-18T00:03:00Z",
+                },
+                {
+                  jobId: legacyPackageId,
+                  jobKind: "lcia_result.package_build",
+                  workerStatus: "completed",
+                  resultPackageId: legacyPackageId,
+                },
+              ],
+              nextCursor: null,
+            },
+          });
+        if (body.packageId === legacyPackageId)
+          return Response.json(
+            {
+              ok: false,
+              code: "calculation_bundle_not_available",
+              message: "Legacy Package has no Bundle",
+            },
+            { status: 404 },
+          );
+        return Response.json({
+          ok: true,
+          data: {
+            packageId: uuid,
+            packageVersion: "01.00.000",
+            snapshotId: uuid,
+            resultId: legacyPackageId,
+            calculationBundle: {
+              schemaVersion: "tiangong.calculation-bundle.v2",
+              bundleContentHash: "a".repeat(64),
+              manifestUrl: "https://signed.invalid/manifest?secret=yes",
+            },
+            availableImpactCategories: [uuid],
+            productDownloads: [
+              {
+                role: "lcia_results_xlsx",
+                group: "results",
+                fileName: "lcia-results.xlsx",
+                mediaType:
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                sha256: "b".repeat(64),
+                byteSize: 123,
+                recordCount: 10,
+                signedDownloadUrl: "https://signed.invalid/file?secret=yes",
+              },
+            ],
+          },
+        });
+      },
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, env.TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL);
+  assert.equal(calls[1].url, "https://example.invalid/release-commands");
+  assert.equal(result.command, "calculation-bundle.list");
+  assert.equal(result.data.items.length, 1);
+  assert.equal(result.data.items[0].packageId, uuid);
+  assert.equal(result.data.items[0].calculation.jobId, jobId);
+  assert.equal(result.completeness.lookup.excludedPackages, 1);
+  assert.equal(result.completeness.status, "complete");
+  assert.equal(result.replyTemplate.id, "calculation-bundle-listed");
+  assert.doesNotMatch(stdout.value(), /signed\.invalid/);
+});
+
+test("calculation-bundle list validates its bound before network access", async () => {
+  const stdout = buffer();
+  let calls = 0;
+  const code = await runCli(
+    ["calculation-bundle", "list", "--limit", "201", "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env: {},
+      fetchImpl: async () => {
+        calls += 1;
+      },
+    },
+  );
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+});
+
 test("calculation submission binds the selected closure evidence", async () => {
   const stdout = buffer();
   const code = await runCli(

@@ -70,6 +70,11 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "calculation-bundle.list": [
+    "calculation-bundle-listed",
+    "calculation-bundle-listed.md",
+    ["data.items", "completeness", "warnings", "nextActions"],
+  ],
   "worker.logs": [
     "worker-log-delegated",
     "worker-log-delegated.md",

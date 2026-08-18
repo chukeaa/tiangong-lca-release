@@ -18,7 +18,7 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
+lastReviewedCommit: ab21774eb5140f817b2679bcc06bf53fcfc896c5
 lastReviewedNote: "Defined provider-compatible adapters and Release-owned references for workflow-local ResultSet operations."
 related:
   - ../AGENTS.md
@@ -127,4 +127,4 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 
 四个根 Workflow 的拆分已经得到用户确认。每个可执行入口由所属 Workflow 本地拥有，不建立仓库级聚合 CLI。
 
-Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get adapter、provider compatibility projection、Release-owned 最小引用、CLI 和恢复文件。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。
+Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get、Closure/Calculation 提交、数据库优先的任务状态查询和可用 Calculation Bundle 发现。Bundle 发现先从数据库任务投影取得精确 Package 候选，再通过 actor-scoped Release API 验证，不扫描 Worker 或对象存储，也不把 signed URL 放入列表输出。外部 payload 统一经 provider compatibility adapter 转为 Release-owned 最小引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。

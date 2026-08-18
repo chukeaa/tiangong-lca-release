@@ -41,7 +41,7 @@ related:
 四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
 
 当前仓库以四个 Workflow 为活动基线。Calculation 已拥有 workflow-local ResultSet
-create/list/get、Closure Check 与计算任务提交，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
+create/list/get、Closure Check 与计算任务提交、数据库优先的任务状态查询、可用 Calculation Bundle 列表，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
 每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
 Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。

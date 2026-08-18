@@ -42,6 +42,7 @@ Usage:
   ${COMMAND} closure get --closure-check-id <uuid> [--format human|json]
   ${COMMAND} calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode <mode> --method <uuid>@<version> --idempotency-key <key> --confirm-start
   ${COMMAND} calculation get --job-id <uuid> [--format human|json]
+  ${COMMAND} calculation-bundle list [--limit 20] [--format human|json]
   ${COMMAND} worker logs --job-id <uuid> [--environment <name>] [--since <journal-time>]
 
 Behavior:
@@ -50,11 +51,13 @@ Behavior:
   create  Creates a remote ResultSet only with --confirm-create and records its ID.
   closure get  Reads one exact Closure Check and reports whether its evidence can bind a calculation.
   calculation get  Reads database-backed task status first and recommends Worker logs only for diagnosis.
+  calculation-bundle list  Verifies recent Package candidates and lists only Bundles available to the actor.
 
 Examples:
   ${COMMAND} result-set list --limit 20 --format json
   ${COMMAND} result-set get --result-set-id 123e4567-e89b-42d3-a456-426614174000
   ${COMMAND} result-set create --name "Steel baseline" --confirm-create
+  ${COMMAND} calculation-bundle list --limit 20 --format json
 `;
 
 const EXIT_CODES = {
@@ -344,6 +347,63 @@ export async function runCli(
       );
       return 0;
     }
+    if (family === "calculation-bundle" && action === "list") {
+      command = "calculation-bundle.list";
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      const limit = flags.limit ?? 20;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--limit must be an integer from 1 to 200",
+        );
+      const { items, lookup, exclusions } = await createCalculationTaskApi({
+        env,
+        fetchImpl,
+      }).listCalculationBundles(limit);
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data: { items },
+        completeness: {
+          status: lookup.complete ? "complete" : "bounded",
+          returned: items.length,
+          lookup,
+          exclusions,
+        },
+        warnings: exclusions.length
+          ? [
+              {
+                code: "bundle_candidates_excluded",
+                message: `${exclusions.length} recent Package candidate(s) did not expose an available Calculation Bundle`,
+              },
+            ]
+          : [],
+        nextActions: items.length
+          ? [
+              `${COMMAND} calculation get --job-id ${items[0].calculation.jobId}`,
+              "Continue Result Materialization with an exact packageId from this list",
+            ]
+          : ["Inspect recent Calculation tasks or start a new Calculation"],
+      };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `Available Calculation Bundles (${items.length})\n\nSummary:\n${
+              items.length
+                ? items
+                    .map(
+                      (item) =>
+                        `- ${item.calculation.resultSetName ?? item.calculation.title ?? "Unnamed calculation"} | Package ${item.packageId} | Job ${item.calculation.jobId} | ${item.productDownloads.length} downloads`,
+                    )
+                    .join("\n")
+                : "- No verified available Calculation Bundle was found in the bounded recent task feed"
+            }\n- Completeness: ${lookup.complete ? "complete for the scanned feed" : "bounded"}; scanned ${lookup.tasksScanned} tasks, ${lookup.excludedPackages} Package candidates excluded\n\nNext:\n${result.nextActions.map((entry) => `- ${entry}`).join("\n")}\n- Reply using template: ${result.replyTemplate.path}\n`,
+      );
+      return 0;
+    }
     if (family === "calculation" && action === "get") {
       command = "calculation.get";
       const flags = parseFlags(rest);
@@ -507,7 +567,7 @@ export async function runCli(
     ) {
       throw new ResultSetOperationError(
         "invalid_request",
-        "Expected result-set list/get/create, closure start/get, calculation start, or worker logs; use --help for examples",
+        "Expected result-set list/get/create, closure start/get, calculation start/get, calculation-bundle list, or worker logs; use --help for examples",
       );
     }
     command = `result-set.${action}`;

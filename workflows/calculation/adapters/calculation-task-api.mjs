@@ -5,6 +5,18 @@ import { resolveActorAccessToken } from "../runtime/actor-session.mjs";
 const text = (value) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
+function releaseCommandUrl(config) {
+  const exact = config.env.TIANGONG_LCA_RELEASE_COMMAND_URL?.trim();
+  if (exact) return exact;
+  const dataProductSuffix = "/app_data_product_commands";
+  if (config.commandUrl.endsWith(dataProductSuffix))
+    return `${config.commandUrl.slice(0, -dataProductSuffix.length)}/app_lca_release_commands`;
+  throw new ResultSetApiError(
+    "capability_unavailable",
+    "TIANGONG_LCA_RELEASE_COMMAND_URL or a standard TIANGONG_LCA_API_BASE_URL is required for Calculation Bundle reads",
+  );
+}
+
 function projectTask(data, kind) {
   const job = data?.workerJob ?? data?.job ?? {};
   const jobId =
@@ -145,11 +157,100 @@ function projectCalculationTask(value) {
   };
 }
 
+function projectCalculationBundle(value) {
+  const packageId = text(value?.packageId);
+  const calculationBundle = value?.calculationBundle;
+  if (
+    !isUuid(packageId) ||
+    !calculationBundle ||
+    typeof calculationBundle !== "object"
+  )
+    throw new ResultSetApiError(
+      "invalid_calculation_bundle",
+      "Calculation Bundle response did not contain an exact Package identity and bundle metadata",
+    );
+  const downloads = Array.isArray(value?.productDownloads)
+    ? value.productDownloads
+        .filter((entry) => entry && typeof entry === "object")
+        .map((entry) => ({
+          role: text(entry.role),
+          group: text(entry.group),
+          fileName: text(entry.fileName),
+          mediaType: text(entry.mediaType),
+          sha256: text(entry.sha256),
+          byteSize: Number.isSafeInteger(entry.byteSize)
+            ? entry.byteSize
+            : null,
+          recordCount: Number.isSafeInteger(entry.recordCount)
+            ? entry.recordCount
+            : null,
+        }))
+    : [];
+  return {
+    packageId,
+    packageVersion: text(value?.packageVersion),
+    snapshotId: isUuid(text(value?.snapshotId)) ? text(value.snapshotId) : null,
+    resultId: isUuid(text(value?.resultId)) ? text(value.resultId) : null,
+    bundle: {
+      schemaVersion: text(calculationBundle.schemaVersion),
+      bundleContentHash: text(calculationBundle.bundleContentHash),
+    },
+    availableImpactCategories: Array.isArray(value?.availableImpactCategories)
+      ? value.availableImpactCategories.filter(
+          (entry) => typeof entry === "string",
+        )
+      : [],
+    productDownloads: downloads,
+  };
+}
+
 export function createCalculationTaskApi({
   env = process.env,
   fetchImpl = globalThis.fetch,
 } = {}) {
   const config = resultSetApiConfig(env);
+  async function invokeUrl(url, body, { readName, project }) {
+    const accessToken = await resolveActorAccessToken({
+      env: config.env,
+      fetchImpl,
+    });
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method: "POST",
+        headers: {
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      throw new ResultSetApiError(
+        "capability_unavailable",
+        `${readName} lookup is temporarily unavailable`,
+        { details: { cause: error instanceof Error ? error.name : "unknown" } },
+      );
+    }
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ResultSetApiError(
+        "invalid_calculation_bundle",
+        `${readName} lookup returned non-JSON`,
+      );
+    }
+    if (!response.ok || payload?.ok === false)
+      throw new ResultSetApiError(
+        payload?.code ?? `http_${response.status}`,
+        payload?.message ??
+          `${readName} lookup failed with HTTP ${response.status}`,
+        { status: response.status },
+      );
+    return project(payload?.data);
+  }
   async function invoke(
     body,
     {
@@ -267,6 +368,90 @@ export function createCalculationTaskApi({
         `Calculation task ${jobId} was not found before the bounded lookup limit`,
         { details: { maxPages, pageSize: 200 } },
       );
+    },
+    async listCalculationBundles(limit) {
+      const data = await invoke(
+        {
+          action: "list_task_feed",
+          category: "data_product",
+          jobKinds: ["lcia_result.package_build"],
+          limit: 200,
+          rootOnly: false,
+        },
+        {
+          kind: "calculation",
+          readOnly: true,
+          readName: "Calculation task feed",
+          project: (value) => value,
+        },
+      );
+      const tasks = (Array.isArray(data?.items) ? data.items : [])
+        .map(projectCalculationTask)
+        .filter(Boolean);
+      const candidates = [];
+      const seen = new Set();
+      for (const task of tasks) {
+        if (task.resultPackageId && !seen.has(task.resultPackageId)) {
+          seen.add(task.resultPackageId);
+          candidates.push(task);
+        }
+      }
+      const items = [];
+      const exclusions = [];
+      for (const task of candidates) {
+        if (items.length >= limit) break;
+        try {
+          const bundle = await invokeUrl(
+            releaseCommandUrl(config),
+            {
+              action: "get_calculation_bundle",
+              packageId: task.resultPackageId,
+            },
+            {
+              readName: "Calculation Bundle",
+              project: projectCalculationBundle,
+            },
+          );
+          items.push({
+            ...bundle,
+            calculation: {
+              jobId: task.jobId,
+              title: task.title,
+              resultSetId: task.resultSetId,
+              resultSetName: task.resultSetName,
+              projectionUpdatedAt: task.projectionUpdatedAt,
+            },
+          });
+        } catch (error) {
+          if (
+            ["calculation_bundle_not_available", "package_not_found"].includes(
+              error?.code,
+            )
+          ) {
+            exclusions.push({
+              packageId: task.resultPackageId,
+              jobId: task.jobId,
+              code: error.code,
+            });
+            continue;
+          }
+          throw error;
+        }
+      }
+      return {
+        items,
+        lookup: {
+          source: "actor_scoped_database_task_feed_and_exact_bundle_reads",
+          taskLimit: 200,
+          tasksScanned: tasks.length,
+          candidatePackages: candidates.length,
+          excludedPackages: exclusions.length,
+          nextCursorPresent: Boolean(data?.nextCursor),
+          resultLimit: limit,
+          complete: !data?.nextCursor && items.length < limit,
+        },
+        exclusions: exclusions.slice(0, 20),
+      };
     },
     createCalculation(input) {
       return invoke(
