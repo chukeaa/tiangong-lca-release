@@ -36,12 +36,66 @@ function projectTask(data, kind) {
   };
 }
 
+function projectClosureCheck(data) {
+  const closureCheckId = text(data?.closureCheckId);
+  if (!isUuid(closureCheckId))
+    throw new ResultSetApiError(
+      "invalid_closure_check",
+      "Closure Check response did not contain an exact identity",
+    );
+  const workerJob = data?.workerJob ?? {};
+  const jobId = text(workerJob.jobId) ?? text(workerJob.id);
+  const requestedScopeHash = text(data?.requestedScopeHash);
+  const policyFingerprint = text(data?.policyFingerprint);
+  const runStatus = text(data?.runStatus) ?? "unknown";
+  const scanCompleteness = text(data?.scanCompleteness) ?? "unknown";
+  const certificateValidity = text(data?.certificateValidity) ?? "unknown";
+  const calculationReady =
+    runStatus === "passed" &&
+    scanCompleteness === "complete" &&
+    certificateValidity === "valid" &&
+    requestedScopeHash !== null &&
+    policyFingerprint !== null;
+  return {
+    closureCheckId,
+    runStatus,
+    scanCompleteness,
+    certificateValidity,
+    calculationReady,
+    binding: {
+      requestedScopeHash,
+      policyFingerprint,
+      effectiveScopeHash: text(data?.effectiveScopeHash),
+    },
+    blockerCodes: Array.isArray(data?.blockerCodes)
+      ? data.blockerCodes
+          .filter((value) => typeof value === "string")
+          .slice(0, 50)
+      : [],
+    workerJob: {
+      jobId: isUuid(jobId) ? jobId : null,
+      status: text(workerJob.status),
+      phase: text(workerJob.phase),
+      progressFraction:
+        typeof workerJob.progressFraction === "number"
+          ? workerJob.progressFraction
+          : null,
+    },
+    createdAt: text(data?.createdAt),
+    updatedAt: text(data?.updatedAt),
+    finishedAt: text(data?.finishedAt),
+  };
+}
+
 export function createCalculationTaskApi({
   env = process.env,
   fetchImpl = globalThis.fetch,
 } = {}) {
   const config = resultSetApiConfig(env);
-  async function invoke(body, kind) {
+  async function invoke(
+    body,
+    { kind, readOnly = false, project = projectTask },
+  ) {
     const accessToken = await resolveActorAccessToken({
       env: config.env,
       fetchImpl,
@@ -60,8 +114,10 @@ export function createCalculationTaskApi({
       });
     } catch (error) {
       throw new ResultSetApiError(
-        "remote_outcome_unknown",
-        "Task submission outcome is unknown; inspect the task feed before retrying",
+        readOnly ? "capability_unavailable" : "remote_outcome_unknown",
+        readOnly
+          ? "Closure Check lookup is temporarily unavailable"
+          : "Task submission outcome is unknown; inspect the task feed before retrying",
         { details: { cause: error instanceof Error ? error.name : "unknown" } },
       );
     }
@@ -70,8 +126,10 @@ export function createCalculationTaskApi({
       payload = await response.json();
     } catch {
       throw new ResultSetApiError(
-        "remote_outcome_unknown",
-        "Task submission returned non-JSON; inspect the task feed before retrying",
+        readOnly ? "invalid_closure_check" : "remote_outcome_unknown",
+        readOnly
+          ? "Closure Check lookup returned non-JSON"
+          : "Task submission returned non-JSON; inspect the task feed before retrying",
       );
     }
     if (!response.ok || payload?.ok === false)
@@ -81,7 +139,7 @@ export function createCalculationTaskApi({
           `Task submission failed with HTTP ${response.status}`,
         { status: response.status },
       );
-    return projectTask(payload?.data, kind);
+    return project(payload?.data, kind);
   }
   return {
     createClosure(input) {
@@ -92,7 +150,13 @@ export function createCalculationTaskApi({
           requestedScope: input.requestedScope,
           requestIdempotencyToken: input.idempotencyToken,
         },
-        "closure",
+        { kind: "closure" },
+      );
+    },
+    getClosure(closureCheckId) {
+      return invoke(
+        { action: "get_closure_check", closureCheckId },
+        { kind: "closure", readOnly: true, project: projectClosureCheck },
       );
     },
     createCalculation(input) {
@@ -109,7 +173,7 @@ export function createCalculationTaskApi({
           requestedScopeHash: input.requestedScopeHash,
           policyFingerprint: input.policyFingerprint,
         },
-        "calculation",
+        { kind: "calculation" },
       );
     },
   };

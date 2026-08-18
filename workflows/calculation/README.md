@@ -65,6 +65,7 @@ npm --prefix workflows/calculation run --silent cli -- result-set list --limit 2
 npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- result-set create --name <name> --confirm-create
 npm --prefix workflows/calculation run --silent cli -- closure start --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-token <token> --confirm-start
+npm --prefix workflows/calculation run --silent cli -- closure get --closure-check-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
 npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
 ```
@@ -131,6 +132,14 @@ Check ID 和 Worker Job ID。只有无法确认最低稳定身份时才使用结
 
 JSON 结果的 `effectiveInput.defaultedInputs` 会明确列出采用默认值的字段。显式参数始终覆盖
 对应默认值；subset 仍必须提供至少一个 `--process`。
+
+`closure get` 是异步 Closure Check 的只读恢复节点，只按精确 `closureCheckId` 查询。它返回
+`runStatus`、`scanCompleteness`、`certificateValidity`、Worker identity、
+`requestedScopeHash` 和 `policyFingerprint`，并且只有在 `passed + complete + valid` 且两个绑定值
+齐全时才标记 `calculationReady=true`。provider 当前不在该查询中返回完整 method/process identity，
+所以 CLI 会明确披露 `scopeIdentityReturned=false`；继续计算必须沿用创建该 Closure 时相同的显式
+scope，不能从 `latest` 猜测，也不能假设当前默认 profile 与旧 Closure 相同。CLI 返回的计算命令
+会保留不可直接执行的 scope 占位符，要求 Agent 先恢复原始 selection。
 
 Worker 主机、SSH 和 journal 由根 workspace 的 `workspace_ops` 拥有。`worker logs` 不读取日志，
 而是输出应从 `lca-workspace` 根目录执行的精确委托命令：

@@ -39,6 +39,7 @@ Usage:
   ${COMMAND} result-set get --result-set-id <uuid> [--format human|json]
   ${COMMAND} result-set create --name <name> --confirm-create [--format human|json]
   ${COMMAND} closure start --coverage-mode <global_eligible|subset> --method <uuid>@<version> --idempotency-token <token> --confirm-start
+  ${COMMAND} closure get --closure-check-id <uuid> [--format human|json]
   ${COMMAND} calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode <mode> --method <uuid>@<version> --idempotency-key <key> --confirm-start
   ${COMMAND} worker logs --job-id <uuid> [--environment <name>] [--since <journal-time>]
 
@@ -46,6 +47,7 @@ Behavior:
   list    Returns a bounded recent list; the remote contract has no cursor.
   get     Reads one exact ResultSet by UUID and records a local recovery reference.
   create  Creates a remote ResultSet only with --confirm-create and records its ID.
+  closure get  Reads one exact Closure Check and reports whether its evidence can bind a calculation.
 
 Examples:
   ${COMMAND} result-set list --limit 20 --format json
@@ -292,6 +294,54 @@ export async function runCli(
       );
       return 0;
     }
+    if (family === "closure" && action === "get") {
+      command = "closure.get";
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      if (!isUuid(flags.closureCheckId))
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--closure-check-id must be an exact UUID",
+        );
+      const closure = await createCalculationTaskApi({
+        env,
+        fetchImpl,
+      }).getClosure(flags.closureCheckId);
+      const inspectAgain = `${COMMAND} closure get --closure-check-id ${closure.closureCheckId}`;
+      const nextActions = closure.calculationReady
+        ? [
+            `${COMMAND} calculation start --name "RESULT_SET_NAME" --closure-check-id ${closure.closureCheckId} --requested-scope-hash ${closure.binding.requestedScopeHash} --policy-fingerprint ${closure.binding.policyFingerprint} --coverage-mode "REUSE_ORIGINAL_COVERAGE_MODE" --method "REUSE_ORIGINAL_METHOD_ID@VERSION" --idempotency-key "NEW_IDEMPOTENCY_KEY" --confirm-start`,
+          ]
+        : [inspectAgain];
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data: closure,
+        completeness: {
+          status: closure.calculationReady ? "calculation_ready" : "not_ready",
+          bindingComplete:
+            closure.binding.requestedScopeHash !== null &&
+            closure.binding.policyFingerprint !== null,
+          scopeIdentityReturned: false,
+        },
+        warnings: [
+          {
+            code: "scope_identity_not_returned",
+            message:
+              "The provider projection does not return the Closure method/process identities; replace the scope placeholders with the exact values used to create this Closure. Do not assume the current defaults match an older Closure.",
+          },
+        ],
+        nextActions,
+      };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `Closure Check inspected\n\nSummary:\n- Closure: ${closure.closureCheckId}\n- Run: ${closure.runStatus}\n- Scan: ${closure.scanCompleteness}\n- Certificate: ${closure.certificateValidity}\n- Calculation ready: ${closure.calculationReady ? "yes" : "no"}\n- Requested scope hash: ${closure.binding.requestedScopeHash ?? "pending"}\n- Policy fingerprint: ${closure.binding.policyFingerprint ?? "pending"}\n\nNext:\n- ${nextActions[0]}\n- Reply using template: ${result.replyTemplate.path}\n`,
+      );
+      return 0;
+    }
     if (["closure", "calculation"].includes(family) && action === "start") {
       command = `${family}.start`;
       const flags = parseFlags(rest);
@@ -410,7 +460,7 @@ export async function runCli(
     ) {
       throw new ResultSetOperationError(
         "invalid_request",
-        "Expected result-set followed by list, get, or create; use --help for examples",
+        "Expected result-set list/get/create, closure start/get, calculation start, or worker logs; use --help for examples",
       );
     }
     command = `result-set.${action}`;

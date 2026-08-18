@@ -190,6 +190,115 @@ test("closure submission uses and discloses the workflow default profile", async
   );
 });
 
+test("closure get returns exact calculation bindings only when evidence is ready", async () => {
+  const stdout = buffer();
+  let calls = 0;
+  const code = await runCli(
+    ["closure", "get", "--closure-check-id", uuid, "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async (_url, options) => {
+        calls += 1;
+        assert.deepEqual(JSON.parse(options.body), {
+          action: "get_closure_check",
+          closureCheckId: uuid,
+        });
+        return Response.json({
+          ok: true,
+          data: {
+            schemaVersion: "provider.changed.v9",
+            closureCheckId: uuid,
+            runStatus: "passed",
+            scanCompleteness: "complete",
+            certificateValidity: "valid",
+            requestedScopeHash: "scope-hash",
+            effectiveScopeHash: "effective-hash",
+            policyFingerprint: "policy-hash",
+            dataSnapshotToken: "snapshot-token",
+            blockerCodes: [],
+            workerJob: {
+              jobId,
+              status: "completed",
+              phase: "finalize_evidence",
+              progressFraction: 1,
+            },
+            createdAt: "2026-08-18T00:00:00Z",
+            updatedAt: "2026-08-18T00:01:00Z",
+            finishedAt: "2026-08-18T00:01:00Z",
+            providerExtra: true,
+          },
+        });
+      },
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.equal(calls, 1);
+  assert.equal(result.command, "closure.get");
+  assert.equal(result.data.calculationReady, true);
+  assert.deepEqual(result.data.binding, {
+    requestedScopeHash: "scope-hash",
+    policyFingerprint: "policy-hash",
+    effectiveScopeHash: "effective-hash",
+  });
+  assert.equal(result.completeness.status, "calculation_ready");
+  assert.equal(result.completeness.bindingComplete, true);
+  assert.equal(result.completeness.scopeIdentityReturned, false);
+  assert.match(result.nextActions[0], /calculation start/);
+  assert.match(result.nextActions[0], /--requested-scope-hash scope-hash/);
+  assert.match(result.nextActions[0], /--policy-fingerprint policy-hash/);
+  assert.match(result.nextActions[0], /REUSE_ORIGINAL_COVERAGE_MODE/);
+  assert.match(result.nextActions[0], /REUSE_ORIGINAL_METHOD_ID@VERSION/);
+  assert.equal(result.replyTemplate.id, "closure-inspected");
+  assert.equal("providerExtra" in result.data, false);
+});
+
+test("closure get keeps incomplete evidence on the same read-only recovery node", async () => {
+  const stdout = buffer();
+  await runCli(
+    ["closure", "get", "--closure-check-id", uuid, "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async () =>
+        Response.json({
+          ok: true,
+          data: {
+            closureCheckId: uuid,
+            runStatus: "running",
+            scanCompleteness: "pending",
+            certificateValidity: "pending",
+            workerJob: { jobId, status: "running", progressFraction: 0.5 },
+          },
+        }),
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(result.data.calculationReady, false);
+  assert.equal(result.data.binding.requestedScopeHash, null);
+  assert.equal(result.completeness.status, "not_ready");
+  assert.match(result.nextActions[0], /closure get/);
+  assert.doesNotMatch(result.nextActions[0], /calculation start/);
+});
+
+test("closure get rejects a non-exact identity before network access", async () => {
+  const stdout = buffer();
+  let calls = 0;
+  const code = await runCli(
+    ["closure", "get", "--closure-check-id", "latest", "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env: {},
+      fetchImpl: async () => {
+        calls += 1;
+      },
+    },
+  );
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+});
+
 test("calculation submission binds the selected closure evidence", async () => {
   const stdout = buffer();
   const code = await runCli(

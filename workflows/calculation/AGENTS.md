@@ -60,6 +60,7 @@ related:
 - 创建或读取成功后保存最小本地恢复引用，不保存凭据或 signed URL。
 - 创建请求发生 transport failure 或远程 5xx 时返回 `remote_outcome_unknown`，先查询远程状态，不自动重试。
 - Closure/Calculation `start` 必须显式确认并携带幂等 token/key；内部只投影稳定 job/resource identity，不以 provider `schemaVersion` 分支。
+- Closure 完成后使用精确 ID 的 `closure get` 读取生命周期、证书、Worker identity 和 Calculation binding；只有 `passed + complete + valid` 且 `requestedScopeHash`/`policyFingerprint` 齐全时才能提示计算就绪。provider 未返回 method/process identity 时必须披露这一信息并要求沿用原 Closure scope，不得从 `latest` 猜测。
 - Calculation 提交只要有稳定 Worker Job ID 即视为 `submitted`；结果资源未 materialize 时使用 nullable `resourceId` 与 `identityCompleteness=job_only`。Closure 仍要求 Closure/Job 双身份；不得因异步结果 ID 暂缺误报 `remote_outcome_unknown`。
 - 未显式选择时使用当前 Calculation profile：`global_eligible`、完整的 25 个 reviewed LCIA `{id, version}` identities，以及独立的 Climate change/GWP 默认展示类别 `6209b35f-9447-40b5-b68c-a1099e3674a0`；Closure 与 Calculation 必须使用同一完整方法集。输出必须披露 defaulted inputs，显式参数优先。
 - Worker job 日志必须委托给根 workspace 的 `python -m workspace_ops.cli worker job`；本 Workflow 只输出精确命令，不复制服务器配置、SSH 或 journal 逻辑。

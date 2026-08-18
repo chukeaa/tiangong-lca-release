@@ -16,6 +16,7 @@ test("every successful Calculation command maps to an existing bounded template"
     "result-set.get",
     "result-set.create",
     "closure.start",
+    "closure.get",
     "calculation.start",
     "worker.logs",
   ]);

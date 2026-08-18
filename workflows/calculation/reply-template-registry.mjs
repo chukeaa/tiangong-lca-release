@@ -28,6 +28,21 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "closure.get": [
+    "closure-inspected",
+    "closure-inspected.md",
+    [
+      "data.closureCheckId",
+      "data.runStatus",
+      "data.scanCompleteness",
+      "data.certificateValidity",
+      "data.calculationReady",
+      "data.binding",
+      "completeness",
+      "warnings",
+      "nextActions",
+    ],
+  ],
   "calculation.start": [
     "calculation-submitted",
     "calculation-submitted.md",
