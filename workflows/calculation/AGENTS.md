@@ -14,7 +14,7 @@ checkPaths:
   - workflows/calculation/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined Calculation Agent confirmation, evidence, recovery, and external-system boundaries."
+lastReviewedNote: "Added workflow-local ResultSet commands, confirmation, bounded output, and recovery rules."
 related:
   - README.md
   - ../AGENTS.md
@@ -44,6 +44,16 @@ related:
 - 下载用户已经明确要求的产物；
 - 校验大小、hash、版本和 manifest 引用；
 - 恢复一个已有任务的状态观察。
+
+## ResultSet 操作入口
+
+- 使用 `npm --prefix workflows/calculation run --silent cli -- result-set ...`；CLI script 和命令实现都由本目录拥有，不得提升为仓库级 `tiangong-release` CLI。
+- `list` 默认最多返回 20 条，最大 200 条，并把无 cursor 的结果标记为 bounded。
+- `get` 必须使用精确 `resultSetId`；不得按名称隐式选择。
+- `create` 必须在用户确认精确名称后使用 `--confirm-create`。
+- JSON stdout 必须保持 `tiangong.calculation-cli-result.v1` 可解析；诊断不得混入 stdout。
+- 创建或读取成功后保存最小本地恢复引用，不保存凭据或 signed URL。
+- 创建请求发生 transport failure 或远程 5xx 时返回 `remote_outcome_unknown`，先查询远程状态，不自动重试。
 
 ## 需要明确确认的动作
 

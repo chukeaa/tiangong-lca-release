@@ -1,0 +1,10 @@
+{
+  "name": "@tiangong-lca/release-workflow-calculation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cli": "node cli.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

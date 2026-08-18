@@ -23,7 +23,7 @@ checkPaths:
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Removed the obsolete runtime and established the four root workflows as the only active implementation baseline."
+lastReviewedNote: "Kept runtime ownership inside each root workflow and added Calculation-local ResultSet operations."
 related:
   - README.md
   - .docpact/config.yaml
@@ -39,7 +39,7 @@ related:
 
 旧 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。不得恢复旧 20-stage runtime、默认兼容层或长期 legacy 目录。
 
-后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。
+后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
 
 ## 加载顺序
 
@@ -123,4 +123,5 @@ related:
 - 根 README 清楚表达项目目标和四个 Workflow；
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
-- 文档基线验证通过并形成独立 Git commit。
+- Calculation 的 ResultSet create/list/get 保持 workflow-local，确认、严格投影、恢复和错误路径测试通过；
+- 当前变更通过仓库门禁并形成独立 Git commit。

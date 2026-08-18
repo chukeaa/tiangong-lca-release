@@ -40,7 +40,10 @@ related:
 
 四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
 
-当前仓库是一个干净的 Workflow 文档基线。后续按照 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个优化；每个 Workflow 只在自己的目标和契约确认后增加实现、schemas、fixtures 和测试。
+当前仓库以四个 Workflow 为活动基线。Calculation 已拥有首个 workflow-local ResultSet
+能力，包括 create/list/get、严格远程投影、本地恢复引用和测试；其余能力继续按照
+Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
+每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
 
 在任何 Workflow 明确授权之前：
 
@@ -225,5 +228,5 @@ Agent 不能替代用户决定：
 
 - 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
 - 当前分支：`codex/issue-11-workflow-control-plane`
-- 当前阶段：旧 runtime 已清理，准备逐个优化 Workflow
-- 运行时状态：尚无实现；每个 Workflow 独立确认后新增
+- 当前阶段：Calculation Workflow 正在按已确认能力逐步实现
+- 运行时状态：ResultSet create/list/get 已由 `workflows/calculation` 本地拥有；Closure、计算与下载等后续能力尚未实现

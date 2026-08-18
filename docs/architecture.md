@@ -19,7 +19,7 @@ checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined root workflow packages as the architecture and made executable code subordinate to confirmed workflow contracts."
+lastReviewedNote: "Kept executable surfaces workflow-local and added Calculation ResultSet adapters and recovery artifacts."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -123,6 +123,6 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 
 ## 当前基线
 
-四个根 Workflow 的拆分已经得到用户确认。旧运行时代码和耦合配置已删除，Git 历史是唯一恢复路径。
+四个根 Workflow 的拆分已经得到用户确认。每个可执行入口由所属 Workflow 本地拥有，不建立仓库级聚合 CLI。
 
-后续一次只优化一个 Workflow；只有该 Workflow 当前确认的说明、契约、实现和验证进入活动结构，避免尚未讨论的旧设计影响新决策。
+Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get adapter、严格投影、CLI 和最小恢复引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。

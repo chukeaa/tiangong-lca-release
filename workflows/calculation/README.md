@@ -14,7 +14,7 @@ checkPaths:
   - workflows/calculation/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined the Calculation workflow for ResultSet, closure, calculation, and verified download."
+lastReviewedNote: "Added the workflow-local ResultSet create/list/get surface, strict contracts, and recovery references."
 related:
   - AGENTS.md
   - ../../README.md
@@ -55,6 +55,32 @@ Workflow 首先识别当前入口，不能要求用户为了流程完整而重�
 ```
 
 每个箭头都是可恢复节点，不是强制 stage number。
+
+## Workflow-local CLI
+
+Calculation 的操作入口由本目录拥有，不通过仓库级 `tiangong-release` CLI 聚合：
+
+```bash
+npm --prefix workflows/calculation run --silent cli -- result-set list --limit 20
+npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id <uuid>
+npm --prefix workflows/calculation run --silent cli -- result-set create --name <name> --confirm-create
+```
+
+三个命令都支持 `--format json`。JSON stdout 使用
+`tiangong.calculation-cli-result.v1`，包含结果、完整性、错误和下一步，不混入日志。
+
+- `list` 只返回有界的最近结果，并明确标记可能不完整；远程契约当前没有 cursor 或总数。
+- `get` 只接受精确 UUID，不根据名称猜测对象。
+- `create` 是远程副作用，必须传入 `--confirm-create`；远程契约当前没有 idempotency key，结果不确定时不得盲目重试。
+
+运行时通过 `TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL` 或
+`TIANGONG_LCA_API_BASE_URL` 定位 `app_data_product_commands`，并需要
+`TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY` 和 actor-scoped
+`TIANGONG_LCA_ACCESS_TOKEN`。凭据只从进程环境或本地 ignored `.env` 读取。
+
+成功创建或精确读取后，Workflow 在
+`.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程
+ResultSet 投影、target fingerprint 和观察时间，不包含 access token、publishable key 或 signed URL。
 
 ## 需要用户决定的内容
 
