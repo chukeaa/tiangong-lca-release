@@ -1,0 +1,25 @@
+{
+  "name": "@tiangong-lca/release-result-materialization-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "bin": {
+    "release-result-materialization": "./cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@tiangong-lca/tidas-sdk": "0.1.46",
+    "canonicalize": "4.0.0",
+    "uuid": "14.0.1",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

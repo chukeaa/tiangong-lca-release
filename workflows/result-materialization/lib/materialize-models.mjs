@@ -1,0 +1,304 @@
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import { canonicalJson, fail, sha256Bytes } from "./common.mjs";
+import { loadMaterializationContext, selectAxes } from "./context.mjs";
+import { MODEL_PROFILE } from "./identity.mjs";
+import { renderLifecycleModel } from "./model-renderer.mjs";
+import {
+  assertNoContentCollision,
+  hashJson,
+  indexPrevious,
+  resolveVersion,
+  versionSignificantHash,
+} from "./versioning.mjs";
+
+export async function materializeModels({
+  intakeDir,
+  resultCatalogPath,
+  outDir,
+  processUuids,
+  firstGeneration = false,
+  previousManifestPath,
+}) {
+  if (firstGeneration === Boolean(previousManifestPath)) {
+    fail(
+      "version_history_choice_required",
+      "Choose exactly one of --first-generation or --previous-manifest",
+    );
+  }
+  const previousManifest = previousManifestPath
+    ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
+    : null;
+  const previous = indexPrevious(previousManifest);
+  const context = await loadMaterializationContext(intakeDir);
+  const catalogFile = path.resolve(resultCatalogPath);
+  const catalog = JSON.parse(await readFile(catalogFile, "utf8"));
+  validateCatalog(context, catalog);
+  const resultDocuments = await verifyCatalogDatasets(catalogFile, catalog);
+  const allowedRoots = new Set(
+    catalog.selection.map((item) => item.id.toLowerCase()),
+  );
+  const requested = processUuids?.length ? processUuids : [...allowedRoots];
+  for (const uuid of requested) {
+    if (!allowedRoots.has(uuid.toLowerCase())) {
+      fail(
+        "model_selection_outside_result_roots",
+        `Process is not a selected Model root: ${uuid}`,
+      );
+    }
+  }
+  const axes = selectAxes(context, requested);
+  const descriptors = [];
+  for (const axis of axes) {
+    const provisional = renderLifecycleModel(
+      context,
+      axis,
+      catalog,
+      "01.00.000",
+    );
+    const hashes = modelHashes(provisional);
+    const historical = previous.get(`lifecyclemodel:${provisional.uuid}`);
+    const resolution = resolveVersion(
+      { uuid: provisional.uuid, ...hashes },
+      historical,
+    );
+    const rendered = renderLifecycleModel(
+      context,
+      axis,
+      catalog,
+      resolution.version,
+    );
+    const finalHashes = modelHashes(rendered);
+    const descriptor = {
+      schemaVersion: "tiangong.release.dataset-descriptor.v1",
+      datasetType: "lifecyclemodel",
+      role: "lifecycle_model",
+      processIndex: rendered.processIndex,
+      uuid: rendered.uuid,
+      version: rendered.version,
+      profile: MODEL_PROFILE,
+      identity: rendered.identity,
+      sourceProcess: rendered.sourceProcess,
+      resultProcess: rendered.resultProcess,
+      providerCount: rendered.providerCount,
+      reconstruction: rendered.reconstruction,
+      versionChange: resolution.change,
+      ...finalHashes,
+      document: rendered.document,
+    };
+    assertNoContentCollision(descriptor, historical);
+    descriptors.push(descriptor);
+  }
+  descriptors.sort((left, right) => left.processIndex - right.processIndex);
+  const target = path.resolve(outDir);
+  const staging = await mkdtemp(`${target}.tmp-`);
+  try {
+    const datasetDir = path.join(
+      staging,
+      "canonical-datasets",
+      "lifecyclemodels",
+    );
+    const resultDir = path.join(staging, "canonical-datasets", "processes");
+    await mkdir(datasetDir, { recursive: true });
+    await mkdir(resultDir, { recursive: true });
+    const resultDatasets = [];
+    for (const dataset of catalog.datasets) {
+      const fileName = `${dataset.uuid}_${dataset.version}.json`;
+      await writeFile(
+        path.join(resultDir, fileName),
+        canonicalJson(resultDocuments.get(dataset.uuid.toLowerCase())),
+        { flag: "wx" },
+      );
+      resultDatasets.push({
+        ...dataset,
+        path: `canonical-datasets/processes/${fileName}`,
+      });
+    }
+    const modelDatasets = [];
+    for (const descriptor of descriptors) {
+      const fileName = `${descriptor.uuid}_${descriptor.version}.json`;
+      await writeFile(
+        path.join(datasetDir, fileName),
+        canonicalJson(descriptor.document),
+        { flag: "wx" },
+      );
+      const { document: _document, ...entry } = descriptor;
+      modelDatasets.push({
+        ...entry,
+        path: `canonical-datasets/lifecyclemodels/${fileName}`,
+      });
+    }
+    const modelCatalog = {
+      schemaVersion: "tiangong.release.model-catalog.v1",
+      completeness: "complete-for-selected-roots",
+      calculationId: context.intake.source.calculationId,
+      bundleContentHash: context.intake.source.bundleContentHash,
+      resultCatalogSha256: sha256Bytes(await readFile(catalogFile)),
+      selection: axes.map((axis) => axis.rootProcess).sort(compareIdentity),
+      datasets: modelDatasets,
+    };
+    await writeFile(
+      path.join(staging, "model-catalog.json"),
+      canonicalJson(modelCatalog),
+      { flag: "wx" },
+    );
+    const materializationManifest = {
+      schemaVersion: "tiangong.release.materialization-manifest.v1",
+      completeness: "complete-for-selected-roots",
+      inputs: {
+        calculationId: context.intake.source.calculationId,
+        bundleContentHash: context.intake.source.bundleContentHash,
+        intakeManifestSha256: hashJson(context.intake),
+        resultCatalogSha256: modelCatalog.resultCatalogSha256,
+        previousManifestSha256: previousManifest
+          ? hashJson(previousManifest)
+          : null,
+        firstGeneration,
+      },
+      profiles: {
+        result: catalog.datasets[0]?.profile ?? null,
+        model: MODEL_PROFILE,
+      },
+      datasets: [...resultDatasets, ...modelDatasets],
+      validation: {
+        tidasSdk: "@tiangong-lca/tidas-sdk@0.1.46",
+        sourceDocuments: "verified",
+        resultReferences: "verified",
+        modelSchemas: "passed",
+        oneHopReconstruction: "passed",
+      },
+    };
+    await writeFile(
+      path.join(staging, "materialization-manifest.json"),
+      canonicalJson(materializationManifest),
+      { flag: "wx" },
+    );
+    await writeFile(
+      path.join(staging, "materialization-report.json"),
+      canonicalJson({
+        schemaVersion: "tiangong.release.model-materialization-report.v1",
+        outcome: "materialized",
+        completeness: "complete-for-selected-roots",
+        modelCount: descriptors.length,
+        providerInstanceCount: descriptors.reduce(
+          (total, item) => total + item.providerCount,
+          0,
+        ),
+        versionChanges: countChanges(descriptors),
+      }),
+      { flag: "wx" },
+    );
+    await mkdir(path.dirname(target), { recursive: true });
+    await rename(staging, target);
+    return {
+      path: target,
+      catalog: modelCatalog,
+      manifest: materializationManifest,
+    };
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    if (error.code === "EEXIST" || error.code === "ENOTEMPTY") {
+      fail("output_exists", `Refusing to overwrite existing output: ${target}`);
+    }
+    throw error;
+  }
+}
+
+function validateCatalog(context, catalog) {
+  if (catalog.schemaVersion !== "tiangong.release.result-catalog.v1") {
+    fail("result_catalog_invalid", "Expected result-catalog.v1");
+  }
+  if (
+    catalog.calculationId !== context.intake.source.calculationId ||
+    catalog.bundleContentHash !== context.intake.source.bundleContentHash
+  ) {
+    fail(
+      "result_catalog_input_mismatch",
+      "Result Catalog belongs to a different Calculation Bundle",
+    );
+  }
+  if (!Array.isArray(catalog.selection) || !Array.isArray(catalog.datasets)) {
+    fail(
+      "result_catalog_invalid",
+      "Result Catalog must contain selection[] and datasets[]",
+    );
+  }
+}
+
+async function verifyCatalogDatasets(catalogFile, catalog) {
+  const root = path.dirname(catalogFile);
+  const documents = new Map();
+  for (const dataset of catalog.datasets) {
+    const resolved = path.resolve(root, dataset.path);
+    if (!resolved.startsWith(`${root}${path.sep}`)) {
+      fail(
+        "unsafe_catalog_path",
+        `Unsafe Result Catalog path: ${dataset.path}`,
+      );
+    }
+    const document = JSON.parse(await readFile(resolved, "utf8"));
+    if (hashJson(document) !== dataset.canonicalContentHash) {
+      fail(
+        "result_catalog_content_mismatch",
+        `Result dataset hash mismatch: ${dataset.uuid}`,
+      );
+    }
+    if (documents.has(dataset.uuid.toLowerCase())) {
+      fail(
+        "result_catalog_lineage_duplicate",
+        `Duplicate Result Catalog UUID: ${dataset.uuid}`,
+      );
+    }
+    documents.set(dataset.uuid.toLowerCase(), document);
+  }
+  return documents;
+}
+
+function modelHashes(model) {
+  const data = model.document.lifeCycleModelDataSet;
+  const information = data.lifeCycleModelInformation;
+  const semantic = {
+    schema: "tiangong.release.lifecycle-model-semantic.v1",
+    profile: MODEL_PROFILE,
+    uuid: model.uuid,
+    sourceProcess: model.sourceProcess,
+    resultingProcess: model.resultProcess,
+    quantitativeReference: information.quantitativeReference,
+    processInstances: information.technology.processes.processInstance.map(
+      (instance) => ({
+        id: instance["@dataSetInternalID"],
+        multiplicationFactor: instance["@multiplicationFactor"],
+        process: {
+          uuid: instance.referenceToProcess["@refObjectId"].toLowerCase(),
+          version: instance.referenceToProcess["@version"],
+        },
+        connections: instance.connections ?? null,
+      }),
+    ),
+  };
+  return {
+    versionSignificantHash: versionSignificantHash(model.document),
+    semanticHash: hashJson(semantic),
+    canonicalContentHash: hashJson(model.document),
+  };
+}
+
+function countChanges(descriptors) {
+  return descriptors.reduce((result, item) => {
+    result[item.versionChange] = (result[item.versionChange] ?? 0) + 1;
+    return result;
+  }, {});
+}
+
+function compareIdentity(left, right) {
+  return (
+    left.id.localeCompare(right.id) || left.version.localeCompare(right.version)
+  );
+}

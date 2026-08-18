@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/materialization-manifest.v1.schema.json",
+  "title": "Result Materialization Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "completeness",
+    "inputs",
+    "profiles",
+    "datasets",
+    "validation"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.materialization-manifest.v1"
+    },
+    "completeness": { "const": "complete-for-selected-roots" },
+    "inputs": {
+      "type": "object",
+      "required": [
+        "calculationId",
+        "bundleContentHash",
+        "intakeManifestSha256",
+        "resultCatalogSha256",
+        "firstGeneration"
+      ]
+    },
+    "profiles": {
+      "type": "object",
+      "required": ["result", "model"]
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "object" }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "tidasSdk",
+        "sourceDocuments",
+        "resultReferences",
+        "modelSchemas"
+      ]
+    }
+  }
+}

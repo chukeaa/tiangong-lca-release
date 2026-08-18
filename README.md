@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: 0804aed95b858b095fc6af4329f3ecb036aad2d7
-lastReviewedNote: "Confirmed four root-level Agent-operable workflows by separating Result Materialization from calculation, transformation, and release."
+lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
+lastReviewedNote: "Confirmed local two-phase Result Process materialization and resolved one-hop LifecycleModel composition."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -111,11 +111,12 @@ workflows/
 它包括：
 
 - 选择 LCI Result Process、LCI + LCIA Result Process 或 LifecycleModel recipe；
-- 派生稳定 UUID lineage；
-- 读取上一版 manifest 并共同求解 dataset version；
-- 生成 Result Process 和可选 LifecycleModel；
+- 选择需要生成 LifecycleModel 的 root Process 范围，并从 direct edges 派生 required Result set；
+- 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
+- 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
+- 读取上一版 manifest 并分阶段求解 Result/Model dataset version；
 - 渲染精确 identity/version 引用；
-- 验证 TIDAS schema、引用闭合和数值一致性；
+- 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 
 LCI Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。
@@ -221,12 +222,13 @@ Agent 不能替代用户决定：
 5. Materialization 中源 Unit Process、LifecycleModel 和 Result Process 保持不同身份，不把 LCI/LCIA 写回原始 Unit Process。
 6. Release 只消费已经 materialize 的 canonical datasets，不在打包过程中临时生成 Process/Model。
 7. 其他仓库保持不变；缺少能力时本项目明确停止并报告，而不是跨仓补实现。
+8. LifecycleModel 首版采用 resolved one-hop aggregated-background：根 instance 引用 `U(P)`，每条有效 direct provider edge 引用对应聚合 `R(Q)`，resulting Process 引用 `R(P)`。
 
 ## 仍需确认的细节
 
 1. Dataset Transformation 的默认产物是否只保留在本地工作区，不直接写回线上 authoring tables。
 2. 加权组合默认优先生成 LifecycleModel 或 Derived Result，还是每次都由用户选择输出类型。
-3. Result Materialization 首版 recipe、one-hop 行为、Result Process lineage 和 previous manifest 规则。
+3. Result Materialization 首版 recipe 集合、Result Process lineage 和 previous manifest 规则。
 4. Release 首版 formats、package recipes、subset 限制和本地预览边界。
 
 ## 开发状态

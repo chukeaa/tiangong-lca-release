@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/materialization-intake.v1.schema.json",
+  "title": "Release Materialization Intake",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "artifacts", "verification"],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.materialization-intake.v1" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter",
+        "calculationId",
+        "bundleContentHash",
+        "manifestSha256"
+      ],
+      "properties": {
+        "adapter": { "const": "worker-calculation-bundle.v2" },
+        "calculationId": { "type": "string", "format": "uuid" },
+        "bundleContentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "manifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "sha256", "recordCount"],
+        "properties": {
+          "kind": { "type": "string" },
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "recordCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "artifacts"],
+      "properties": {
+        "manifest": { "const": "verified" },
+        "artifacts": { "const": "verified" }
+      }
+    }
+  }
+}

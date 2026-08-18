@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/result-catalog.v1.schema.json",
+  "title": "Frozen Result Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "completeness",
+    "calculationId",
+    "bundleContentHash",
+    "selection",
+    "requiredResults",
+    "datasets"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.result-catalog.v1" },
+    "completeness": { "const": "complete-for-selection" },
+    "calculationId": { "type": "string", "format": "uuid" },
+    "bundleContentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "selection": { "type": "array", "items": { "$ref": "#/$defs/identity" } },
+    "requiredResults": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/identity" }
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "object" }
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        }
+      }
+    }
+  }
+}

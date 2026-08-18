@@ -13,21 +13,28 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined the Agent contract for deterministic Process/LifecycleModel result materialization."
+lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
+lastReviewedNote: "Confirmed local two-phase Result Process materialization and resolved one-hop LifecycleModel composition rules."
 related:
   - README.md
+  - design/resolved-one-hop-materialization.md
   - ../AGENTS.md
 ---
 
 # Result Materialization Workflow Agent Contract
+
+## 本地验证
+
+运行 `npm --prefix workflows/result-materialization test` 验证本 Workflow；仓库根目录的 `npm test` 已包含该命令。
 
 ## Agent 的职责
 
 - 识别 Calculation Bundle、Derived Result 或已有 materialization artifact。
 - 展示可用 recipe、已有证据和必须由用户决定的模型/metadata 问题。
 - 冻结精确 Materialization Request。
+- 冻结 requested Model roots、required Result set 和 direct-edge evidence。
 - 调用确定性 identity、version、materializer 和 validator 实现。
+- 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
 - 只把通过验证的 canonical dataset collection 交给 Release Workflow。
 
@@ -48,13 +55,17 @@ related:
 - Recipe 必须声明输出 role、依赖、必需证据和 validator。
 - LCIA recipe 必须包含或引用同一 Result Process 的完整 LCI 层。
 - LifecycleModel recipe 必须同时绑定精确 Result Process identity/version。
-- one-hop 只能作为显式 recipe，不能作为仓库全局默认。
+- 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/resolved-one-hop-materialization.md`。
+- 每条有效 direct provider edge 对应一个引用聚合 `R(Q)` 的 provider process instance；不得只用 root `U(P)` 包装聚合 `R(P)`。
+- one-hop 是 LifecycleModel recipe 的显式 profile，不得被隐式套用到不生成 LifecycleModel 的 Result-only recipe。
 
 ## 身份与版本
 
 - Identity 由稳定语义输入和 recipe profile 派生，不使用随机 UUID。
+- Generated `R(P)` v2 identity 直接绑定 `U(P)` UUID、reference flow UUID 和 Result profile，不依赖 `M(P)` UUID。
 - 版本规划必须考虑 semantic hash、version-significant hash 和引用版本。
-- 相互引用的数据集作为集合求解版本，不能分别生成后补引用。
+- 先统一解析并冻结 Result UUID/version set，再生成绑定精确 `R(Q)`/`R(P)` references 的 Model version set。
+- 相互引用的数据集作为集合求解版本，不能分别生成后查询 mutable `latest` 补引用。
 - 相同 identity/version 的 canonical content 冲突必须 fail closed。
 - 输入或 recipe 改变时，不得静默复用无效 materialization evidence。
 
@@ -75,10 +86,11 @@ Agent 提议不能替代用户对模型结构、重要 metadata 和首次 lineag
 - 不改写源 Unit Process。
 - 不生成只有 LCIA、没有有效 LCI/reference basis 的 Result Process。
 - 不让 LifecycleModel 引用另一次 materialization 的未验证 Result Process。
+- 不忽略有效 direct provider edge，也不从源 Process 文本猜测 provider connection 或 factor。
 - 不跳过 TIDAS、引用闭合和数值一致性验证。
 - 不打包或远程发布。
 - 不写入远程 authoring tables。
 
 ## 完成条件
 
-完成的 materialization 必须产生冻结的 canonical dataset collection、dataset index、materialization manifest 和验证报告。每个输出都能追溯到精确输入、recipe、identity/version 决策和 validator evidence。
+完成的 materialization 必须产生冻结的 selection、Result Catalog、canonical dataset collection、dataset index、materialization manifest 和验证报告。每个输出都能追溯到精确输入、recipe、direct edge、identity/version 决策和 validator evidence；每个 one-hop Model 必须在冻结容差内重构对应 Result Process。

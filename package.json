@@ -10,7 +10,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run format:check",
-    "test": "npm --prefix workflows/calculation test",
+    "test": "npm --prefix workflows/calculation test && npm --prefix workflows/result-materialization test",
     "prepush:gate": "npm run format:check && npm test"
   },
   "devDependencies": {
