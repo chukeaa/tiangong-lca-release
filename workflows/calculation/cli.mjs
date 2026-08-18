@@ -19,6 +19,7 @@ import {
   DEFAULT_CALCULATION_PROFILE,
   defaultMethodSelections,
 } from "./contracts/default-profile.mjs";
+import { replyTemplateFor } from "./reply-template-registry.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
@@ -151,13 +152,14 @@ function success(command, result) {
       "Continue Calculation with the exact resultSetId after scope and LCIA methods are confirmed",
     );
   }
-  return {
+  const output = {
     schemaVersion: CLI_SCHEMA,
     ok: true,
     command,
     ...result,
     nextActions,
   };
+  return { ...output, replyTemplate: replyTemplateFor(command, { ok: true }) };
 }
 
 function failure(command, error) {
@@ -170,7 +172,7 @@ function failure(command, error) {
       : code === "remote_outcome_unknown"
         ? [`${COMMAND} result-set list --format json`]
         : [];
-  return {
+  const output = {
     schemaVersion: CLI_SCHEMA,
     ok: false,
     command,
@@ -181,6 +183,10 @@ function failure(command, error) {
       ...(error?.details === undefined ? {} : { details: error.details }),
     },
     nextActions,
+  };
+  return {
+    ...output,
+    replyTemplate: replyTemplateFor(command, { ok: false, errorCode: code }),
   };
 }
 
@@ -211,6 +217,7 @@ function humanSuccess(result) {
     lines.push(`- Warning: ${warning.message}`);
   lines.push("", "Next:");
   for (const action of result.nextActions) lines.push(`- ${action}`);
+  lines.push(`- Reply using template: ${result.replyTemplate.path}`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -224,6 +231,7 @@ function humanFailure(result) {
     lines.push("", "Next:");
     for (const action of result.nextActions) lines.push(`- ${action}`);
   }
+  lines.push("", `Reply template: ${result.replyTemplate.path}`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -269,10 +277,11 @@ export async function runCli(
         completeness: { status: "delegated", remoteLogsRead: false },
         nextActions: [instruction],
       };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
       stdout.write(
         format === "json"
           ? `${JSON.stringify(result)}\n`
-          : `Worker log access\n\nRun from the lca-workspace root:\n${instruction}\n`,
+          : `Worker log access\n\nRun from the lca-workspace root:\n${instruction}\n\nReply template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }
@@ -365,10 +374,11 @@ export async function runCli(
         completeness: { status: "submitted", terminalStateObserved: false },
         nextActions: [logs],
       };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
       stdout.write(
         format === "json"
           ? `${JSON.stringify(result)}\n`
-          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n`,
+          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n- Reply using template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }

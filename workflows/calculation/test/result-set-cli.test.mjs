@@ -81,6 +81,11 @@ test("list emits clean bounded JSON with a usable next action", async () => {
     },
   });
   assert.match(result.nextActions[0], /result-set get/);
+  assert.equal(result.replyTemplate.id, "result-set-listed");
+  assert.equal(
+    result.replyTemplate.path,
+    "workflows/calculation/reply-templates/result-set-listed.md",
+  );
 });
 
 test("create requires confirmation before configuration or network access", async () => {

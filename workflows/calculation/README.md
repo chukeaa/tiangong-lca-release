@@ -71,6 +71,11 @@ npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uui
 
 所有命令都支持 `--format json`。JSON stdout 使用
 `tiangong.calculation-cli-result.v1`，包含结果、完整性、错误和下一步，不混入日志。
+每次动作还返回 `replyTemplate`，其中包含稳定模板 ID、仓库相对路径和回复所需事实；Agent 应读取
+`reply-templates/` 下的对应 Markdown，再基于本次真实结果回复用户。
+
+回复模板是 F2 指引，不是远程事实或固定渲染 schema。模板控制回复应覆盖什么、如何区分提交与
+完成、以及下一步应如何表达；CLI 结果继续作为事实来源。
 
 外部 ResultSet payload 先由 adapter 转换为 Calculation 自有的最小引用：
 

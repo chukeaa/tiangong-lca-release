@@ -48,6 +48,7 @@ test("worker logs delegates exact job lookup to workspace_ops", async () => {
   );
   assert.match(result.data.instruction, new RegExp(jobId));
   assert.match(result.data.instruction, /--all-configs/);
+  assert.equal(result.replyTemplate.id, "worker-log-delegated");
 });
 
 test("closure submission requires confirmation before configuration or network", async () => {
@@ -135,6 +136,7 @@ test("closure submission projects identities and returns workspace_ops log comma
     },
   });
   assert.match(result.nextActions[0], /workspace_ops/);
+  assert.equal(result.replyTemplate.id, "closure-submitted");
 });
 
 test("closure submission uses and discloses the workflow default profile", async () => {
