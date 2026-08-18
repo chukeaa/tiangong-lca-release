@@ -1,5 +1,6 @@
 import { isUuid } from "../contracts/result-set.mjs";
 import { resultSetApiConfig, ResultSetApiError } from "./result-set-api.mjs";
+import { resolveActorAccessToken } from "../runtime/actor-session.mjs";
 
 const text = (value) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
@@ -38,13 +39,17 @@ export function createCalculationTaskApi({
 } = {}) {
   const config = resultSetApiConfig(env);
   async function invoke(body, kind) {
+    const accessToken = await resolveActorAccessToken({
+      env: config.env,
+      fetchImpl,
+    });
     let response;
     try {
       response = await fetchImpl(config.commandUrl, {
         method: "POST",
         headers: {
           apikey: config.publishableKey,
-          Authorization: `Bearer ${config.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),

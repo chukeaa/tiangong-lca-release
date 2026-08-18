@@ -94,8 +94,10 @@ Workflow 不依赖某个固定的外部 `schemaVersion`，也不要求 provider 
 
 运行时通过 `TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL` 或
 `TIANGONG_LCA_API_BASE_URL` 定位 `app_data_product_commands`，并需要
-`TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY` 和 actor-scoped
-`TIANGONG_LCA_ACCESS_TOKEN`。凭据只从进程环境或本地 ignored `.env` 读取。
+`TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY`。认证优先采用显式 actor-scoped
+`TIANGONG_LCA_ACCESS_TOKEN`；未提供时，使用已有 `TIANGONG_LCA_API_KEY` 用户 bootstrap
+交换短期 session。CLI 启动时读取本地 ignored `.env`，token 只存在于当前进程内存，不写入
+stdout、命令参数、session cache 或恢复文件。
 
 Closure 和 Calculation 的 `start` 也使用同一个 actor-scoped endpoint，且必须显式传入
 `--confirm-start` 与幂等 token/key。`--method` 和 subset 模式下的 `--process` 可重复，格式为

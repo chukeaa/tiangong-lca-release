@@ -3,6 +3,7 @@ import {
   projectResultSetReference,
   projectResultSetReferenceList,
 } from "../contracts/result-set.mjs";
+import { resolveActorAccessToken } from "../runtime/actor-session.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -39,14 +40,17 @@ function commandUrl(env) {
 }
 
 export function resultSetApiConfig(env = process.env) {
-  const accessToken = required(env, "TIANGONG_LCA_ACCESS_TOKEN");
-  if (accessToken.split(".").length !== 3) {
+  const accessToken = env.TIANGONG_LCA_ACCESS_TOKEN?.trim();
+  if (accessToken && accessToken.split(".").length !== 3)
     throw new ResultSetApiError(
       "auth_required",
       "TIANGONG_LCA_ACCESS_TOKEN must be an actor-scoped JWT access token",
     );
-  }
-
+  if (!accessToken && !env.TIANGONG_LCA_API_KEY?.trim())
+    throw new ResultSetApiError(
+      "auth_required",
+      "TIANGONG_LCA_ACCESS_TOKEN or TIANGONG_LCA_API_KEY is required",
+    );
   const publishableKey = required(env, "TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY");
   if (publishableKey.startsWith("sb_secret_")) {
     throw new ResultSetApiError(
@@ -58,7 +62,7 @@ export function resultSetApiConfig(env = process.env) {
   return {
     commandUrl: commandUrl(env),
     publishableKey,
-    accessToken,
+    env,
   };
 }
 
@@ -111,13 +115,17 @@ export function createResultSetApi({
   const config = resultSetApiConfig(env);
 
   async function invoke(action, body, decodeData) {
+    const accessToken = await resolveActorAccessToken({
+      env: config.env,
+      fetchImpl,
+    });
     let response;
     try {
       response = await fetchImpl(config.commandUrl, {
         method: "POST",
         headers: {
           apikey: config.publishableKey,
-          Authorization: `Bearer ${config.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),

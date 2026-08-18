@@ -44,6 +44,7 @@ related:
 create/list/get、Closure Check 与计算任务提交，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
 每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
+Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。
 
 在任何 Workflow 明确授权之前：
 

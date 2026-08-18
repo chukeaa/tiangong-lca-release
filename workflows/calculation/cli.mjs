@@ -2,6 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
+import { fileURLToPath } from "node:url";
 
 import {
   createResultSetApi,
@@ -17,6 +18,10 @@ import { createCalculationTaskApi } from "./adapters/calculation-task-api.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
+const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
+const REPOSITORY_CONTEXT = fileURLToPath(
+  new URL("../../.release", import.meta.url),
+);
 
 const HELP = `Calculation Workflow CLI
 
@@ -225,7 +230,7 @@ export async function runCli(
     stderr = process.stderr,
     env = process.env,
     fetchImpl = globalThis.fetch,
-    contextRoot = ".release",
+    contextRoot = REPOSITORY_CONTEXT,
   } = {},
 ) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -429,7 +434,8 @@ export async function runCli(
     if (
       !(error instanceof ResultSetOperationError) &&
       !(error instanceof ResultSetApiError) &&
-      !(error instanceof ResultSetContractError)
+      !(error instanceof ResultSetContractError) &&
+      error?.name !== "ActorSessionError"
     ) {
       normalized = new ResultSetOperationError(
         "local_context_write_failed",
@@ -446,6 +452,6 @@ export async function runCli(
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  if (existsSync(".env")) loadEnvFile(".env");
+  if (existsSync(REPOSITORY_ENV)) loadEnvFile(REPOSITORY_ENV);
   process.exitCode = await runCli(process.argv.slice(2));
 }

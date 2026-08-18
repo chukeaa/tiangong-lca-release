@@ -77,6 +77,7 @@ related:
 - 不把任务 transport success 当作 domain validity。
 - 不把 Closure warning 自动解释为可忽略。
 - 不持久化 signed URL、access token 或用户 API key。
+- 认证优先使用显式 actor JWT；否则从 `TIANGONG_LCA_API_KEY` 交换进程内短期 session。不得把 user API key 直接当 bearer、输出 token、建立第二套持久 session cache，或在不同 API key 间静默回退。
 - 不因外部能力缺失修改其他仓库。
 
 ## 完成条件
