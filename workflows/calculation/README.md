@@ -67,6 +67,7 @@ npm --prefix workflows/calculation run --silent cli -- result-set create --name 
 npm --prefix workflows/calculation run --silent cli -- closure start --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-token <token> --confirm-start
 npm --prefix workflows/calculation run --silent cli -- closure get --closure-check-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
+npm --prefix workflows/calculation run --silent cli -- calculation get --job-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
 ```
 
@@ -151,6 +152,12 @@ python -m workspace_ops.cli worker job <job-id> --all-configs --kind all --execu
 可以用 `--environment` 和 `--since` 缩小查询范围。Release 不复制远程服务器配置、SSH 或
 `journalctl` 实现。`workspace_ops qualification` 是发布候选资格门禁，不是线上 Closure Check
 提交入口。
+
+Calculation 状态观察使用 `calculation get --job-id <uuid>`。该命令先分页读取 actor-scoped 数据库
+task feed，并只接受精确 Worker Job ID；输出 `workerStatus`、domain status/validity、phase、progress、
+ResultSet/Closure/Result Package identity 和投影更新时间。queued/running 状态的下一步仍是数据库状态
+查询；只有 failed/blocked/stale，或 Worker completed 但 domain 未通过/无效时，才优先建议
+`workspace_ops worker job` 日志诊断。日志不覆盖数据库任务投影的产品状态权威性。
 
 成功创建或精确读取后，Workflow 在
 `.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程

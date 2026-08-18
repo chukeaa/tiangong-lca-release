@@ -41,6 +41,7 @@ Usage:
   ${COMMAND} closure start --coverage-mode <global_eligible|subset> --method <uuid>@<version> --idempotency-token <token> --confirm-start
   ${COMMAND} closure get --closure-check-id <uuid> [--format human|json]
   ${COMMAND} calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode <mode> --method <uuid>@<version> --idempotency-key <key> --confirm-start
+  ${COMMAND} calculation get --job-id <uuid> [--format human|json]
   ${COMMAND} worker logs --job-id <uuid> [--environment <name>] [--since <journal-time>]
 
 Behavior:
@@ -48,6 +49,7 @@ Behavior:
   get     Reads one exact ResultSet by UUID and records a local recovery reference.
   create  Creates a remote ResultSet only with --confirm-create and records its ID.
   closure get  Reads one exact Closure Check and reports whether its evidence can bind a calculation.
+  calculation get  Reads database-backed task status first and recommends Worker logs only for diagnosis.
 
 Examples:
   ${COMMAND} result-set list --limit 20 --format json
@@ -339,6 +341,51 @@ export async function runCli(
         format === "json"
           ? `${JSON.stringify(result)}\n`
           : `Closure Check inspected\n\nSummary:\n- Closure: ${closure.closureCheckId}\n- Run: ${closure.runStatus}\n- Scan: ${closure.scanCompleteness}\n- Certificate: ${closure.certificateValidity}\n- Calculation ready: ${closure.calculationReady ? "yes" : "no"}\n- Requested scope hash: ${closure.binding.requestedScopeHash ?? "pending"}\n- Policy fingerprint: ${closure.binding.policyFingerprint ?? "pending"}\n\nNext:\n- ${nextActions[0]}\n- Reply using template: ${result.replyTemplate.path}\n`,
+      );
+      return 0;
+    }
+    if (family === "calculation" && action === "get") {
+      command = "calculation.get";
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      if (!isUuid(flags.jobId))
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--job-id must be an exact UUID",
+        );
+      const { task, lookup } = await createCalculationTaskApi({
+        env,
+        fetchImpl,
+      }).getCalculation(flags.jobId);
+      const inspectAgain = `${COMMAND} calculation get --job-id ${task.jobId}`;
+      const logs = workspaceLogsCommand(task.jobId);
+      const nextActions = task.diagnosticsRecommended
+        ? [logs, inspectAgain]
+        : task.terminal
+          ? task.resultSetId
+            ? [`${COMMAND} result-set get --result-set-id ${task.resultSetId}`]
+            : []
+          : [inspectAgain];
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data: {
+          ...task,
+          statusAuthority: "database_task_projection",
+          workerLogsRole: "secondary_diagnostics",
+        },
+        completeness: {
+          status: task.terminal ? "terminal_observed" : "in_progress",
+          lookup,
+        },
+        nextActions,
+      };
+      result.replyTemplate = replyTemplateFor(command, { ok: true });
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `Calculation task inspected\n\nSummary:\n- Job: ${task.jobId}\n- Worker status: ${task.workerStatus}\n- Domain status: ${task.domainStatus ?? "pending"}\n- Domain validity: ${task.domainValidity ?? "pending"}\n- Phase: ${task.phase ?? "unknown"}\n- Progress: ${task.progressFraction ?? "unknown"}\n- Result package: ${task.resultPackageId ?? "pending"}\n- Worker diagnostics recommended: ${task.diagnosticsRecommended ? "yes" : "no"}\n\nNext:\n${nextActions.length ? nextActions.map((entry) => `- ${entry}`).join("\n") : "- No further CLI action required"}\n- Reply using template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }

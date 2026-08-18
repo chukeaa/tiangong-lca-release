@@ -54,6 +54,22 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "calculation.get": [
+    "calculation-inspected",
+    "calculation-inspected.md",
+    [
+      "data.jobId",
+      "data.workerStatus",
+      "data.domainStatus",
+      "data.domainValidity",
+      "data.terminal",
+      "data.diagnosticsRecommended",
+      "data.resultPackageId",
+      "data.statusAuthority",
+      "completeness",
+      "nextActions",
+    ],
+  ],
   "worker.logs": [
     "worker-log-delegated",
     "worker-log-delegated.md",

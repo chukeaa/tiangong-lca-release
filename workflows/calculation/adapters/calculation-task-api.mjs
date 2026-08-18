@@ -87,6 +87,64 @@ function projectClosureCheck(data) {
   };
 }
 
+function projectCalculationTask(value) {
+  const jobId = text(value?.jobId);
+  if (!isUuid(jobId) || text(value?.jobKind) !== "lcia_result.package_build")
+    return null;
+  const workerStatus = text(value?.workerStatus) ?? "unknown";
+  const domainStatus = text(value?.domainStatus);
+  const domainValidity = text(value?.domainValidity);
+  const terminal = [
+    "completed",
+    "failed",
+    "cancelled",
+    "canceled",
+    "blocked",
+    "stale",
+  ].includes(workerStatus);
+  const diagnosticsRecommended =
+    ["failed", "blocked", "stale"].includes(workerStatus) ||
+    (workerStatus === "completed" &&
+      (domainStatus !== "passed" || domainValidity !== "valid"));
+  return {
+    jobId,
+    jobKind: "lcia_result.package_build",
+    workerStatus,
+    domainStatus,
+    domainValidity,
+    terminal,
+    diagnosticsRecommended,
+    phase: text(value?.phase),
+    progressFraction:
+      typeof value?.progressFraction === "number"
+        ? value.progressFraction
+        : null,
+    projectionUpdatedAt: text(value?.projectionUpdatedAt),
+    title: text(value?.title),
+    resultSetId: isUuid(text(value?.resultSetId))
+      ? text(value.resultSetId)
+      : null,
+    resultSetName: text(value?.resultSetName),
+    closureCheckId: isUuid(text(value?.closureCheckId))
+      ? text(value.closureCheckId)
+      : null,
+    resultPackageId: isUuid(text(value?.resultPackageId))
+      ? text(value.resultPackageId)
+      : null,
+    blockerCodes: Array.isArray(value?.blockerCodes)
+      ? value.blockerCodes
+          .filter((entry) => typeof entry === "string")
+          .slice(0, 50)
+      : [],
+    errorSummary: text(value?.errorSummary),
+    capabilities: {
+      canOpenWorkbench: value?.capabilities?.canOpenWorkbench === true,
+      canPreviewResult: value?.capabilities?.canPreviewResult === true,
+      canDownloadReport: value?.capabilities?.canDownloadReport === true,
+    },
+  };
+}
+
 export function createCalculationTaskApi({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -94,7 +152,12 @@ export function createCalculationTaskApi({
   const config = resultSetApiConfig(env);
   async function invoke(
     body,
-    { kind, readOnly = false, project = projectTask },
+    {
+      kind,
+      readOnly = false,
+      readName = "Closure Check",
+      project = projectTask,
+    },
   ) {
     const accessToken = await resolveActorAccessToken({
       env: config.env,
@@ -116,7 +179,7 @@ export function createCalculationTaskApi({
       throw new ResultSetApiError(
         readOnly ? "capability_unavailable" : "remote_outcome_unknown",
         readOnly
-          ? "Closure Check lookup is temporarily unavailable"
+          ? `${readName} lookup is temporarily unavailable`
           : "Task submission outcome is unknown; inspect the task feed before retrying",
         { details: { cause: error instanceof Error ? error.name : "unknown" } },
       );
@@ -128,7 +191,7 @@ export function createCalculationTaskApi({
       throw new ResultSetApiError(
         readOnly ? "invalid_closure_check" : "remote_outcome_unknown",
         readOnly
-          ? "Closure Check lookup returned non-JSON"
+          ? `${readName} lookup returned non-JSON`
           : "Task submission returned non-JSON; inspect the task feed before retrying",
       );
     }
@@ -157,6 +220,52 @@ export function createCalculationTaskApi({
       return invoke(
         { action: "get_closure_check", closureCheckId },
         { kind: "closure", readOnly: true, project: projectClosureCheck },
+      );
+    },
+    async getCalculation(jobId, { maxPages = 5 } = {}) {
+      let cursor;
+      for (let page = 1; page <= maxPages; page += 1) {
+        const data = await invoke(
+          {
+            action: "list_task_feed",
+            category: "data_product",
+            jobKinds: ["lcia_result.package_build"],
+            ...(cursor ? { cursor } : {}),
+            limit: 200,
+            rootOnly: false,
+          },
+          {
+            kind: "calculation",
+            readOnly: true,
+            readName: "Calculation task",
+            project: (value) => value,
+          },
+        );
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const task = items
+          .map(projectCalculationTask)
+          .find((candidate) => candidate?.jobId === jobId);
+        if (task)
+          return {
+            task,
+            lookup: {
+              source: "actor_scoped_database_task_feed",
+              pageCount: page,
+              pageSize: 200,
+              complete: true,
+            },
+          };
+        cursor = data?.nextCursor;
+        if (!cursor)
+          throw new ResultSetApiError(
+            "calculation_task_not_found",
+            `Calculation task ${jobId} was not found in the complete actor-scoped feed`,
+          );
+      }
+      throw new ResultSetApiError(
+        "calculation_task_lookup_incomplete",
+        `Calculation task ${jobId} was not found before the bounded lookup limit`,
+        { details: { maxPages, pageSize: 200 } },
       );
     },
     createCalculation(input) {

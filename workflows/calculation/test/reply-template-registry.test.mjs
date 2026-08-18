@@ -18,6 +18,7 @@ test("every successful Calculation command maps to an existing bounded template"
     "closure.start",
     "closure.get",
     "calculation.start",
+    "calculation.get",
     "worker.logs",
   ]);
   for (const command of REPLY_TEMPLATE_COMMANDS) {

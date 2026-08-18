@@ -299,6 +299,143 @@ test("closure get rejects a non-exact identity before network access", async () 
   assert.equal(calls, 0);
 });
 
+test("calculation get uses the database task projection and skips healthy Worker logs", async () => {
+  const stdout = buffer();
+  const code = await runCli(
+    ["calculation", "get", "--job-id", jobId, "--format", "json"],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async (_url, options) => {
+        assert.deepEqual(JSON.parse(options.body), {
+          action: "list_task_feed",
+          category: "data_product",
+          jobKinds: ["lcia_result.package_build"],
+          limit: 200,
+          rootOnly: false,
+        });
+        return Response.json({
+          ok: true,
+          data: {
+            items: [
+              {
+                schemaVersion: "task-summary.v2",
+                jobId,
+                jobKind: "lcia_result.package_build",
+                workerStatus: "completed",
+                domainStatus: "passed",
+                domainValidity: "valid",
+                phase: "finalize",
+                progressFraction: 1,
+                projectionUpdatedAt: "2026-08-18T00:01:00Z",
+                resultSetId: uuid,
+                closureCheckId: uuid,
+                resultPackageId: uuid,
+                capabilities: { canPreviewResult: true },
+                rawPayload: { mustNotLeak: true },
+              },
+            ],
+            nextCursor: null,
+          },
+        });
+      },
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.equal(result.data.statusAuthority, "database_task_projection");
+  assert.equal(result.data.workerLogsRole, "secondary_diagnostics");
+  assert.equal(result.data.diagnosticsRecommended, false);
+  assert.equal(result.data.resultPackageId, uuid);
+  assert.equal(result.completeness.status, "terminal_observed");
+  assert.equal(result.completeness.lookup.complete, true);
+  assert.doesNotMatch(result.nextActions.join("\n"), /workspace_ops/);
+  assert.equal("rawPayload" in result.data, false);
+  assert.equal(result.replyTemplate.id, "calculation-inspected");
+});
+
+test("calculation get follows bounded feed pages and keeps running tasks on database polling", async () => {
+  const stdout = buffer();
+  let calls = 0;
+  await runCli(["calculation", "get", "--job-id", jobId, "--format", "json"], {
+    stdout: stdout.stream,
+    env,
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      const body = JSON.parse(options.body);
+      if (calls === 1) {
+        assert.equal("cursor" in body, false);
+        return Response.json({
+          ok: true,
+          data: {
+            items: [],
+            nextCursor: {
+              updatedAt: "2026-08-18T00:00:00Z",
+              jobId: uuid,
+            },
+          },
+        });
+      }
+      assert.deepEqual(body.cursor, {
+        updatedAt: "2026-08-18T00:00:00Z",
+        jobId: uuid,
+      });
+      return Response.json({
+        ok: true,
+        data: {
+          items: [
+            {
+              jobId,
+              jobKind: "lcia_result.package_build",
+              workerStatus: "running",
+              phase: "solve",
+              progressFraction: 0.5,
+              projectionUpdatedAt: "2026-08-18T00:02:00Z",
+            },
+          ],
+          nextCursor: null,
+        },
+      });
+    },
+  });
+  const result = JSON.parse(stdout.value());
+  assert.equal(calls, 2);
+  assert.equal(result.data.terminal, false);
+  assert.equal(result.data.diagnosticsRecommended, false);
+  assert.equal(result.completeness.lookup.pageCount, 2);
+  assert.match(result.nextActions[0], /calculation get/);
+  assert.doesNotMatch(result.nextActions.join("\n"), /workspace_ops/);
+});
+
+test("calculation get recommends Worker logs only for diagnostic states", async () => {
+  const stdout = buffer();
+  await runCli(["calculation", "get", "--job-id", jobId, "--format", "json"], {
+    stdout: stdout.stream,
+    env,
+    fetchImpl: async () =>
+      Response.json({
+        ok: true,
+        data: {
+          items: [
+            {
+              jobId,
+              jobKind: "lcia_result.package_build",
+              workerStatus: "failed",
+              domainStatus: "failed",
+              domainValidity: "invalid",
+              projectionUpdatedAt: "2026-08-18T00:03:00Z",
+              errorSummary: "bounded summary",
+            },
+          ],
+          nextCursor: null,
+        },
+      }),
+  });
+  const result = JSON.parse(stdout.value());
+  assert.equal(result.data.diagnosticsRecommended, true);
+  assert.match(result.nextActions[0], /workspace_ops\.cli worker job/);
+});
+
 test("calculation submission binds the selected closure evidence", async () => {
   const stdout = buffer();
   const code = await runCli(
