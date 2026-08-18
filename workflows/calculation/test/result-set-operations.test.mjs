@@ -7,10 +7,13 @@ import {
 } from "../result-set-operations.mjs";
 
 const resultSet = {
-  schemaVersion: "lcia.result-set.v1",
-  resultSetId: "123e4567-e89b-42d3-a456-426614174000",
+  id: "123e4567-e89b-42d3-a456-426614174000",
   name: "Steel baseline",
   createdAt: "2026-08-18T08:00:00.000Z",
+  source: {
+    system: "tiangong-lca",
+    externalSchemaVersion: "provider.result-set.v2",
+  },
 };
 
 test("preserves the exact remote identity when local recovery persistence fails", async () => {
@@ -34,7 +37,7 @@ test("preserves the exact remote identity when local recovery persistence fails"
     (error) =>
       error instanceof ResultSetOperationError &&
       error.code === "local_context_write_failed" &&
-      error.details.resultSet.resultSetId === resultSet.resultSetId &&
-      error.details.nextCommand.endsWith(resultSet.resultSetId),
+      error.details.resultSet.id === resultSet.id &&
+      error.details.nextCommand.endsWith(resultSet.id),
   );
 });

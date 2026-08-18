@@ -5,7 +5,7 @@ export class ResultSetContractError extends Error {
   constructor(message, details = undefined) {
     super(message);
     this.name = "ResultSetContractError";
-    this.code = "invalid_result_set_projection";
+    this.code = "invalid_result_set_reference";
     this.details = details;
   }
 }
@@ -14,72 +14,84 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function hasExactKeys(value, keys) {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return (
-    actual.length === expected.length &&
-    actual.every((key, index) => key === expected[index])
-  );
+function firstString(value, keys) {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
 }
 
 export function isUuid(value) {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
-export function decodeResultSet(value) {
-  if (
-    !isRecord(value) ||
-    !hasExactKeys(value, ["schemaVersion", "resultSetId", "name", "createdAt"])
-  ) {
+/**
+ * Converts a provider-owned payload into the minimal ResultSet reference used
+ * by Calculation. Provider fields may grow or change versions without leaking
+ * those details into the Workflow model.
+ */
+export function projectResultSetReference(value) {
+  if (!isRecord(value)) {
     throw new ResultSetContractError(
-      "ResultSet must contain exactly the v1 projection fields",
+      "ResultSet response must be an object containing identity semantics",
     );
   }
 
-  const name = typeof value.name === "string" ? value.name.trim() : "";
-  if (
-    value.schemaVersion !== "lcia.result-set.v1" ||
-    !isUuid(value.resultSetId) ||
-    !name ||
-    typeof value.createdAt !== "string" ||
-    !Number.isFinite(Date.parse(value.createdAt))
-  ) {
+  const id = firstString(value, ["resultSetId", "id"]);
+  const name = firstString(value, ["name", "displayName"]);
+  const createdAtValue = firstString(value, ["createdAt", "created_at"]);
+  const createdAt =
+    createdAtValue && Number.isFinite(Date.parse(createdAtValue))
+      ? createdAtValue
+      : null;
+  const externalSchemaVersion = firstString(value, [
+    "schemaVersion",
+    "schema_version",
+  ]);
+
+  if (!isUuid(id) || !name) {
     throw new ResultSetContractError(
-      "ResultSet contains invalid v1 field values",
+      "ResultSet response must provide a UUID identity and non-empty name",
+      {
+        missing: [!isUuid(id) ? "id" : null, !name ? "name" : null].filter(
+          Boolean,
+        ),
+      },
     );
   }
 
   return {
-    schemaVersion: "lcia.result-set.v1",
-    resultSetId: value.resultSetId,
+    id,
     name,
-    createdAt: value.createdAt,
+    createdAt,
+    source: {
+      system: "tiangong-lca",
+      externalSchemaVersion,
+    },
   };
 }
 
-export function decodeResultSetList(value) {
-  if (
-    !isRecord(value) ||
-    !hasExactKeys(value, ["items"]) ||
-    !Array.isArray(value.items)
-  ) {
+export function projectResultSetReferenceList(value) {
+  const items = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.items)
+      ? value.items
+      : null;
+  if (!items) {
     throw new ResultSetContractError(
-      "ResultSet list must contain exactly an items array",
+      "ResultSet list response must provide an items array",
     );
   }
-  return { items: value.items.map(decodeResultSet) };
+  return { items: items.map(projectResultSetReference) };
 }
 
-export function decodeCommandEnvelope(value, expectedCommand, decodeData) {
-  if (
-    !isRecord(value) ||
-    value.ok !== true ||
-    value.command !== expectedCommand ||
-    !("data" in value)
-  ) {
+export function decodeCommandEnvelope(value, decodeData) {
+  if (!isRecord(value) || value.ok !== true || !("data" in value)) {
     throw new ResultSetContractError(
-      `Expected successful ${expectedCommand} response envelope`,
+      "Expected a successful ResultSet response envelope with data",
     );
   }
   return decodeData(value.data);

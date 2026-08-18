@@ -14,7 +14,7 @@ checkPaths:
   - workflows/calculation/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Added the workflow-local ResultSet create/list/get surface, strict contracts, and recovery references."
+lastReviewedNote: "Isolated provider ResultSet payloads behind a workflow-local compatibility adapter and stable internal reference."
 related:
   - AGENTS.md
   - ../../README.md
@@ -69,6 +69,22 @@ npm --prefix workflows/calculation run --silent cli -- result-set create --name 
 三个命令都支持 `--format json`。JSON stdout 使用
 `tiangong.calculation-cli-result.v1`，包含结果、完整性、错误和下一步，不混入日志。
 
+外部 ResultSet payload 先由 adapter 转换为 Calculation 自有的最小引用：
+
+```json
+{
+  "id": "<uuid>",
+  "name": "<display name>",
+  "createdAt": "<timestamp-or-null>",
+  "source": {
+    "system": "tiangong-lca",
+    "externalSchemaVersion": "<observed-version-or-null>"
+  }
+}
+```
+
+Workflow 不依赖某个固定的外部 `schemaVersion`，也不要求 provider payload 只能包含一组精确字段。adapter 忽略附加字段，兼容当前 identity/name/time 字段别名，并只在 UUID 或名称等必要语义缺失时失败。`externalSchemaVersion` 仅用于观察和排障，不参与 Workflow 决策。
+
 - `list` 只返回有界的最近结果，并明确标记可能不完整；远程契约当前没有 cursor 或总数。
 - `get` 只接受精确 UUID，不根据名称猜测对象。
 - `create` 是远程副作用，必须传入 `--confirm-create`；远程契约当前没有 idempotency key，结果不确定时不得盲目重试。
@@ -80,7 +96,7 @@ npm --prefix workflows/calculation run --silent cli -- result-set create --name 
 
 成功创建或精确读取后，Workflow 在
 `.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程
-ResultSet 投影、target fingerprint 和观察时间，不包含 access token、publishable key 或 signed URL。
+Release-owned ResultSet 引用、target fingerprint 和观察时间，不包含原始 provider payload、access token、publishable key 或 signed URL。
 
 ## 需要用户决定的内容
 

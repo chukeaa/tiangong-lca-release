@@ -15,7 +15,7 @@ export function createResultSetContextStore({
   return {
     async save(resultSet, target) {
       const directory = path.resolve(root, "calculation", "result-sets");
-      const outputPath = path.join(directory, `${resultSet.resultSetId}.json`);
+      const outputPath = path.join(directory, `${resultSet.id}.json`);
       const temporaryPath = `${outputPath}.${process.pid}.${Date.now()}.tmp`;
       const document = {
         schemaVersion: "tiangong.calculation-result-set-reference.v1",

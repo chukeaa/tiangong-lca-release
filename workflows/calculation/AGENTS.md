@@ -14,7 +14,7 @@ checkPaths:
   - workflows/calculation/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Added workflow-local ResultSet commands, confirmation, bounded output, and recovery rules."
+lastReviewedNote: "Required provider-compatible ResultSet adapters and a stable Release-owned internal reference."
 related:
   - README.md
   - ../AGENTS.md
@@ -52,6 +52,9 @@ related:
 - `get` 必须使用精确 `resultSetId`；不得按名称隐式选择。
 - `create` 必须在用户确认精确名称后使用 `--confirm-create`。
 - JSON stdout 必须保持 `tiangong.calculation-cli-result.v1` 可解析；诊断不得混入 stdout。
+- provider payload 只在 adapter 中解析；外部新增字段或非破坏性版本变化不得使 Workflow 失败。
+- Workflow、CLI 和恢复文件只使用 `id`、`name`、nullable `createdAt` 和来源元数据组成的内部 ResultSet 引用。
+- 外部 `schemaVersion` 只作为可选观察信息，不得成为 Workflow 分支条件。
 - 创建或读取成功后保存最小本地恢复引用，不保存凭据或 signed URL。
 - 创建请求发生 transport failure 或远程 5xx 时返回 `remote_outcome_unknown`，先查询远程状态，不自动重试。
 

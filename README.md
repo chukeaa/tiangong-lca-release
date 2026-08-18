@@ -41,7 +41,7 @@ related:
 四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
 
 当前仓库以四个 Workflow 为活动基线。Calculation 已拥有首个 workflow-local ResultSet
-能力，包括 create/list/get、严格远程投影、本地恢复引用和测试；其余能力继续按照
+能力，包括 create/list/get、外部兼容 adapter、Release-owned 最小引用、本地恢复引用和测试；其余能力继续按照
 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
 每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
 

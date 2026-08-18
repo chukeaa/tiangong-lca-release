@@ -19,7 +19,7 @@ checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Kept executable surfaces workflow-local and added Calculation ResultSet adapters and recovery artifacts."
+lastReviewedNote: "Defined provider-compatible adapters and Release-owned references for workflow-local ResultSet operations."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -115,6 +115,8 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 目标确认后，运行时实现应遵守：
 
 - 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
+- 外部 provider schema 只在 adapter 边界解析；Workflow、CLI 和本地恢复文件只消费 Release-owned 最小语义对象；
+- adapter 接受不改变必要语义的附加字段和版本变化，不把外部 `schemaVersion` 作为 Workflow 分支条件；
 - Workflow 文档拥有行为语义，adapter 不拥有业务路线；
 - 确定性计算、验证和打包不得由 Agent 自行模拟；
 - 共享代码只提取已被多个 Workflow 实际复用的机制；
@@ -125,4 +127,4 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 
 四个根 Workflow 的拆分已经得到用户确认。每个可执行入口由所属 Workflow 本地拥有，不建立仓库级聚合 CLI。
 
-Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get adapter、严格投影、CLI 和最小恢复引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。
+Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get adapter、provider compatibility projection、Release-owned 最小引用、CLI 和恢复文件。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。

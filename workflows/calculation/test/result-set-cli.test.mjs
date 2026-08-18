@@ -13,7 +13,7 @@ const env = {
   TIANGONG_LCA_ACCESS_TOKEN: "header.payload.signature",
 };
 
-const resultSet = {
+const externalResultSet = {
   schemaVersion: "lcia.result-set.v1",
   resultSetId: "123e4567-e89b-42d3-a456-426614174000",
   name: "Steel baseline",
@@ -54,7 +54,15 @@ test("list emits clean bounded JSON with a usable next action", async () => {
         Response.json({
           ok: true,
           command: "lcia_result_sets_list",
-          data: { items: [resultSet] },
+          data: {
+            items: [
+              {
+                ...externalResultSet,
+                schemaVersion: "provider.result-set.v2",
+                additiveField: true,
+              },
+            ],
+          },
         }),
     },
   );
@@ -63,6 +71,15 @@ test("list emits clean bounded JSON with a usable next action", async () => {
   assert.equal(result.schemaVersion, "tiangong.calculation-cli-result.v1");
   assert.equal(result.completeness.status, "bounded");
   assert.equal(result.completeness.mayHaveMore, true);
+  assert.deepEqual(result.data.items[0], {
+    id: externalResultSet.resultSetId,
+    name: externalResultSet.name,
+    createdAt: externalResultSet.createdAt,
+    source: {
+      system: "tiangong-lca",
+      externalSchemaVersion: "provider.result-set.v2",
+    },
+  });
   assert.match(result.nextActions[0], /result-set get/);
 });
 
@@ -114,14 +131,15 @@ test("create persists the exact remote identity and returns its path", async (t)
         return Response.json({
           ok: true,
           command: "lcia_result_set_create",
-          data: resultSet,
+          data: externalResultSet,
         });
       },
     },
   );
   const result = JSON.parse(stdout.value());
   assert.equal(exitCode, 0);
-  assert.equal(result.data.resultSetId, resultSet.resultSetId);
+  assert.equal(result.data.id, externalResultSet.resultSetId);
+  assert.equal(result.data.schemaVersion, undefined);
   assert.match(result.contextPath, /\.json$/);
   assert.equal(result.warnings[0].code, "create_not_idempotent");
 });

@@ -12,11 +12,21 @@ const env = {
   TIANGONG_LCA_ACCESS_TOKEN: "header.payload.signature",
 };
 
-const resultSet = {
+const externalResultSet = {
   schemaVersion: "lcia.result-set.v1",
   resultSetId: "123e4567-e89b-42d3-a456-426614174000",
   name: "Steel baseline",
   createdAt: "2026-08-18T08:00:00.000Z",
+};
+
+const resultSetReference = {
+  id: externalResultSet.resultSetId,
+  name: externalResultSet.name,
+  createdAt: externalResultSet.createdAt,
+  source: {
+    system: "tiangong-lca",
+    externalSchemaVersion: externalResultSet.schemaVersion,
+  },
 };
 
 test("calls the actor-scoped ResultSet endpoint without exposing credentials in output", async () => {
@@ -27,13 +37,13 @@ test("calls the actor-scoped ResultSet endpoint without exposing credentials in 
       captured = { url, options };
       return Response.json({
         ok: true,
-        command: "lcia_result_sets_list",
-        data: { items: [resultSet] },
+        command: "provider_result_sets_v99",
+        data: { items: [{ ...externalResultSet, futureField: true }] },
       });
     },
   });
 
-  assert.deepEqual(await api.list(20), { items: [resultSet] });
+  assert.deepEqual(await api.list(20), { items: [resultSetReference] });
   assert.equal(
     captured.url,
     "https://example.supabase.co/functions/v1/app_data_product_commands",
@@ -79,7 +89,7 @@ test("classifies a successful create response with an invalid projection as unce
       Response.json({
         ok: true,
         command: "lcia_result_set_create",
-        data: { resultSetId: resultSet.resultSetId },
+        data: { resultSetId: externalResultSet.resultSetId },
       }),
   });
 

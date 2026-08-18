@@ -45,7 +45,7 @@ const EXIT_CODES = {
   result_set_not_found: 5,
   not_data_product_manager: 6,
   remote_outcome_unknown: 7,
-  invalid_result_set_projection: 8,
+  invalid_result_set_reference: 8,
   capability_unavailable: 9,
   local_context_write_failed: 10,
 };
@@ -139,7 +139,9 @@ function humanSuccess(result) {
   if (result.command === "result-set.list") {
     lines.push(`ResultSets (${result.data.items.length})`, "", "Summary:");
     for (const item of result.data.items) {
-      lines.push(`- ${item.name} | ${item.resultSetId} | ${item.createdAt}`);
+      lines.push(
+        `- ${item.name} | ${item.id} | ${item.createdAt ?? "unknown"}`,
+      );
     }
     lines.push(
       `- Completeness: bounded to ${result.completeness.limit}; more items ${result.completeness.mayHaveMore ? "may exist" : "are not indicated"}`,
@@ -151,7 +153,7 @@ function humanSuccess(result) {
         : "ResultSet found",
       "",
       "Summary:",
-      `- ${result.data.name} | ${result.data.resultSetId} | ${result.data.createdAt}`,
+      `- ${result.data.name} | ${result.data.id} | ${result.data.createdAt ?? "unknown"}`,
       `- Recovery reference: ${result.contextPath}`,
     );
   }

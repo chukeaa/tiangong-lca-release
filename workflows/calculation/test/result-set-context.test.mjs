@@ -14,10 +14,13 @@ test("writes a minimal recovery reference without credentials", async (t) => {
     now: () => new Date("2026-08-18T08:30:00.000Z"),
   });
   const resultSet = {
-    schemaVersion: "lcia.result-set.v1",
-    resultSetId: "123e4567-e89b-42d3-a456-426614174000",
+    id: "123e4567-e89b-42d3-a456-426614174000",
     name: "Steel baseline",
     createdAt: "2026-08-18T08:00:00.000Z",
+    source: {
+      system: "tiangong-lca",
+      externalSchemaVersion: "provider.result-set.v2",
+    },
   };
 
   const outputPath = await store.save(resultSet, {
@@ -33,6 +36,7 @@ test("writes a minimal recovery reference without credentials", async (t) => {
     "tiangong.calculation-result-set-reference.v1",
   );
   assert.deepEqual(document.resultSet, resultSet);
+  assert.equal(text.includes("lcia.result-set.v1"), false);
   assert.match(document.targetFingerprint, /^[0-9a-f]{64}$/);
   assert.equal(text.includes("must-not-be-read"), false);
   assert.equal((await stat(outputPath)).mode & 0o777, 0o600);

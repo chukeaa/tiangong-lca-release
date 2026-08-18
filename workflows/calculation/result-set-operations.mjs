@@ -15,11 +15,11 @@ async function saveContext(contextStore, resultSet, target) {
   } catch (error) {
     throw new ResultSetOperationError(
       "local_context_write_failed",
-      `Remote ResultSet ${resultSet.resultSetId} was read successfully, but its local recovery reference could not be written`,
+      `Remote ResultSet ${resultSet.id} was read successfully, but its local recovery reference could not be written`,
       {
         resultSet,
         cause: error instanceof Error ? error.name : "unknown",
-        nextCommand: `node workflows/calculation/cli.mjs result-set get --result-set-id ${resultSet.resultSetId}`,
+        nextCommand: `npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id ${resultSet.id}`,
       },
     );
   }

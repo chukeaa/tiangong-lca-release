@@ -1,7 +1,7 @@
 import {
   decodeCommandEnvelope,
-  decodeResultSet,
-  decodeResultSetList,
+  projectResultSetReference,
+  projectResultSetReferenceList,
 } from "../contracts/result-set.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -110,7 +110,7 @@ export function createResultSetApi({
 } = {}) {
   const config = resultSetApiConfig(env);
 
-  async function invoke(action, body, expectedCommand, decodeData) {
+  async function invoke(action, body, decodeData) {
     let response;
     try {
       response = await fetchImpl(config.commandUrl, {
@@ -144,7 +144,7 @@ export function createResultSetApi({
       throw new ResultSetApiError(
         action === "create"
           ? "remote_outcome_unknown"
-          : "invalid_result_set_projection",
+          : "invalid_result_set_reference",
         "ResultSet endpoint returned a non-JSON response",
         { status: response.status },
       );
@@ -157,7 +157,7 @@ export function createResultSetApi({
       throw remoteError(response, payload, action);
     }
     try {
-      return decodeCommandEnvelope(payload, expectedCommand, decodeData);
+      return decodeCommandEnvelope(payload, decodeData);
     } catch (error) {
       if (action === "create") {
         throw new ResultSetApiError(
@@ -182,24 +182,21 @@ export function createResultSetApi({
       return invoke(
         "create",
         { action: "create_result_set", name },
-        "lcia_result_set_create",
-        decodeResultSet,
+        projectResultSetReference,
       );
     },
     list(limit) {
       return invoke(
         "list",
         { action: "list_result_sets", limit },
-        "lcia_result_sets_list",
-        decodeResultSetList,
+        projectResultSetReferenceList,
       );
     },
     get(resultSetId) {
       return invoke(
         "get",
         { action: "get_result_set", resultSetId },
-        "lcia_result_set_get",
-        decodeResultSet,
+        projectResultSetReference,
       );
     },
   };
