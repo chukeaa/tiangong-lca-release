@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -23,7 +23,15 @@ test("every successful Calculation command maps to an existing bounded template"
     const template = replyTemplateFor(command, { ok: true });
     assert.match(template.id, /^[a-z][a-z0-9-]+$/);
     assert.ok(template.requiredFacts.length > 0);
-    await access(path.join(repositoryRoot, template.path));
+    assert.equal(template.format, "markdown");
+    assert.equal(template.placeholderSyntax, "{{...}}");
+    const body = await readFile(
+      path.join(repositoryRoot, template.path),
+      "utf8",
+    );
+    assert.match(body, /```markdown/);
+    assert.match(body, /{{[^}]+}}/);
+    assert.match(body, /[✅🚀🔎⚠️❌]/u);
   }
 });
 
@@ -33,5 +41,6 @@ test("uncertain remote outcomes use a distinct no-blind-retry reply template", a
     errorCode: "remote_outcome_unknown",
   });
   assert.equal(template.id, "remote-outcome-unknown");
-  await access(path.join(repositoryRoot, template.path));
+  const body = await readFile(path.join(repositoryRoot, template.path), "utf8");
+  assert.match(body, /不会自动重试/);
 });

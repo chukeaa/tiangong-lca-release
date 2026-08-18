@@ -52,7 +52,7 @@ related:
 - `get` 必须使用精确 `resultSetId`；不得按名称隐式选择。
 - `create` 必须在用户确认精确名称后使用 `--confirm-create`。
 - JSON stdout 必须保持 `tiangong.calculation-cli-result.v1` 可解析；诊断不得混入 stdout。
-- 每个 CLI 结果必须返回 `replyTemplate` 的稳定 ID、路径和 required facts。Agent 读取模板后用真实结果自然回复，不照抄占位符、不让模板覆盖 CLI/远程事实。
+- 每个 CLI 结果必须返回 `replyTemplate` 的稳定 ID、路径、Markdown 格式、占位符语法和 required facts。Agent 应从可复制正文模板开始，用真实结果替换全部占位符、删除不适用条件行，不让模板覆盖 CLI/远程事实。
 - provider payload 只在 adapter 中解析；外部新增字段或非破坏性版本变化不得使 Workflow 失败。
 - Workflow、CLI 和恢复文件只使用 `id`、`name`、nullable `createdAt` 和来源元数据组成的内部 ResultSet 引用。
 - 外部 `schemaVersion` 只作为可选观察信息，不得成为 Workflow 分支条件。

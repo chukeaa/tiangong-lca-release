@@ -1,5 +1,18 @@
 # ResultSet 列表
 
-先说明返回数量和查询是否有界，再列出名称、精确 ID、创建时间。提醒用户选择精确 ID；不要根据名称替用户选择。
+```markdown
+🔎 找到 {{data.items.length}} 个 ResultSet（本次查询范围：{{completeness.status}}）。
 
-结尾给出 `result-set get --result-set-id <uuid>`。
+{{#data.items}}
+
+- `{{name}}`
+  - ID：`{{id}}`
+  - 创建时间：{{createdAt}}
+    {{/data.items}}
+
+[若 completeness.mayHaveMore=true] 当前结果是有界列表，远程可能还有更多 ResultSet。
+
+下一步请选择一个精确 ResultSet ID；我不会根据名称自动替你选择。读取命令：
+
+`{{nextActions.0}}`
+```

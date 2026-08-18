@@ -1,5 +1,15 @@
 # Worker 日志查询已委托
 
-说明 Release 没有直接读取日志；给出 job ID、workspace_ops 所属位置、应执行的精确命令和工作目录。
+```markdown
+🔎 已生成 Worker 日志查询方式；当前尚未读取或确认日志内容。
 
-不要把“生成查询命令”说成“已找到日志”。
+- Worker Job ID：`{{data.jobId}}`
+- 执行能力：`{{data.executionOwner}}`
+- 工作目录：`{{data.workingDirectory}}`
+
+请执行：
+
+`{{data.instruction}}`
+
+执行后我可以继续解释匹配到的 Worker 日志和任务状态。
+```

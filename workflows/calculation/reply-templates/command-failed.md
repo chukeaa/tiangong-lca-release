@@ -1,5 +1,14 @@
 # 命令未执行成功
 
-给出错误 code、可公开 message、失败发生在哪个动作，以及 CLI 返回的下一步。确认/输入错误应提供可复制的修正方式。
+```markdown
+❌ `{{command}}` 未执行成功。
 
-不得输出凭据、provider 敏感详情或推断远程状态。
+- 错误代码：`{{error.code}}`
+- 原因：{{error.message}}
+
+[若 nextActions 非空] 可以按下面的方式修正或继续：
+
+`{{nextActions.0}}`
+```
+
+不得在模板之外补充凭据、provider 敏感详情或未经确认的远程状态。

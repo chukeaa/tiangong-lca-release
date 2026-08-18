@@ -1,5 +1,16 @@
 # 计算任务已提交
 
-明确区分“计算已提交”和“计算结果已生成”。给出 Build/Package 资源 ID、Worker Job ID、状态、Closure evidence binding 和 effective inputs。
+```markdown
+🚀 计算任务已提交，计算结果尚未确认生成。
 
-下一步给出任务观察或 workspace_ops 日志命令，不承诺完成时间。
+- Build/Package 资源 ID：`{{data.resourceId}}`
+- Worker Job ID：`{{data.jobId}}`
+- 当前状态：`{{data.status}}`
+- 是否复用已有任务：{{data.reused}}
+- 计算范围：`{{data.effectiveInput.coverageMode}}`
+- LCIA 方法：`{{data.effectiveInput.lciaMethods.0.id}}@{{data.effectiveInput.lciaMethods.0.version}}`
+
+🔎 下一步可以观察任务状态，或从 workspace 根目录查询 Worker 日志：
+
+`{{nextActions.0}}`
+```

@@ -60,7 +60,13 @@ export function replyTemplateFor(command, { ok, errorCode } = {}) {
           ["command", "error", "nextActions"],
         ];
   const [id, filename, requiredFacts] = entry;
-  return { id, path: `${ROOT}/${filename}`, requiredFacts };
+  return {
+    id,
+    path: `${ROOT}/${filename}`,
+    format: "markdown",
+    placeholderSyntax: "{{...}}",
+    requiredFacts,
+  };
 }
 
 export const REPLY_TEMPLATE_COMMANDS = Object.freeze(Object.keys(templates));

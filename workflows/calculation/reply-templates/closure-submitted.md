@@ -1,5 +1,17 @@
 # 完整性校验已提交
 
-明确区分“远程任务已提交”和“完整性校验已完成”。给出 ResultSet（若已知）、Closure Check ID、Worker Job ID、入队状态、是否复用，以及 effective scope/LCIA methods。
+```markdown
+🚀 完整性校验已提交，当前还不能视为校验完成。
 
-披露采用的默认输入。下一步给出任务观察或 workspace_ops 日志命令。
+- Closure Check ID：`{{data.resourceId}}`
+- Worker Job ID：`{{data.jobId}}`
+- 当前状态：`{{data.status}}`
+- 是否复用已有任务：{{data.reused}}
+- 计算范围：`{{data.effectiveInput.coverageMode}}`
+- LCIA 方法：`{{data.effectiveInput.lciaMethods.0.id}}@{{data.effectiveInput.lciaMethods.0.version}}`
+- 采用默认值的字段：{{data.effectiveInput.defaultedInputs}}
+
+🔎 下一步可以观察任务状态，或从 workspace 根目录查询 Worker 日志：
+
+`{{nextActions.0}}`
+```
