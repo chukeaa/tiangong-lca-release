@@ -64,9 +64,12 @@ Calculation 的操作入口由本目录拥有，不通过仓库级 `tiangong-rel
 npm --prefix workflows/calculation run --silent cli -- result-set list --limit 20
 npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id <uuid>
 npm --prefix workflows/calculation run --silent cli -- result-set create --name <name> --confirm-create
+npm --prefix workflows/calculation run --silent cli -- closure start --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-token <token> --confirm-start
+npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
+npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
 ```
 
-三个命令都支持 `--format json`。JSON stdout 使用
+所有命令都支持 `--format json`。JSON stdout 使用
 `tiangong.calculation-cli-result.v1`，包含结果、完整性、错误和下一步，不混入日志。
 
 外部 ResultSet payload 先由 adapter 转换为 Calculation 自有的最小引用：
@@ -93,6 +96,23 @@ Workflow 不依赖某个固定的外部 `schemaVersion`，也不要求 provider 
 `TIANGONG_LCA_API_BASE_URL` 定位 `app_data_product_commands`，并需要
 `TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY` 和 actor-scoped
 `TIANGONG_LCA_ACCESS_TOKEN`。凭据只从进程环境或本地 ignored `.env` 读取。
+
+Closure 和 Calculation 的 `start` 也使用同一个 actor-scoped endpoint，且必须显式传入
+`--confirm-start` 与幂等 token/key。`--method` 和 subset 模式下的 `--process` 可重复，格式为
+`<uuid>@<00.00.000>`。Calculation 必须显式绑定已选择 Closure 的 ID、requested scope hash
+和 policy fingerprint；CLI 不从 mutable 状态推断这些值。返回值只投影任务/资源 ID 和状态，
+忽略 provider 附加字段及 schema 版本。
+
+Worker 主机、SSH 和 journal 由根 workspace 的 `workspace_ops` 拥有。`worker logs` 不读取日志，
+而是输出应从 `lca-workspace` 根目录执行的精确委托命令：
+
+```bash
+python -m workspace_ops.cli worker job <job-id> --all-configs --kind all --execute
+```
+
+可以用 `--environment` 和 `--since` 缩小查询范围。Release 不复制远程服务器配置、SSH 或
+`journalctl` 实现。`workspace_ops qualification` 是发布候选资格门禁，不是线上 Closure Check
+提交入口。
 
 成功创建或精确读取后，Workflow 在
 `.release/calculation/result-sets/<resultSetId>.json` 写入最小恢复引用。文件只包含远程

@@ -57,6 +57,9 @@ related:
 - 外部 `schemaVersion` 只作为可选观察信息，不得成为 Workflow 分支条件。
 - 创建或读取成功后保存最小本地恢复引用，不保存凭据或 signed URL。
 - 创建请求发生 transport failure 或远程 5xx 时返回 `remote_outcome_unknown`，先查询远程状态，不自动重试。
+- Closure/Calculation `start` 必须显式确认并携带幂等 token/key；内部只投影稳定 job/resource identity，不以 provider `schemaVersion` 分支。
+- Worker job 日志必须委托给根 workspace 的 `python -m workspace_ops.cli worker job`；本 Workflow 只输出精确命令，不复制服务器配置、SSH 或 journal 逻辑。
+- `workspace_ops qualification` 只用于生产等价发布资格门禁，不得当作线上 Closure Check 提交能力。
 
 ## 需要明确确认的动作
 

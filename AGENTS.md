@@ -123,5 +123,5 @@ related:
 - 根 README 清楚表达项目目标和四个 Workflow；
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
-- Calculation 的 ResultSet create/list/get 保持 workflow-local，确认、provider compatibility、内部最小引用、恢复和错误路径测试通过；
+- Calculation 的 ResultSet create/list/get、Closure/计算提交和 Worker 日志委托保持 workflow-local，确认、provider compatibility、内部最小引用、恢复和错误路径测试通过；
 - 当前变更通过仓库门禁并形成独立 Git commit。

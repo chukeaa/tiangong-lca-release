@@ -13,6 +13,7 @@ import {
   ResultSetOperationError,
 } from "./result-set-operations.mjs";
 import { createResultSetContextStore } from "./runtime/result-set-context.mjs";
+import { createCalculationTaskApi } from "./adapters/calculation-task-api.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
@@ -26,6 +27,9 @@ Usage:
   ${COMMAND} result-set list [--limit 20] [--format human|json]
   ${COMMAND} result-set get --result-set-id <uuid> [--format human|json]
   ${COMMAND} result-set create --name <name> --confirm-create [--format human|json]
+  ${COMMAND} closure start --coverage-mode <global_eligible|subset> --method <uuid>@<version> --idempotency-token <token> --confirm-start
+  ${COMMAND} calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode <mode> --method <uuid>@<version> --idempotency-key <key> --confirm-start
+  ${COMMAND} worker logs --job-id <uuid> [--environment <name>] [--since <journal-time>]
 
 Behavior:
   list    Returns a bounded recent list; the remote contract has no cursor.
@@ -61,8 +65,9 @@ function parseFlags(args) {
       );
     }
     const key = token.slice(2);
-    if (key === "confirm-create") {
-      values.confirmCreate = true;
+    if (key === "confirm-create" || key === "confirm-start") {
+      values[key === "confirm-create" ? "confirmCreate" : "confirmStart"] =
+        true;
       continue;
     }
     const value = args[index + 1];
@@ -77,6 +82,17 @@ function parseFlags(args) {
     else if (key === "limit") values.limit = Number(value);
     else if (key === "result-set-id") values.resultSetId = value;
     else if (key === "name") values.name = value;
+    else if (key === "job-id") values.jobId = value;
+    else if (key === "closure-check-id") values.closureCheckId = value;
+    else if (key === "coverage-mode") values.coverageMode = value;
+    else if (key === "idempotency-token") values.idempotencyToken = value;
+    else if (key === "idempotency-key") values.idempotencyKey = value;
+    else if (key === "requested-scope-hash") values.requestedScopeHash = value;
+    else if (key === "policy-fingerprint") values.policyFingerprint = value;
+    else if (key === "environment") values.environment = value;
+    else if (key === "since") values.since = value;
+    else if (key === "method" || key === "process")
+      (values[`${key}s`] ??= []).push(value);
     else
       throw new ResultSetOperationError(
         "invalid_request",
@@ -90,6 +106,31 @@ function parseFlags(args) {
     );
   }
   return values;
+}
+
+function selection(value, flag) {
+  const split = value.lastIndexOf("@");
+  const id = value.slice(0, split);
+  const version = value.slice(split + 1);
+  if (split < 1 || !isUuid(id) || !/^\d{2}\.\d{2}\.\d{3}$/.test(version))
+    throw new ResultSetOperationError(
+      "invalid_request",
+      `${flag} must be <uuid>@<00.00.000>`,
+    );
+  return { id, version };
+}
+
+function workspaceLogsCommand(jobId, { environment, since } = {}) {
+  const parts = [
+    "python -m workspace_ops.cli worker job",
+    jobId,
+    "--all-configs",
+    "--kind all",
+  ];
+  if (environment) parts.push("--environment", JSON.stringify(environment));
+  if (since) parts.push("--since", JSON.stringify(since));
+  parts.push("--execute");
+  return parts.join(" ");
 }
 
 function success(command, result) {
@@ -196,6 +237,130 @@ export async function runCli(
   let format = "human";
   try {
     const [family, action, ...rest] = argv;
+    if (family === "worker" && action === "logs") {
+      command = "worker.logs";
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      if (!isUuid(flags.jobId))
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--job-id must be an exact UUID",
+        );
+      const instruction = workspaceLogsCommand(flags.jobId, flags);
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data: {
+          jobId: flags.jobId,
+          executionOwner: "lca-workspace/workspace_ops",
+          workingDirectory: "lca-workspace root",
+          instruction,
+        },
+        completeness: { status: "delegated", remoteLogsRead: false },
+        nextActions: [instruction],
+      };
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `Worker log access\n\nRun from the lca-workspace root:\n${instruction}\n`,
+      );
+      return 0;
+    }
+    if (["closure", "calculation"].includes(family) && action === "start") {
+      command = `${family}.start`;
+      const flags = parseFlags(rest);
+      format = flags.format ?? "human";
+      if (!flags.confirmStart)
+        throw new ResultSetOperationError(
+          "confirmation_required",
+          `Starting ${family} requires --confirm-start`,
+        );
+      const coverageMode = flags.coverageMode;
+      if (!["global_eligible", "subset"].includes(coverageMode))
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "--coverage-mode must be global_eligible or subset",
+        );
+      const processes = (flags.processes ?? []).map((value) =>
+        selection(value, "--process"),
+      );
+      const lciaMethods = (flags.methods ?? []).map((value) =>
+        selection(value, "--method"),
+      );
+      if (!lciaMethods.length)
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "At least one --method is required",
+        );
+      if ((coverageMode === "subset") !== processes.length > 0)
+        throw new ResultSetOperationError(
+          "invalid_request",
+          "subset requires --process; global_eligible forbids it",
+        );
+      const taskApi = createCalculationTaskApi({ env, fetchImpl });
+      let task;
+      if (family === "closure") {
+        if (flags.resultSetId && !isUuid(flags.resultSetId))
+          throw new ResultSetOperationError(
+            "invalid_request",
+            "--result-set-id must be an exact UUID",
+          );
+        if (!flags.idempotencyToken)
+          throw new ResultSetOperationError(
+            "invalid_request",
+            "--idempotency-token is required",
+          );
+        task = await taskApi.createClosure({
+          resultSetId: flags.resultSetId,
+          requestedScope: {
+            coverageMode,
+            ...(processes.length ? { processes } : {}),
+            lciaMethods,
+          },
+          idempotencyToken: flags.idempotencyToken,
+        });
+      } else {
+        for (const [key, label] of [
+          ["name", "--name"],
+          ["closureCheckId", "--closure-check-id"],
+          ["requestedScopeHash", "--requested-scope-hash"],
+          ["policyFingerprint", "--policy-fingerprint"],
+          ["idempotencyKey", "--idempotency-key"],
+        ])
+          if (!flags[key])
+            throw new ResultSetOperationError(
+              "invalid_request",
+              `${label} is required`,
+            );
+        if (!isUuid(flags.closureCheckId))
+          throw new ResultSetOperationError(
+            "invalid_request",
+            "--closure-check-id must be an exact UUID",
+          );
+        task = await taskApi.createCalculation({
+          ...flags,
+          coverageMode,
+          processes,
+          lciaMethods,
+        });
+      }
+      const logs = workspaceLogsCommand(task.jobId);
+      const result = {
+        schemaVersion: CLI_SCHEMA,
+        ok: true,
+        command,
+        data: task,
+        completeness: { status: "submitted", terminalStateObserved: false },
+        nextActions: [logs],
+      };
+      stdout.write(
+        format === "json"
+          ? `${JSON.stringify(result)}\n`
+          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n`,
+      );
+      return 0;
+    }
     if (
       family !== "result-set" ||
       !["list", "get", "create"].includes(action)
