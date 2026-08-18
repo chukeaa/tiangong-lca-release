@@ -127,6 +127,7 @@ test("closure submission projects identities and returns workspace_ops log comma
     kind: "closure",
     jobId,
     resourceId: uuid,
+    identityCompleteness: "complete",
     status: "queued",
     reused: false,
     effectiveInput: {
@@ -218,4 +219,43 @@ test("calculation submission binds the selected closure evidence", async () => {
   );
   assert.equal(code, 0);
   assert.equal(JSON.parse(stdout.value()).data.kind, "calculation");
+});
+
+test("calculation submission succeeds with job-only identity before package materialization", async () => {
+  const stdout = buffer();
+  const code = await runCli(
+    [
+      "calculation",
+      "start",
+      "--name",
+      "Steel",
+      "--closure-check-id",
+      uuid,
+      "--requested-scope-hash",
+      "scope-hash",
+      "--policy-fingerprint",
+      "policy-hash",
+      "--idempotency-key",
+      "build-job-only",
+      "--confirm-start",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async () =>
+        Response.json({
+          ok: true,
+          data: { workerJobId: jobId, status: "queued" },
+        }),
+    },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(code, 0);
+  assert.equal(result.data.jobId, jobId);
+  assert.equal(result.data.resourceId, null);
+  assert.equal(result.data.identityCompleteness, "job_only");
+  assert.equal(result.completeness.status, "submitted");
+  assert.equal(result.replyTemplate.id, "calculation-submitted");
 });

@@ -22,6 +22,7 @@ const templates = Object.freeze({
     [
       "data.jobId",
       "data.resourceId",
+      "data.identityCompleteness",
       "data.status",
       "data.effectiveInput",
       "nextActions",
@@ -32,7 +33,7 @@ const templates = Object.freeze({
     "calculation-submitted.md",
     [
       "data.jobId",
-      "data.resourceId",
+      "data.identityCompleteness",
       "data.status",
       "data.effectiveInput",
       "nextActions",

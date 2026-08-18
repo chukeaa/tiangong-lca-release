@@ -5,6 +5,7 @@
 
 - Closure Check ID：`{{data.resourceId}}`
 - Worker Job ID：`{{data.jobId}}`
+- 身份完整性：`{{data.identityCompleteness}}`
 - 当前状态：`{{data.status}}`
 - 是否复用已有任务：{{data.reused}}
 - 计算范围：`{{data.effectiveInput.coverageMode}}`

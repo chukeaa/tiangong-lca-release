@@ -111,6 +111,11 @@ Closure 和 Calculation 的 `start` 也使用同一个 actor-scoped endpoint，�
 和 policy fingerprint；CLI 不从 mutable 状态推断这些值。返回值只投影任务/资源 ID 和状态，
 忽略 provider 附加字段及 schema 版本。
 
+异步 Calculation 提交以 Worker Job ID 作为最低稳定成功身份。Result Package/Build ID 尚未
+materialize 时返回 `resourceId: null` 和 `identityCompleteness: job_only`，不误报
+`remote_outcome_unknown`；资源 ID 出现后为 `complete`。Closure 提交仍必须同时返回 Closure
+Check ID 和 Worker Job ID。只有无法确认最低稳定身份时才使用结果未知恢复路径。
+
 未传 `--coverage-mode` 和 `--method` 时，当前 Workflow profile 使用：
 
 - coverage：`global_eligible`；

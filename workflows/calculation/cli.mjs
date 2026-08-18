@@ -378,7 +378,7 @@ export async function runCli(
       stdout.write(
         format === "json"
           ? `${JSON.stringify(result)}\n`
-          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n- Reply using template: ${result.replyTemplate.path}\n`,
+          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId ?? "pending"}\n- Identity: ${task.identityCompleteness}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n- Reply using template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }

@@ -18,16 +18,19 @@ function projectTask(data, kind) {
       : (text(data?.buildId) ??
         text(data?.resultPackageId) ??
         text(data?.packageId));
-  if (!isUuid(jobId) || !isUuid(resourceId)) {
+  if (!isUuid(jobId) || (kind === "closure" && !isUuid(resourceId))) {
     throw new ResultSetApiError(
       "remote_outcome_unknown",
-      "The task may have been accepted, but stable job/resource identities were not returned",
+      kind === "closure"
+        ? "The task may have been accepted, but stable Closure/job identities were not returned"
+        : "The calculation may have been accepted, but a stable Worker Job identity was not returned",
     );
   }
   return {
     kind,
     jobId,
-    resourceId,
+    resourceId: isUuid(resourceId) ? resourceId : null,
+    identityCompleteness: isUuid(resourceId) ? "complete" : "job_only",
     status: text(job.status) ?? text(data?.status) ?? "queued",
     reused: data?.reused === true,
   };
