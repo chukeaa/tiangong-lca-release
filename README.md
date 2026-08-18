@@ -45,6 +45,7 @@ create/list/get、Closure Check 与计算任务提交，以及委托根 workspac
 Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
 每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
 Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。
+Calculation 当前默认 profile 是 `global_eligible` 与 Climate change/GWP `6209b35f-9447-40b5-b68c-a1099e3674a0@01.00.000`，命令输出会披露默认值的采用情况。
 
 在任何 Workflow 明确授权之前：
 

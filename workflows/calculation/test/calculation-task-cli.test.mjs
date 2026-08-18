@@ -128,8 +128,52 @@ test("closure submission projects identities and returns workspace_ops log comma
     resourceId: uuid,
     status: "queued",
     reused: false,
+    effectiveInput: {
+      coverageMode: "global_eligible",
+      lciaMethods: [{ id: uuid, version: "01.00.000" }],
+      defaultedInputs: [],
+    },
   });
   assert.match(result.nextActions[0], /workspace_ops/);
+});
+
+test("closure submission uses and discloses the workflow default profile", async () => {
+  const stdout = buffer();
+  await runCli(
+    [
+      "closure",
+      "start",
+      "--result-set-id",
+      uuid,
+      "--idempotency-token",
+      "default-profile-1",
+      "--confirm-start",
+      "--format",
+      "json",
+    ],
+    {
+      stdout: stdout.stream,
+      env,
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        assert.equal(body.requestedScope.coverageMode, "global_eligible");
+        assert.deepEqual(body.requestedScope.lciaMethods, [
+          { id: "6209b35f-9447-40b5-b68c-a1099e3674a0", version: "01.00.000" },
+        ]);
+        return Response.json({
+          ok: true,
+          data: {
+            closureCheckId: uuid,
+            workerJob: { id: jobId, status: "queued" },
+          },
+        });
+      },
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(stdout.value()).data.effectiveInput.defaultedInputs,
+    ["coverageMode", "lciaMethods"],
+  );
 });
 
 test("calculation submission binds the selected closure evidence", async () => {

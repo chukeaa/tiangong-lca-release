@@ -105,6 +105,14 @@ Closure 和 Calculation 的 `start` 也使用同一个 actor-scoped endpoint，�
 和 policy fingerprint；CLI 不从 mutable 状态推断这些值。返回值只投影任务/资源 ID 和状态，
 忽略 provider 附加字段及 schema 版本。
 
+未传 `--coverage-mode` 和 `--method` 时，当前 Workflow profile 使用：
+
+- coverage：`global_eligible`；
+- LCIA method：Climate change / GWP，`6209b35f-9447-40b5-b68c-a1099e3674a0@01.00.000`。
+
+JSON 结果的 `effectiveInput.defaultedInputs` 会明确列出采用默认值的字段。显式参数始终覆盖
+对应默认值；subset 仍必须提供至少一个 `--process`。
+
 Worker 主机、SSH 和 journal 由根 workspace 的 `workspace_ops` 拥有。`worker logs` 不读取日志，
 而是输出应从 `lca-workspace` 根目录执行的精确委托命令：
 

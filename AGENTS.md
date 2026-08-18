@@ -22,7 +22,7 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-18
-lastReviewedCommit: 12b59a9665f63c6b7011bd0ecc174f9340d4f97a
+lastReviewedCommit: 496402961fedf1e4581a506bf96de75165940190
 lastReviewedNote: "Kept runtime ownership workflow-local and isolated provider ResultSet schemas behind a Release-owned reference."
 related:
   - README.md

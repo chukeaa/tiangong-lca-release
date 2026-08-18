@@ -15,6 +15,10 @@ import {
 } from "./result-set-operations.mjs";
 import { createResultSetContextStore } from "./runtime/result-set-context.mjs";
 import { createCalculationTaskApi } from "./adapters/calculation-task-api.mjs";
+import {
+  DEFAULT_CALCULATION_PROFILE,
+  defaultMethodSelections,
+} from "./contracts/default-profile.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
@@ -281,7 +285,10 @@ export async function runCli(
           "confirmation_required",
           `Starting ${family} requires --confirm-start`,
         );
-      const coverageMode = flags.coverageMode;
+      const defaultedInputs = [];
+      const coverageMode =
+        flags.coverageMode ?? DEFAULT_CALCULATION_PROFILE.coverageMode;
+      if (!flags.coverageMode) defaultedInputs.push("coverageMode");
       if (!["global_eligible", "subset"].includes(coverageMode))
         throw new ResultSetOperationError(
           "invalid_request",
@@ -290,14 +297,10 @@ export async function runCli(
       const processes = (flags.processes ?? []).map((value) =>
         selection(value, "--process"),
       );
-      const lciaMethods = (flags.methods ?? []).map((value) =>
-        selection(value, "--method"),
-      );
-      if (!lciaMethods.length)
-        throw new ResultSetOperationError(
-          "invalid_request",
-          "At least one --method is required",
-        );
+      const lciaMethods = flags.methods?.length
+        ? flags.methods.map((value) => selection(value, "--method"))
+        : defaultMethodSelections();
+      if (!flags.methods?.length) defaultedInputs.push("lciaMethods");
       if ((coverageMode === "subset") !== processes.length > 0)
         throw new ResultSetOperationError(
           "invalid_request",
@@ -355,7 +358,10 @@ export async function runCli(
         schemaVersion: CLI_SCHEMA,
         ok: true,
         command,
-        data: task,
+        data: {
+          ...task,
+          effectiveInput: { coverageMode, lciaMethods, defaultedInputs },
+        },
         completeness: { status: "submitted", terminalStateObserved: false },
         nextActions: [logs],
       };
