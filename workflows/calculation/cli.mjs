@@ -20,6 +20,7 @@ import {
   defaultMethodSelections,
 } from "./contracts/default-profile.mjs";
 import { replyTemplateFor } from "./reply-template-registry.mjs";
+import { recommendResultSetName } from "./contracts/result-set-name.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
 const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
@@ -55,6 +56,7 @@ Examples:
 const EXIT_CODES = {
   invalid_request: 2,
   confirmation_required: 3,
+  result_set_name_confirmation_required: 3,
   auth_required: 4,
   result_set_not_found: 5,
   not_data_product_manager: 6,
@@ -165,13 +167,17 @@ function success(command, result) {
 function failure(command, error) {
   const code = error?.code ?? "capability_unavailable";
   const nextActions =
-    code === "confirmation_required"
+    code === "result_set_name_confirmation_required"
       ? [
-          `Repeat the create command with --confirm-create after reviewing the exact name`,
+          `${COMMAND} result-set create --name ${error.details.recommendedName} --confirm-create`,
         ]
-      : code === "remote_outcome_unknown"
-        ? [`${COMMAND} result-set list --format json`]
-        : [];
+      : code === "confirmation_required"
+        ? [
+            `Repeat the create command with --confirm-create after reviewing the exact name`,
+          ]
+        : code === "remote_outcome_unknown"
+          ? [`${COMMAND} result-set list --format json`]
+          : [];
   const output = {
     schemaVersion: CLI_SCHEMA,
     ok: false,
@@ -243,6 +249,7 @@ export async function runCli(
     env = process.env,
     fetchImpl = globalThis.fetch,
     contextRoot = REPOSITORY_CONTEXT,
+    now = () => new Date(),
   } = {},
 ) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -413,8 +420,9 @@ export async function runCli(
     }
     if (action === "create" && !flags.name?.trim()) {
       throw new ResultSetOperationError(
-        "invalid_request",
-        "--name is required",
+        "result_set_name_confirmation_required",
+        "No ResultSet name was supplied; review the recommended name before creating it",
+        { recommendedName: recommendResultSetName(now()) },
       );
     }
     if (action === "create" && !flags.confirmCreate) {

@@ -51,6 +51,7 @@ related:
 - `list` 默认最多返回 20 条，最大 200 条，并把无 cursor 的结果标记为 bounded。
 - `get` 必须使用精确 `resultSetId`；不得按名称隐式选择。
 - `create` 必须在用户确认精确名称后使用 `--confirm-create`。
+- 用户未提供名称时，推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并返回确认命令；不得静默采用推荐值或在推荐阶段访问远程能力。
 - JSON stdout 必须保持 `tiangong.calculation-cli-result.v1` 可解析；诊断不得混入 stdout。
 - 每个 CLI 结果必须返回 `replyTemplate` 的稳定 ID、路径、Markdown 格式、占位符语法和 required facts。Agent 应从可复制正文模板开始，用真实结果替换全部占位符、删除不适用条件行，不让模板覆盖 CLI/远程事实。
 - provider payload 只在 adapter 中解析；外部新增字段或非破坏性版本变化不得使 Workflow 失败。

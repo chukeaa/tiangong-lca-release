@@ -48,6 +48,7 @@ Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换�
 Calculation 当前默认 profile 是 `global_eligible` 与 Climate change/GWP `6209b35f-9447-40b5-b68c-a1099e3674a0@01.00.000`，命令输出会披露默认值的采用情况。
 Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接填值的 Markdown 回复模板，使用克制的状态 emoji 帮助 Agent 区分已提交、已完成、委托查询和远程结果未知等用户回复语义。
 异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
+创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
 
 在任何 Workflow 明确授权之前：
 

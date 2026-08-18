@@ -97,6 +97,7 @@ Workflow 不依赖某个固定的外部 `schemaVersion`，也不要求 provider 
 - `list` 只返回有界的最近结果，并明确标记可能不完整；远程契约当前没有 cursor 或总数。
 - `get` 只接受精确 UUID，不根据名称猜测对象。
 - `create` 是远程副作用，必须传入 `--confirm-create`；远程契约当前没有 idempotency key，结果不确定时不得盲目重试。
+- `create` 未提供名称时不访问网络，而是按 Asia/Shanghai 当前时间推荐 `ResultSet-YYYYMMDD-HHmm`，返回可复制的确认命令；推荐值不会自动创建，用户也可以换成业务语义更强的名称。
 
 运行时通过 `TIANGONG_LCA_DATA_PRODUCT_COMMAND_URL` 或
 `TIANGONG_LCA_API_BASE_URL` 定位 `app_data_product_commands`，并需要

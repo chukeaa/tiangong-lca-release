@@ -44,3 +44,14 @@ test("uncertain remote outcomes use a distinct no-blind-retry reply template", a
   const body = await readFile(path.join(repositoryRoot, template.path), "utf8");
   assert.match(body, /不会自动重试/);
 });
+
+test("missing ResultSet names use the copy-ready recommendation template", async () => {
+  const template = replyTemplateFor("result-set.create", {
+    ok: false,
+    errorCode: "result_set_name_confirmation_required",
+  });
+  assert.equal(template.id, "result-set-name-recommended");
+  const body = await readFile(path.join(repositoryRoot, template.path), "utf8");
+  assert.match(body, /💡/u);
+  assert.match(body, /recommendedName/);
+});

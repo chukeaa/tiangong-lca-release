@@ -108,6 +108,30 @@ test("create requires confirmation before configuration or network access", asyn
   assert.equal(calls, 0);
 });
 
+test("create without a name recommends one before configuration or network access", async () => {
+  const stdout = outputBuffer();
+  let calls = 0;
+  const exitCode = await runCli(["result-set", "create", "--format", "json"], {
+    stdout: stdout.stream,
+    env: {},
+    now: () => new Date("2026-08-18T08:34:00.000Z"),
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("must not be called");
+    },
+  });
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 3);
+  assert.equal(result.error.code, "result_set_name_confirmation_required");
+  assert.equal(result.error.details.recommendedName, "ResultSet-20260818-1634");
+  assert.match(
+    result.nextActions[0],
+    /--name ResultSet-20260818-1634 --confirm-create/,
+  );
+  assert.equal(result.replyTemplate.id, "result-set-name-recommended");
+  assert.equal(calls, 0);
+});
+
 test("create persists the exact remote identity and returns its path", async (t) => {
   const contextRoot = await mkdtemp(
     path.join(os.tmpdir(), "release-result-set-cli-"),

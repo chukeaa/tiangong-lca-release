@@ -49,17 +49,23 @@ const templates = Object.freeze({
 export function replyTemplateFor(command, { ok, errorCode } = {}) {
   const entry = ok
     ? templates[command]
-    : errorCode === "remote_outcome_unknown"
+    : errorCode === "result_set_name_confirmation_required"
       ? [
-          "remote-outcome-unknown",
-          "remote-outcome-unknown.md",
-          ["command", "error", "nextActions"],
+          "result-set-name-recommended",
+          "result-set-name-recommended.md",
+          ["error.details.recommendedName", "nextActions"],
         ]
-      : [
-          "command-failed",
-          "command-failed.md",
-          ["command", "error", "nextActions"],
-        ];
+      : errorCode === "remote_outcome_unknown"
+        ? [
+            "remote-outcome-unknown",
+            "remote-outcome-unknown.md",
+            ["command", "error", "nextActions"],
+          ]
+        : [
+            "command-failed",
+            "command-failed.md",
+            ["command", "error", "nextActions"],
+          ];
   const [id, filename, requiredFacts] = entry;
   return {
     id,
