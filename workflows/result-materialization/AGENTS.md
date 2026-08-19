@@ -13,11 +13,11 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed exact source-version Result variants and quantitative-reference pivot evidence handling."
+lastReviewedCommit: 9adfbf11942428fba306360c264e9a39d27a4f3e
+lastReviewedNote: "Reviewed the executable contract against the conceptual Result Process and LifecycleModel design."
 related:
   - README.md
-  - design/resolved-one-hop-materialization.md
+  - design/result-process-and-lifecycle-model.md
   - ../AGENTS.md
 ---
 
@@ -61,7 +61,7 @@ related:
 - 主数据集、resulting Result 和 dependency Result 必须分别标记并分别计数。
 - LCIA recipe 必须包含或引用同一 Result Process 的完整 LCI 层。
 - LifecycleModel recipe 必须同时绑定精确 Result Process identity/version。
-- 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/resolved-one-hop-materialization.md`。
+- 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/result-process-and-lifecycle-model.md`。
 - 每条有效 direct provider edge 对应一个引用聚合 `R(Q)` 的 provider process instance；不得只用 root `U(P)` 包装聚合 `R(P)`。
 - one-hop 是 LifecycleModel recipe 的显式 profile，不得被隐式套用到不生成 LifecycleModel 的 Result-only recipe。
 

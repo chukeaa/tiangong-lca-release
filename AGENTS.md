@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 7e47912bee706c7c8cdd0ba8b807d01598e07ff3
-lastReviewedNote: "Kept Result Materialization workflow-local while exposing one scope/output/result-layer request over deterministic internal convergence."
+lastReviewedCommit: 9adfbf11942428fba306360c264e9a39d27a4f3e
+lastReviewedNote: "Reviewed the repository contract while reframing Result Materialization documentation around its current domain model."
 related:
   - README.md
   - .docpact/config.yaml
@@ -105,8 +105,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`codex/fix-issue-11-materialization-recipes`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
+- 当前工作分支：`codex/docs-issue-17-conceptual-materialization`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#17`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

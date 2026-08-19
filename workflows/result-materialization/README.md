@@ -17,7 +17,7 @@ lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
 lastReviewedNote: "Documented multi-revision Result lineages and quantitative-reference pivot handling."
 related:
   - AGENTS.md
-  - design/resolved-one-hop-materialization.md
+  - design/result-process-and-lifecycle-model.md
   - ../../README.md
 ---
 
@@ -67,7 +67,7 @@ M(P)
 - LCIA 默认作为同一 Result Process 上的可选结果层，不单独制造只有 LCIA、没有 LCI 的 Process。
 - 如果未来标准或消费者确实要求独立 LCIA Process，再增加经过验证的 recipe。
 
-完整的单条、范围、provider instance 和验证规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。
+对象关系、生成模式和 provider 连接原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。
 
 ## 一个入口，由三个选择决定执行图
 
@@ -155,7 +155,7 @@ node cli.mjs materialize \
 
 同一次请求中多个 exact axes 可以共享一个 Result UUID lineage。Workflow 不按 UUID 去重，而是为每个 exact source Process revision 分配独立 dataset version；previous manifest 按 source UUID@version 精确匹配，LifecycleModel 也按 process index 引用对应的 Result UUID@version。first generation 和新增 revision 使用确定性顺序分配未占用的 major version。
 
-Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。完整规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。整个过程不会上传或发布。
+Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。领域原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。整个过程不会上传或发布。
 
 CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下一条可复制命令；大数据集始终写入文件。
 
