@@ -110,7 +110,7 @@ workflows/
 
 它包括：
 
-- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel）和结果层（LCI 或 LCI + LCIA）；
+- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel），以及本次生成的 Result Process 内容层（LCI 或 LCI + LCIA）；
 - Result Process 只处理所选 roots；LifecycleModel 在一次动作中从 direct edges 派生依赖、冻结 Result Catalog 并生成最终 Model；
 - 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
 - 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
@@ -121,7 +121,7 @@ workflows/
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 
-LCI Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。
+LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。LifecycleModel 本身不保存 LCI/LCIA 数值，只引用本次生成的精确 Result Process。
 
 详见 [Result Materialization Workflow](workflows/result-materialization/README.md)。
 

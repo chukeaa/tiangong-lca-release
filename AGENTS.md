@@ -60,7 +60,7 @@ related:
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
 - `workflows/release`：package、candidate、approval、publish 和 readback。
 
-完整性验证属于 Calculation；LCI/LCIA Result Process 和 LifecycleModel 生成属于 Result Materialization；Packaging 属于 Release。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。
+完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 属于 Release。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。
 
 ## 所有权
 
@@ -126,5 +126,5 @@ related:
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
 - Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
-- Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和结果层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
+- Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和 Result Process 内容层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
 - 当前变更通过仓库门禁并形成独立 Git commit。

@@ -52,9 +52,9 @@ related:
 
 ## Recipe 规则
 
-- LCI Result Process、LCI + LCIA Result Process、LifecycleModel 是同一 Workflow 的 recipe。
+- LCI Result Process、LCI + LCIA Result Process、LifecycleModel 是同一 Workflow 的 recipe；LifecycleModel 本身不含 LCI/LCIA 数值，`resultProcessLayer` 只控制它引用的 resulting/dependency Result Process。
 - Recipe 必须声明输出 role、依赖、必需证据和 validator。
-- 公开入口必须先收敛 `scope + outputType + resultLayer`；内部 Result/Model 两阶段不得要求用户手动串联。
+- 公开入口必须先收敛 `scope + outputType + resultProcessLayer`；内部 Result/Model 两阶段不得要求用户手动串联。
 - `materialize-result` 和 `compose-model` 只是一个 `materialize` 请求内的执行节点，不得作为需要用户先后运行的公开工作流呈现。
 - `result-process` 只物化 requested roots，不自动扩展 provider；`lifecycle-model` 才扩展 direct provider Results 并在同一次动作中生成 Model。
 - `lifecycle-model` 的主要对象是 requested-root `M(P)`；内部 `R(P)` 标记为 resulting、`R(Q)` 标记为 dependency，且不得自动生成 provider `M(Q)`。

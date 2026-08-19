@@ -24,7 +24,7 @@ export async function materializeResults({
   outDir,
   processUuids,
   includeDirectProviders = false,
-  resultLayer = "lci-lcia",
+  resultProcessLayer = "lci-lcia",
   firstGeneration = false,
   previousManifestPath,
 }) {
@@ -42,11 +42,11 @@ export async function materializeResults({
   const rootAxes = selectAxes(context, processUuids);
   if (!rootAxes.length)
     fail("empty_selection", "Result materialization selection is empty");
-  const profile = RESULT_PROFILES[resultLayer];
+  const profile = RESULT_PROFILES[resultProcessLayer];
   if (!profile)
     fail(
-      "unsupported_result_layer",
-      `Unsupported result layer: ${resultLayer}`,
+      "unsupported_result_process_layer",
+      `Unsupported Result Process layer: ${resultProcessLayer}`,
     );
   const rootIndexes = new Set(rootAxes.map((axis) => axis.processIndex));
   const requiredIndexes = new Set(rootIndexes);
@@ -66,7 +66,7 @@ export async function materializeResults({
       context,
       axis,
       "01.00.000",
-      resultLayer,
+      resultProcessLayer,
     );
     const hashes = resultHashes(provisional);
     return { axis, provisional, hashes };
@@ -78,7 +78,7 @@ export async function materializeResults({
       context,
       axis,
       resolution.version,
-      resultLayer,
+      resultProcessLayer,
     );
     const finalHashes = resultHashes(rendered);
     const descriptor = {
@@ -129,7 +129,7 @@ export async function materializeResults({
       schemaVersion: "tiangong.release.result-catalog.v1",
       completeness: "complete-for-selection",
       outputType: includeDirectProviders ? "lifecycle_model" : "result_process",
-      resultLayer,
+      resultProcessLayer,
       calculationId: context.intake.source.calculationId,
       bundleContentHash: context.intake.source.bundleContentHash,
       selection: rootAxes.map((axis) => axis.rootProcess).sort(compareIdentity),

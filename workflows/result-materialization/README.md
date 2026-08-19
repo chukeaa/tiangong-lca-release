@@ -71,7 +71,7 @@ M(P)
 
 ## 一个入口，由三个选择决定执行图
 
-用户先选择范围，再选择最终对象和结果层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令：
+用户先选择范围，再选择最终对象，以及本次需要生成的 Result Process 内容层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令。LifecycleModel 本身没有 LCI/LCIA 结果字段，第三个选择只控制 `R(P)` 和依赖 `R(Q)` 的内容：
 
 1. `lci-result-process`
    - 生成 quantitative reference 和聚合 LCI exchanges；
@@ -83,7 +83,7 @@ M(P)
    - 方法集变化必须进入版本和 provenance 判断。
 3. `lifecycle-model-with-result`
    - 生成 LifecycleModel；
-   - 同时选择 LCI-only 或 LCI + LCIA Result Process；
+   - 同时生成 LCI-only 或 LCI + LCIA 的 resulting/dependency Result Process；
    - 首版使用 `resolved-one-hop-aggregated-background.v1` 组合 profile；
    - 将根 `U(P)`、direct provider `R(Q)`、connections、multiplication factors 和 resulting `R(P)` 精确绑定。
 
@@ -91,7 +91,7 @@ M(P)
 
 1. `scope`：单条、指定一批或全部 eligible Process，显式选择使用 `UUID@version`；
 2. `outputType`：`result-process` 或 `lifecycle-model`；
-3. `resultLayer`：`lci` 或 `lci-lcia`，不支持 LCIA-only。
+3. `resultProcessLayer`：本次生成的 Result Process 包含 `lci` 或 `lci-lcia`，不支持 LCIA-only；它不是 LifecycleModel 的结果层。
 
 `result-process` 对每个 root 只生成一个主要 `R(P)`，不扩展 provider。`lifecycle-model` 对每个 root 生成一个主要 `M(P)`，并在同一次动作的内部执行图中生成 resulting `R(P)` 和 direct provider dependency `R(Q)`。这些 Result datasets 是 Model 闭合所需的组成部分，不是额外的主要用户输出，也不会计入主要对象数量；不会自动生成 provider 的 `M(Q)`。身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
 
@@ -99,7 +99,7 @@ M(P)
 
 ```text
 读取并验证冻结输入
-  -> 冻结 scope + outputType + resultLayer
+  -> 冻结 scope + outputType + resultProcessLayer
   -> 仅在 lifecycle-model 模式从 direct edges 派生 required Result set
   -> 确认 metadata completion policy
   -> 派生稳定 identity lineage并读取上一版 manifest
@@ -131,7 +131,7 @@ node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
   --processes <UUID@VERSION> \
   --output-type result-process \
-  --result-layer lci-lcia \
+  --result-process-layer lci-lcia \
   --out-dir /path/to/materialized/result-process \
   --first-generation \
   --json
@@ -141,7 +141,7 @@ node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
   --processes <UUID@VERSION> \
   --output-type lifecycle-model \
-  --result-layer lci-lcia \
+  --result-process-layer lci-lcia \
   --out-dir /path/to/materialized/lifecycle-model \
   --first-generation \
   --json
@@ -164,7 +164,7 @@ CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下�
 - 选择处理范围；
 - 选择最终对象 `result-process` 或 `lifecycle-model`；
 - 是否显式选择未来新增、已经过验证的非默认模型组织 profile；
-- 输出 LCI-only 还是 LCI + LCIA；
+- 本次生成并由 Model 引用的 Result Process 是 LCI-only 还是 LCI + LCIA；
 - 需要使用的上一版 Release Manifest；
 - 无法从输入确定的名称、描述、分类、地理、时间、技术和来源字段；
 - metadata 冲突时继承、声明或阻塞。

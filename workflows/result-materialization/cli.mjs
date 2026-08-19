@@ -17,7 +17,7 @@ materialize options:
   --processes <list>   Comma-separated UUID@version selectors
   --all                Select every eligible Process in the Calculation Bundle
   --output-type <type> result-process or lifecycle-model
-  --result-layer <layer> lci or lci-lcia
+  --result-process-layer <layer> Result Process content: lci or lci-lcia
   --out-dir <path>     New immutable materialization directory
   --first-generation   Confirm that no previous Release Manifest exists
   --previous-manifest <path>  Previous materialization/release manifest
@@ -48,9 +48,9 @@ async function main() {
       calculationId: result.intake.source.calculationId,
       bundleContentHash: result.intake.source.bundleContentHash,
       nextAction: {
-        command: `node cli.mjs materialize --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
+        command: `node cli.mjs materialize --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
         description:
-          "Choose scope, final dataset type, and result layer, then materialize the complete local delivery.",
+          "Choose scope, final dataset type, and the Result Process content layer, then materialize the complete local delivery. LifecycleModel itself does not contain LCI/LCIA results.",
       },
     });
     return;
@@ -60,7 +60,7 @@ async function main() {
       "intake",
       "out-dir",
       "output-type",
-      "result-layer",
+      "result-process-layer",
     ]);
     requireSelection(options);
     const result = await materialize({
@@ -68,7 +68,7 @@ async function main() {
       outDir: options["out-dir"],
       processUuids: options.all ? undefined : splitSelectors(options.processes),
       outputType: options["output-type"],
-      resultLayer: options["result-layer"],
+      resultProcessLayer: options["result-process-layer"],
       firstGeneration: Boolean(options["first-generation"]),
       previousManifestPath: options["previous-manifest"],
     });
@@ -79,7 +79,7 @@ async function main() {
       output: result.path,
       completeness: result.manifest.completeness,
       outputType: result.request.outputType,
-      resultLayer: result.request.resultLayer,
+      resultProcessLayer: result.request.resultProcessLayer,
       ...result.summary,
       manifest: `${result.path}/materialization-manifest.json`,
       nextAction: {

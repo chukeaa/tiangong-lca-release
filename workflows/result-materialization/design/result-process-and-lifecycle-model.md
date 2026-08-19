@@ -12,7 +12,7 @@ whenToUse:
   - 当判断 LifecycleModel 应连接哪些过程时
 whenToUpdate:
   - 当 Result Process 或 LifecycleModel 的领域含义发生变化时
-  - 当范围、结果层级或模型连接原则变化时
+  - 当范围、Result Process 内容层或模型连接原则变化时
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
@@ -36,9 +36,11 @@ related:
 
 1. **处理哪些数据**：一条 Process、指定的一批 Process，或者全部符合条件的 Process；
 2. **生成什么对象**：Result Process，还是 LifecycleModel；
-3. **保留哪一层结果**：只有 LCI，还是同时包含 LCI 和 LCIA。
+3. **生成哪种 Result Process**：只包含 LCI，还是同时包含 LCI 和 LCIA。
 
-这三个选择彼此独立。范围决定“处理谁”，对象类型决定“生成什么”，结果层决定“写入哪些计算结果”。
+这三个选择彼此独立。范围决定“处理谁”，对象类型决定主要交付物是 `R(P)` 还是 `M(P)`，第三项决定本次生成的 `R(P)` 和依赖 `R(Q)` 包含哪些计算结果。
+
+LifecycleModel 本身没有 LCI 或 LCIA 结果字段。它保存过程实例和连接关系，并通过精确 UUID/version 引用 Result Process。因此，“LCI 或 LCI + LCIA”始终是在描述 Result Process，不是在描述 LifecycleModel。
 
 ## 三种对象
 
@@ -114,16 +116,16 @@ LifecycleModel 模式不会为 provider 自动生成 `M(Q)`。背景 `R(Q)` 已�
 
 如果同一条输入由多个 provider 分摊，每条已求解的 provider 关系都要单独表达。即使多个连接引用同一个 `R(Q)`，它们的用量、exchange 和证据仍可能不同，不能为了减少节点而随意合并。
 
-## LCI 与 LCIA 的选择
+## Result Process 包含 LCI 还是 LCI + LCIA
 
-对象类型和结果层是两个不同维度：
+无论主要对象是哪一种，LCI/LCIA 选择都只作用于本次生成的 Result Process：
 
-| 对象类型       | LCI                        | LCI + LCIA                              |
-| -------------- | -------------------------- | --------------------------------------- |
-| Result Process | `R(P)` 包含清单结果        | `R(P)` 同时包含清单和影响评价结果       |
-| LifecycleModel | `M(P)` 引用 LCI 结果数据集 | `M(P)` 引用同时含 LCI/LCIA 的结果数据集 |
+| 主要对象       | Result Process 内容                                       | LifecycleModel 中的表达 |
+| -------------- | --------------------------------------------------------- | ----------------------- |
+| Result Process | `R(P)` 包含 LCI，或同时包含 LCI 和 LCIA                   | 不生成 Model            |
+| LifecycleModel | resulting `R(P)` 和 dependency `R(Q)` 按选择包含 LCI/LCIA | `M(P)` 只引用这些结果   |
 
-选择 LifecycleModel 并不自动表示需要 LCIA；选择 LCI + LCIA 也不自动表示需要 LifecycleModel。
+所以不存在“带有 LCIA 的 LifecycleModel”这种数据含义。准确说法是：“LifecycleModel 引用的 Result Process 同时包含 LCI 和 LCIA”。
 
 ## 数值关系
 
@@ -173,7 +175,7 @@ Result Process 的 UUID 表示稳定的业务 lineage。它由源 Process 的 UU
 ```text
 范围：P
 对象：Result Process
-结果：LCI + LCIA
+Result Process 内容：LCI + LCIA
 ```
 
 主要输出是一个包含 LCI 和 LCIA 的 `R(P)`。
@@ -183,7 +185,7 @@ Result Process 的 UUID 表示稳定的业务 lineage。它由源 Process 的 UU
 ```text
 范围：P
 对象：LifecycleModel
-结果：LCI + LCIA
+引用的 Result Process 内容：LCI + LCIA
 ```
 
 主要输出是一个 `M(P)`。为了让它完整可读，本地还会生成或复用 `R(P)`、`R(Q1)` 和 `R(Q2)`。`M(P)` 表达 `U(P)` 如何按计算确定的用量连接 `R(Q1)` 和 `R(Q2)`，并指向最终的 `R(P)`。

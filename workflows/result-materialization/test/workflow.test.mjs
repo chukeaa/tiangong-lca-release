@@ -74,7 +74,7 @@ test("CLI exposes one intent-level materialize command and requires all three ch
   assert.equal(help.status, 0);
   assert.match(help.stdout, /materialize\s+/);
   assert.match(help.stdout, /--output-type <type>/);
-  assert.match(help.stdout, /--result-layer <layer>/);
+  assert.match(help.stdout, /--result-process-layer <layer>/);
   assert.doesNotMatch(help.stdout, /materialize-results/);
   assert.doesNotMatch(help.stdout, /materialize-models/);
   const invalid = spawnSync(
@@ -88,7 +88,7 @@ test("CLI exposes one intent-level materialize command and requires all three ch
       "/tmp/output",
       "--output-type",
       "result-process",
-      "--result-layer",
+      "--result-process-layer",
       "lci",
       "--json",
     ],
@@ -279,7 +279,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     outDir: path.join(temp, "result-only-delivery"),
     processUuids: [`${PROCESS_ID}@01.00.000`],
     outputType: "result-process",
-    resultLayer: "lci",
+    resultProcessLayer: "lci",
     firstGeneration: true,
   });
   assert.deepEqual(resultOnly.summary, {
@@ -296,7 +296,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     outDir: path.join(temp, "model-delivery"),
     processUuids: [`${PROCESS_ID}@01.00.000`],
     outputType: "lifecycle-model",
-    resultLayer: "lci-lcia",
+    resultProcessLayer: "lci-lcia",
     firstGeneration: true,
   });
   assert.deepEqual(modelDelivery.summary, {
