@@ -17,13 +17,31 @@ import { readNdjson } from "./records.mjs";
 export const PACKAGE_PROFILE =
   "standalone-lifecyclemodel-result-full-closure.v1";
 
+const DISTRIBUTION_PACKAGES = [
+  ["unit-process-full-closure.v1.tidas.zip", "UnitProcessDatabase", "tidas"],
+  ["unit-process-full-closure.v1.ilcd.zip", "UnitProcessDatabase", "ilcd"],
+  [
+    "standalone-lifecyclemodel-result-full-closure.v1.tidas.zip",
+    "ResultDatabase",
+    "tidas",
+  ],
+  [
+    "standalone-lifecyclemodel-result-full-closure.v1.ilcd.zip",
+    "ResultDatabase",
+    "ilcd",
+  ],
+];
+
 export async function buildPackageCandidate({
   materializationDir,
   intakeDir,
   outDir,
+  releaseVersion,
   tidasBin = process.env.TIDAS_BIN ?? "tidas",
   runTool = runTidas,
+  verifyTool = verifyBuiltPackages,
 }) {
+  validateReleaseVersion(releaseVersion);
   const materializationRoot = path.resolve(materializationDir);
   const intakeRoot = path.resolve(intakeDir);
   const target = path.resolve(outDir);
@@ -59,6 +77,7 @@ export async function buildPackageCandidate({
     await writeFile(indexPath, canonicalJson(assembledIndex), { flag: "wx" });
     const plan = {
       schemaVersion: "tiangong.release.package-plan.v1",
+      releaseVersion,
       profile: PACKAGE_PROFILE,
       materialization: {
         manifestSha256: hashJson(manifest),
@@ -92,9 +111,21 @@ export async function buildPackageCandidate({
       indexPath,
       packagesDir,
     });
+    await applyDistributionNames(packagesDir, releaseVersion);
+    const packageVerification = await verifyTool({
+      tidasBin,
+      packagesDir,
+      workspace,
+      releaseVersion,
+    });
     await writeFile(
       path.join(candidateStaging, "tidas-release-report.json"),
       canonicalJson(toolResult),
+      { flag: "wx" },
+    );
+    await writeFile(
+      path.join(candidateStaging, "package-verification-report.json"),
+      canonicalJson(packageVerification),
       { flag: "wx" },
     );
     const packages = await packageArtifacts(packagesDir);
@@ -110,6 +141,7 @@ export async function buildPackageCandidate({
       schemaVersion: "tiangong.release.release-candidate.v1",
       status: "local_candidate",
       publicationAuthorized: false,
+      releaseVersion,
       profile: PACKAGE_PROFILE,
       packagePlanSha256: hashJson(plan),
       canonicalDatasetIndexSha256: hashJson(assembledIndex),
@@ -125,6 +157,7 @@ export async function buildPackageCandidate({
         delegatedTo: "tidas-tools",
         outcome: "passed",
         reportPath: "tidas-release-report.json",
+        archiveReadbackReportPath: "package-verification-report.json",
       },
     };
     await writeFile(
@@ -142,6 +175,113 @@ export async function buildPackageCandidate({
     await rm(workspace, { recursive: true, force: true });
     await rm(candidateStaging, { recursive: true, force: true });
   }
+}
+
+function validateReleaseVersion(value) {
+  if (
+    typeof value !== "string" ||
+    !/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/.test(value) ||
+    value.includes("..")
+  )
+    fail(
+      "release_version_invalid",
+      "--release-version must be 1-64 filename-safe characters and may not contain '..'",
+    );
+}
+
+async function applyDistributionNames(packagesDir, releaseVersion) {
+  for (const [source, product, format] of DISTRIBUTION_PACKAGES) {
+    await rename(
+      path.join(packagesDir, source),
+      path.join(
+        packagesDir,
+        `TiangongLCA-${releaseVersion}-${product}.${format}.zip`,
+      ),
+    );
+  }
+}
+
+export async function verifyBuiltPackages({
+  tidasBin,
+  packagesDir,
+  workspace,
+  releaseVersion,
+  spawnCommand = spawnBounded,
+}) {
+  const packages = [];
+  for (const [, product, format] of DISTRIBUTION_PACKAGES) {
+    const fileName = `TiangongLCA-${releaseVersion}-${product}.${format}.zip`;
+    const archive = path.join(packagesDir, fileName);
+    const archiveBytes = await readFile(archive);
+    const listing = await spawnCommand("unzip", ["-Z1", archive]);
+    if (listing.code !== 0)
+      fail(
+        "package_archive_invalid",
+        `Cannot read ZIP member catalog: ${fileName}`,
+      );
+    const members = listing.stdout.split(/\r?\n/u).filter(Boolean);
+    if (
+      members.length === 0 ||
+      members.some(
+        (member) =>
+          member.startsWith("/") || member.split(/[\\/]/u).includes(".."),
+      )
+    )
+      fail(
+        "package_archive_invalid",
+        `ZIP contains no members or unsafe paths: ${fileName}`,
+      );
+    const extracted = path.join(workspace, "readback", fileName);
+    await mkdir(extracted, { recursive: true });
+    const extraction = await spawnCommand("unzip", [
+      "-qq",
+      archive,
+      "-d",
+      extracted,
+    ]);
+    if (extraction.code !== 0)
+      fail("package_archive_invalid", `Cannot extract ZIP: ${fileName}`);
+    const action = format === "tidas" ? "validate-tidas" : "validate-ilcd";
+    const validation = await spawnCommand(tidasBin, [
+      "release",
+      action,
+      "--input-dir",
+      extracted,
+      "--format",
+      "json",
+    ]);
+    if (validation.code !== 0)
+      fail(
+        `${format}_package_validation_failed`,
+        `${format.toUpperCase()} validation failed after ZIP readback: ${fileName}`,
+        { stderr: validation.stderr.slice(-4000) },
+      );
+    let report;
+    try {
+      report = JSON.parse(validation.stdout);
+    } catch {
+      fail(
+        "tidas_output_invalid",
+        `Validator returned invalid JSON for ${fileName}`,
+      );
+    }
+    packages.push({
+      fileName,
+      product,
+      format,
+      memberCount: members.length,
+      byteSize: archiveBytes.length,
+      sha256: sha256Bytes(archiveBytes),
+      outcome: "passed",
+      validation: report,
+    });
+  }
+  return {
+    schemaVersion: "tiangong.release.package-verification.v1",
+    releaseVersion,
+    outcome: "passed",
+    packages,
+  };
 }
 
 async function assembleCanonicalCollection({
@@ -350,9 +490,16 @@ function spawnBounded(command, args) {
         reject(
           Object.assign(
             new Error(
-              `tidas executable not found: ${command}; install tidas or pass --tidas-bin`,
+              command === "unzip"
+                ? "Required archive reader not found: unzip"
+                : `tidas executable not found: ${command}; install tidas or pass --tidas-bin`,
             ),
-            { code: "tidas_executable_missing" },
+            {
+              code:
+                command === "unzip"
+                  ? "archive_reader_missing"
+                  : "tidas_executable_missing",
+            },
           ),
         );
       else reject(error);

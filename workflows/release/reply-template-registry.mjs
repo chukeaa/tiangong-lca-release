@@ -7,6 +7,7 @@ const templates = Object.freeze({
     [
       "candidate",
       "profile",
+      "releaseVersion",
       "packageCount",
       "packageSetHash",
       "publicationAuthorized",

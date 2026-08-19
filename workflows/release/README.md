@@ -101,6 +101,7 @@ node cli.mjs package build \
   --materialization /path/to/materialized-lifecycle-model \
   --intake /path/to/verified-intake \
   --profile standalone-lifecyclemodel-result-full-closure.v1 \
+  --release-version 2026.08.0 \
   --out-dir /path/to/release-candidate \
   --tidas-bin /path/to/tidas \
   --json
@@ -127,7 +128,9 @@ Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板�
   -> 生成完整 canonical-dataset-index
   -> 冻结 Package Plan
   -> 调用 tidas release build-packages
-  -> 保存四个确定性 ZIP + tidas report
+  -> 以正式数据库发行名称保存四个确定性 ZIP
+  -> 逐包重新读取 ZIP member、隔离解压并执行 TIDAS/eILCD validation
+  -> 保存 tidas report + package-verification-report
   -> 冻结 publicationAuthorized=false 的 Release Candidate
 ```
 
@@ -135,14 +138,23 @@ Release 不在 Node 实现中复制引用遍历、TIDAS/eILCD validation、schem
 
 当前只支持 `standalone-lifecyclemodel-result-full-closure.v1`。Result Process-only materialization 会以 `package_profile_unsupported` 停止；只有未来 `tidas-tools` 增加并验证对应 profile 后才扩展。
 
+内部 profile ID 用于闭包求解和机器验证，不作为独立分发文件名。外部产品名称按 LCA 数据库内容区分：`UnitProcessDatabase` 表示可继续建模的单元过程数据库，`ResultDatabase` 表示包含 LifecycleModel、LCI/LCIA Result Process 及其自包含依赖的结果数据库。显式 `--release-version` 同时进入 Package Plan、Candidate 和四个文件名，禁止 mutable `latest`。
+
+打包完成后的验证以最终 ZIP 字节为输入，而不是复用 staging 结论。Workflow 先读取完整 member catalog 并拒绝空包、绝对路径和 `..` 路径，再隔离解压；两个 `.tidas.zip` 分别调用 `tidas release validate-tidas`，两个 `.ilcd.zip` 分别调用 `tidas release validate-ilcd`。任一归档无法读取、解压或验证时都不会冻结 Candidate。
+
 Candidate 目录包含：
 
 ```text
 package-plan.json
 canonical-dataset-index.json
 tidas-release-report.json
+package-verification-report.json
 release-candidate.json
 packages/                              # exactly four deterministic ZIPs
+  TiangongLCA-<version>-UnitProcessDatabase.tidas.zip
+  TiangongLCA-<version>-UnitProcessDatabase.ilcd.zip
+  TiangongLCA-<version>-ResultDatabase.tidas.zip
+  TiangongLCA-<version>-ResultDatabase.ilcd.zip
 ```
 
 ## 人工审批

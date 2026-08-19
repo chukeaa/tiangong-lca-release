@@ -11,6 +11,7 @@ const VALUE_OPTIONS = new Set([
   "materialization",
   "intake",
   "profile",
+  "release-version",
   "out-dir",
   "tidas-bin",
 ]);
@@ -25,6 +26,7 @@ package build options:
   --materialization <path>  Completed Result Materialization directory
   --intake <path>           Verified local intake containing source_closure
   --profile <id>            ${PACKAGE_PROFILE}
+  --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
   --tidas-bin <path>        tidas executable; defaults to TIDAS_BIN or PATH lookup
 
@@ -38,7 +40,8 @@ TIDAS/eILCD validation, semantic round-trip, and deterministic ZIP creation to t
 Example:
   release-package package build --materialization .release/materialization/lifecycle-model \\
     --intake .release/materialization/intakes/<bundle-hash> \\
-    --profile ${PACKAGE_PROFILE} --out-dir .release/candidates/<candidate-name> --json
+    --profile ${PACKAGE_PROFILE} --release-version 2026.08.0 \
+    --out-dir .release/candidates/<candidate-name> --json
 
 JSON results include outcome, completeness, artifact paths, nextActions, and a workflow-local replyTemplate.
 `;
@@ -64,7 +67,13 @@ async function main() {
     process.stdout.write(HELP);
     return;
   }
-  requireOptions(options, ["materialization", "intake", "profile", "out-dir"]);
+  requireOptions(options, [
+    "materialization",
+    "intake",
+    "profile",
+    "release-version",
+    "out-dir",
+  ]);
   if (options.profile !== PACKAGE_PROFILE) {
     throw Object.assign(
       new Error(
@@ -78,14 +87,16 @@ async function main() {
     intakeDir: path.resolve(options.intake),
     outDir: path.resolve(options["out-dir"]),
     tidasBin: options["tidas-bin"],
+    releaseVersion: options["release-version"],
   });
   const candidateManifest = path.join(result.path, "release-candidate.json");
   respond(options, {
     ok: true,
     command: COMMAND,
     outcome: "candidate_built",
-    completeness: "full-closure-validated",
+    completeness: "full-closure-and-archives-validated",
     profile: result.candidate.profile,
+    releaseVersion: result.candidate.releaseVersion,
     candidate: result.path,
     packageCount: result.candidate.packages.length,
     packageSetHash: result.candidate.packageSetHash,
@@ -98,6 +109,10 @@ async function main() {
         "canonical-dataset-index.json",
       ),
       tidasReport: path.join(result.path, "tidas-release-report.json"),
+      packageVerification: path.join(
+        result.path,
+        "package-verification-report.json",
+      ),
       packagesDirectory: path.join(result.path, "packages"),
     },
     nextActions: [
