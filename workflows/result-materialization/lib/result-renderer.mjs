@@ -64,10 +64,12 @@ export function renderResultProcess(
   publication["common:workflowAndPublicationStatus"] = "Working draft";
 
   referenceExchange["@dataSetInternalID"] = "0";
-  referenceExchange.meanAmount = String(axis.quantitativeReference.meanAmount);
-  referenceExchange.resultingAmount = String(
-    axis.quantitativeReference.meanAmount,
+  referenceExchange.exchangeDirection = axis.referencePivot.rawDirection;
+  referenceExchange.meanAmount = finiteString(
+    axis.referencePivot.normalizedMeanAmount,
+    "quantitativeReference.normalizedMeanAmount",
   );
+  referenceExchange.resultingAmount = referenceExchange.meanAmount;
   referenceExchange.dataDerivationTypeStatus = "Calculated";
   data.processInformation.quantitativeReference.referenceToReferenceFlow = "0";
   const lci = [...(context.lci.get(axis.processIndex) ?? [])].sort(
@@ -79,7 +81,8 @@ export function renderResultProcess(
         !(
           record.flow.id.toLowerCase() ===
             axis.quantitativeReference.flow.id.toLowerCase() &&
-          normalizeDirection(record.direction) === "Output"
+          normalizeDirection(record.direction) ===
+            axis.referencePivot.rawDirection
         ),
     )
     .map((record, index) => ({
@@ -128,6 +131,7 @@ export function renderResultProcess(
     profile,
     identity: identity.evidence,
     sourceProcess: structuredClone(axis.rootProcess),
+    referencePivot: structuredClone(axis.referencePivot),
     document: result,
     counts: { lci: lci.length, lcia: lcia.length },
   };
@@ -150,9 +154,11 @@ function validateReference(unitProcess, axis) {
   const exchange = exchanges[0];
   const flow = exchange.referenceToFlowDataSet;
   if (
-    exchange.exchangeDirection !== "Output" ||
     !Number.isFinite(Number(exchange.meanAmount)) ||
     Number(exchange.meanAmount) === 0 ||
+    normalizeDirection(exchange.exchangeDirection) !==
+      axis.referencePivot.rawDirection ||
+    Number(exchange.meanAmount) !== axis.referencePivot.rawMeanAmount ||
     flow?.["@refObjectId"]?.toLowerCase() !==
       axis.quantitativeReference.flow.id.toLowerCase() ||
     flow?.["@version"] !== axis.quantitativeReference.flow.version

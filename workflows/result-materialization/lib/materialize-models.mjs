@@ -36,7 +36,7 @@ export async function materializeModels({
   const previousManifest = previousManifestPath
     ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
     : null;
-  const previous = indexPrevious(previousManifest);
+  const previous = indexPrevious(previousManifest, ["lifecyclemodel"]);
   const context = await loadMaterializationContext(intakeDir);
   const catalogFile = path.resolve(resultCatalogPath);
   const catalog = JSON.parse(await readFile(catalogFile, "utf8"));

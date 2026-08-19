@@ -22,7 +22,7 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: ab21774eb5140f817b2679bcc06bf53fcfc896c5
+lastReviewedCommit: 7e47912bee706c7c8cdd0ba8b807d01598e07ff3
 lastReviewedNote: "Kept Result Materialization workflow-local while exposing one scope/output/result-layer request over deterministic internal convergence."
 related:
   - README.md

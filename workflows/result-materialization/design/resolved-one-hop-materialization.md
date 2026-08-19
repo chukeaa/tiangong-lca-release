@@ -15,9 +15,9 @@ whenToUpdate:
   - 当 provider edge、identity/version、validation 或本地输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-18
+lastReviewedAt: 2026-08-19
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Defined intent-level materialization requests and internal Result/Model convergence."
+lastReviewedNote: "Defined exact source-version Result variants and quantitative-reference pivot preservation."
 related:
   - ../README.md
   - ../AGENTS.md
@@ -84,9 +84,32 @@ M(P).dataSetInformation.referenceToResultingProcess
 
 `R(P)` 是 resulting Process reference，不作为普通 provider process instance 加入 `M(P)`。
 
-## 两类原子动作
+## 一个公开动作与两个内部生成节点
 
-### 1. `materialize-result(P)`
+用户只调用一次 `materialize`，并在请求中依次冻结：
+
+1. `scope`：一条、指定一批或 `all_eligible`；
+2. `outputType`：`result-process` 或 `lifecycle-model`；
+3. `resultLayer`：`lci` 或 `lci-lcia`。
+
+`materialize-result` 与 `compose-model` 是同一次请求内部的确定性生成节点，不是需要用户手动串联的 CLI，也不是两个独立 Workflow。内部执行图由 `outputType` 决定：
+
+```text
+outputType = result-process
+  requested roots -> materialize-result -> primary R(P)
+
+outputType = lifecycle-model
+  requested roots
+    -> expand direct-provider Result dependencies
+    -> materialize-result for resulting R(P) and dependency R(Q)
+    -> freeze Result Catalog
+    -> compose-model
+    -> primary M(P)
+```
+
+因此选择 `lifecycle-model` 时，最终主要对象只有每个 requested root 对应的 `M(P)`；内部生成的 `R(P)` 是 resulting dataset，`R(Q)` 是 dependency dataset，不应被解释为用户另外请求了一批主要 Result Process。
+
+### 内部节点 1：`materialize-result(P)`
 
 这个动作逐条物化 Result Process，可以在 Result identity/version plan 冻结后并行执行。
 
@@ -103,7 +126,7 @@ M(P).dataSetInformation.referenceToResultingProcess
 - Result descriptor：UUID、version、content hash 和 lineage；
 - schema、quantitative reference 和 LCI/LCIA numerical parity evidence。
 
-`U(P)` 提供身份锚点、reference basis 和可继承 metadata；`R(P)` 的数值只来自已验证 Calculation Bundle。
+`U(P)` 提供身份锚点、reference basis 和可继承 metadata；`R(P)` 的数值只来自已验证 Calculation Bundle。Result-only 模式只对 requested roots 执行；LifecycleModel 模式则对 requested roots 与其 direct providers 的并集执行。
 
 Generated Result UUIDv5 name 只包含业务身份：
 
@@ -114,7 +137,7 @@ Generated Result UUIDv5 name 只包含业务身份：
 }
 ```
 
-它使用冻结的 Result namespace 做 UUIDv5。name 中不放 `schema` 或 identity contract version，避免纯协议升级改变业务 lineage。`R(P)` 不再通过 `M(P)` UUID 间接派生，因此 `U(P) -> R(P)` 是独立原子动作；Result/Model profile、LCI/LCIA 与方法集、任务 ID、source version 和 dataset version 都不进入 Result UUID。这些变化通过 dataset profile、semantic/version-significant hash、dataset version 和 provenance 表达。
+它使用冻结的 Result namespace 做 UUIDv5。name 中不放 `schema` 或 identity contract version，避免纯协议升级改变业务 lineage。`R(P)` 不再通过 `M(P)` UUID 间接派生，因此 `U(P) -> R(P)` 是内部独立的身份与内容生成节点，但仍由同一个公开 `materialize` 动作编排；Result/Model profile、LCI/LCIA 与方法集、任务 ID、source version 和 dataset version 都不进入 Result UUID。这些变化通过 dataset profile、semantic/version-significant hash、dataset version 和 provenance 表达。
 
 算法证据保存在 Result descriptor 外层，不参与 UUID name：
 
@@ -131,9 +154,39 @@ Generated Result UUIDv5 name 只包含业务身份：
 
 如果未来必须让不同 system boundary 的 Result lineage 同时存在，应增加语义明确且有证据的 boundary identity 字段，并为改变后的 name contract 冻结新 namespace；不得使用泛化的 `resultProfileId` 把 recipe 或输出形态误当成业务身份。
 
-### 2. `compose-model(P, finalized-result-catalog)`
+#### 同一 Result lineage 的多个 exact source revisions
 
-这个动作在 Result Catalog 冻结后逐条组合 LifecycleModel。
+`source Process version` 不进入 Result UUID，因此同一个 `U(P) UUID + reference Flow UUID` 可以在一次计算中对应多个 exact source revisions。它们属于同一个业务 lineage，但不能折叠成一个数据集：
+
+- Result UUID 保持相同；
+- 每个 exact `sourceProcess UUID@version` 生成独立的 Result dataset version；
+- Result Catalog 同时保留这些 descriptor，并用 `processIndex + sourceProcess + Result UUID@version` 精确对应 calculation axis；
+- `M(P)` 与 provider instance 只引用其 calculation axis 对应的精确 Result version，不读取 mutable `latest`；
+- previous manifest 先按 exact `sourceProcess UUID@version` 匹配已有 Result variant；相同内容复用版本，metadata 变化升 minor，语义变化升 major；
+- first generation 或新增 source revision 按 source identity/version 的确定性顺序分配尚未占用的 major version，从 `01.00.000` 开始；同一 lineage 内不得出现重复 dataset version。
+
+这个规则把“稳定业务身份”和“精确 source revision”分别放在 UUID lineage 与 dataset version/provenance 中表达。
+
+#### Quantitative-reference pivot
+
+Result Materialization 必须保持 Worker 求解时使用的 signed normalization pivot，而不是假设 quantitative reference 总是 Output。每个 v2 process axis 提供：
+
+```text
+rawDirection
+rawMeanAmount
+signedRawCoefficient = directionSign * rawMeanAmount
+normalizationScale = 1 / abs(signedRawCoefficient)
+normalizedCoefficient = sign(signedRawCoefficient)
+normalizedMeanAmount = rawMeanAmount * normalizationScale
+```
+
+生成 `R(P)` 时，reference exchange 保留 `rawDirection`，amount 使用 `normalizedMeanAmount`；生成 `M(P)` 时，根 `U(P)` process instance 的 multiplication factor 使用 `normalizationScale`。这样 Input/Output 与正负 amount 都沿用计算时语义，Result 和 Model 不会因统一改写为 Output 而失真。
+
+新 Bundle 以 `calculation_bundle_process_axis.v2` 作为 pivot 证据。旧 Bundle 缺少 pivot 时，只允许从 intake 已下载并校验 hash 的 exact source-closure Process 中读取同一个 reference exchange，计算上述字段，并在 descriptor 中记录 `exact_source_closure_legacy_fallback.v1`；这个兼容路径不查询数据库，也不接受其他 source revision 或 mutable current state。
+
+### 内部节点 2：`compose-model(P, finalized-result-catalog)`
+
+这个节点只在 `outputType = lifecycle-model` 时运行，并在 Result Catalog 冻结后为每个 requested root 逐条组合 LifecycleModel。它不会为 provider roots 自动生成 `M(Q)`。
 
 输入：
 
@@ -159,8 +212,8 @@ e.consumerProcess == P
 and e.consumerInputExchange is resolvable
 and e.providerProcess is resolved
 and e.providerOutputExchange is resolvable
-and e.normalizedAmount is finite and non-zero
-and e.providerWeight is finite and positive
+and e.activityRequirement is finite and non-zero
+and e.residualCoefficient/referenceCoefficient/routingWeight evidence is present
 and flow/unit/location mapping is compatible
 and exact R(e.providerProcess) exists in the finalized Result Catalog
 ```
@@ -180,7 +233,7 @@ and exact R(e.providerProcess) exists in the finalized Result Catalog
 - 仅因为某个 Process 也出现在用户选择范围内；
 - 没有被 Calculation Bundle 解析为 provider 的猜测关系。
 
-默认 `full-closure` profile 下，未解析 provider、缺失 `R(Q)` 或引用不兼容都会阻塞 `M(P)`；不得静默忽略或自动降级。
+在 `resolved-one-hop-aggregated-background.v1` profile 下，Calculation Bundle 已保留的有效 edge 若缺失 `R(Q)`、balancing reference 或引用不兼容，都会阻塞 `M(P)`；不得静默忽略或自动降级。
 
 ## 范围编排
 
@@ -222,7 +275,7 @@ provider 依赖 R(Q1), R(Q2)
 
 `global_eligible` 下，Result-only recipe 把所有合格 Process 作为 primary Results；LifecycleModel recipe 把它们作为 requested Model roots，并按 direct edges 扩展 required Results。
 
-## 两阶段身份和版本解析
+## 内部两阶段身份和版本收敛
 
 一次本地 materialization run 必须按以下顺序收敛：
 
@@ -236,35 +289,25 @@ provider 依赖 R(Q1), R(Q2)
 
 Identity 不使用随机 UUID；version 解析不查询 mutable `latest`；相同 dataset identity/version 不得对应不同 canonical content。
 
-如果多个 exact calculation axes 解析到同一个 Result UUID lineage，范围规划必须 fail closed 并报告所有 source UUID/version、process index 和 reference flow。不得使用 UUID 去重掩盖精确版本冲突。
+如果多个 exact calculation axes 解析到同一个 Result UUID lineage，范围规划按 exact source revision 生成多个 dataset versions，并把每个 process index 固定到对应版本。只有同一个 exact source revision 重复出现、版本分配碰撞或同一 UUID/version 对应不同 canonical content 时才 fail closed。
 
-## 本地产物
+## 当前本地产物
 
 ```text
-materialization-runs/<run-id>/
+<out-dir>/
 ├── materialization-request.json
-├── selection.json
-├── identity-plan.json
-├── version-plan.json
 ├── result-catalog.json
-├── items/
-│   └── <root-process-id>/
-│       ├── result-process.json
-│       ├── lifecycle-model.json
-│       ├── item-manifest.json
-│       └── validation-report.json
-├── dependencies/
-│   └── <provider-process-id>/
-│       ├── result-process.json
-│       ├── result-manifest.json
-│       └── validation-report.json
+├── model-catalog.json                 # lifecycle-model 模式
 ├── canonical-datasets/
-├── dataset-index.json
+│   ├── processes/
+│   │   └── <result-uuid>_<version>.json
+│   └── lifecyclemodels/               # lifecycle-model 模式
+│       └── <model-uuid>_<version>.json
 ├── materialization-manifest.json
 └── materialization-report.json
 ```
 
-实现可以使用内容寻址存储去重重复的 Result Process bytes；manifest 中仍需保留 requested/dependency role 和精确 lineage。
+`materialization-request.json` 是 scope/outputType/resultLayer 的冻结请求；Catalog 和 Manifest 共同承担早期规划中 selection、identity plan、version plan 与 dataset index 的职责，当前实现不再额外生成这些重复文件。每个 descriptor 必须保留 `primary`、`resulting` 或 `dependency` role、process index、exact source revision、UUID/version 与 hashes。
 
 ## 完成条件
 
@@ -274,7 +317,7 @@ materialization-runs/<run-id>/
 - 每个 `M(P)` 的 root、provider、connection、factor 和 resulting Process 引用都能解析到精确数据集；
 - 每条有效 direct edge 与 Model provider instance 一一对应；
 - one-hop 重构库存与对应 `R(P)` 在冻结容差内一致；
-- requested/dependency scope、Result Catalog、identity/version 和 canonical hashes 已冻结；
+- requested/resulting/dependency scope、Result Catalog、identity/version 和 canonical hashes 已冻结；
 - 相同输入和 recipe 重放得到相同 canonical content；
 - 没有未解析 provider、动态 latest、半成品 item 或 identity/version 内容冲突。
 

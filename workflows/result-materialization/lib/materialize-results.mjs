@@ -9,12 +9,12 @@ import {
 import path from "node:path";
 import { canonicalJson, fail } from "./common.mjs";
 import { loadMaterializationContext, selectAxes } from "./context.mjs";
-import { resultIdentity, RESULT_PROFILES } from "./identity.mjs";
+import { RESULT_PROFILES } from "./identity.mjs";
 import { renderResultProcess } from "./result-renderer.mjs";
 import {
   assertNoContentCollision,
   hashJson,
-  indexPrevious,
+  indexPreviousResultVariants,
   resolveVersion,
   versionSignificantHash,
 } from "./versioning.mjs";
@@ -37,7 +37,7 @@ export async function materializeResults({
   const previousManifest = previousManifestPath
     ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
     : null;
-  const previous = indexPrevious(previousManifest);
+  const previous = indexPreviousResultVariants(previousManifest);
   const context = await loadMaterializationContext(intakeDir);
   const rootAxes = selectAxes(context, processUuids);
   if (!rootAxes.length)
@@ -61,8 +61,7 @@ export async function materializeResults({
     requiredIndexes.has(axis.processIndex),
   );
   const descriptors = [];
-  assertUniqueResultLineages(axes);
-  for (const axis of axes) {
+  const drafts = axes.map((axis) => {
     const provisional = renderResultProcess(
       context,
       axis,
@@ -70,11 +69,11 @@ export async function materializeResults({
       resultLayer,
     );
     const hashes = resultHashes(provisional);
-    const historical = previous.get(`process:${provisional.uuid}`);
-    const resolution = resolveVersion(
-      { uuid: provisional.uuid, ...hashes },
-      historical,
-    );
+    return { axis, provisional, hashes };
+  });
+  const resolutions = resolveResultVariantVersions(drafts, previous);
+  for (const { axis, provisional, hashes } of drafts) {
+    const { historical, ...resolution } = resolutions.get(axis.processIndex);
     const rendered = renderResultProcess(
       context,
       axis,
@@ -96,6 +95,7 @@ export async function materializeResults({
           : "primary"
         : "dependency",
       sourceProcess: rendered.sourceProcess,
+      referencePivot: rendered.referencePivot,
       identity: rendered.identity,
       versionChange: resolution.change,
       ...finalHashes,
@@ -172,34 +172,6 @@ export async function materializeResults({
   }
 }
 
-export function assertUniqueResultLineages(axes) {
-  const seen = new Map();
-  for (const axis of axes) {
-    const uuid = resultIdentity(
-      axis.rootProcess.id,
-      axis.quantitativeReference.flow.id,
-    ).uuid;
-    const previous = seen.get(uuid);
-    if (previous) {
-      fail(
-        "result_lineage_ambiguous",
-        `Multiple exact calculation axes resolve to Result lineage ${uuid}`,
-        {
-          resultUuid: uuid,
-          axes: [previous, axis].map((item) => ({
-            processIndex: item.processIndex,
-            sourceProcess: item.rootProcess,
-            referenceFlow: item.quantitativeReference.flow,
-          })),
-          recovery:
-            "Resolve the calculation graph to one exact source version per Result lineage before materialization.",
-        },
-      );
-    }
-    seen.set(uuid, axis);
-  }
-}
-
 function resultHashes(result) {
   const data = result.document.processDataSet;
   const semantic = {
@@ -207,6 +179,7 @@ function resultHashes(result) {
     profile: result.profile,
     uuid: result.uuid,
     sourceProcess: result.sourceProcess,
+    referencePivot: result.referencePivot,
     quantitativeReference: data.processInformation.quantitativeReference,
     typeOfDataSet:
       data.modellingAndValidation.LCIMethodAndAllocation.typeOfDataSet,
@@ -232,6 +205,78 @@ function resultHashes(result) {
     semanticHash: hashJson(semantic),
     canonicalContentHash: hashJson(result.document),
   };
+}
+
+export function resolveResultVariantVersions(drafts, previous) {
+  const grouped = new Map();
+  for (const draft of drafts) {
+    const key = `process:${draft.provisional.uuid}`;
+    const variants = grouped.get(key) ?? [];
+    variants.push(draft);
+    grouped.set(key, variants);
+  }
+  const result = new Map();
+  for (const [lineageKey, variants] of grouped) {
+    variants.sort(
+      (left, right) =>
+        compareIdentity(
+          left.provisional.sourceProcess,
+          right.provisional.sourceProcess,
+        ) || left.axis.processIndex - right.axis.processIndex,
+    );
+    const occupied = new Map(
+      (previous.byLineage.get(lineageKey) ?? []).map((dataset) => [
+        dataset.version,
+        exactSourceVariantKey(lineageKey, dataset.sourceProcess),
+      ]),
+    );
+    const currentSources = new Set();
+    for (const draft of variants) {
+      const sourceKey = exactSourceVariantKey(
+        lineageKey,
+        draft.provisional.sourceProcess,
+      );
+      if (currentSources.has(sourceKey)) {
+        fail(
+          "result_source_variant_duplicate",
+          `Calculation contains the same exact Result source variant more than once: ${sourceKey}`,
+        );
+      }
+      currentSources.add(sourceKey);
+      const historical = previous.bySource.get(sourceKey);
+      let resolution = resolveVersion(
+        { uuid: draft.provisional.uuid, ...draft.hashes },
+        historical,
+      );
+      const owner = occupied.get(resolution.version);
+      if (owner && owner !== sourceKey) {
+        resolution = {
+          version: nextFreeMajorVersion(occupied, resolution.version),
+          change: historical ? "major" : "initial",
+        };
+      }
+      occupied.set(resolution.version, sourceKey);
+      result.set(draft.axis.processIndex, { ...resolution, historical });
+    }
+  }
+  return result;
+}
+
+function exactSourceVariantKey(lineageKey, sourceProcess) {
+  return `${lineageKey}:${sourceProcess.id.toLowerCase()}@${sourceProcess.version}`;
+}
+
+function nextFreeMajorVersion(occupied, proposed) {
+  let major = Number(String(proposed).slice(0, 2));
+  while (major <= 99) {
+    const candidate = `${String(major).padStart(2, "0")}.00.000`;
+    if (!occupied.has(candidate)) return candidate;
+    major += 1;
+  }
+  fail(
+    "dataset_version_overflow",
+    `Cannot allocate another exact source variant after ${proposed}`,
+  );
 }
 
 function countChanges(descriptors) {

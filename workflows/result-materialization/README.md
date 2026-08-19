@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-18
+lastReviewedAt: 2026-08-19
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed one public scope/output/result-layer request over internal Result/Model convergence."
+lastReviewedNote: "Documented multi-revision Result lineages and quantitative-reference pivot handling."
 related:
   - AGENTS.md
   - design/resolved-one-hop-materialization.md
@@ -69,9 +69,9 @@ M(P)
 
 完整的单条、范围、provider instance 和验证规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。
 
-## Recipe，而不是多个顶层 Workflow
+## 一个入口，由三个选择决定执行图
 
-用户先选择范围，再选择最终对象和结果层。它们高度共享身份、版本、引用和验证，因此属于同一 Workflow 下的 recipe：
+用户先选择范围，再选择最终对象和结果层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令：
 
 1. `lci-result-process`
    - 生成 quantitative reference 和聚合 LCI exchanges；
@@ -93,7 +93,7 @@ M(P)
 2. `outputType`：`result-process` 或 `lifecycle-model`；
 3. `resultLayer`：`lci` 或 `lci-lcia`，不支持 LCIA-only。
 
-`result-process` 对每个 root 只生成一个主要 `R(P)`，不扩展 provider。`lifecycle-model` 对每个 root 生成一个主要 `M(P)`，并在内部生成 resulting `R(P)` 和 direct provider dependency `R(Q)`。这些依赖不会计入主要对象数量。身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
+`result-process` 对每个 root 只生成一个主要 `R(P)`，不扩展 provider。`lifecycle-model` 对每个 root 生成一个主要 `M(P)`，并在同一次动作的内部执行图中生成 resulting `R(P)` 和 direct provider dependency `R(Q)`。这些 Result datasets 是 Model 闭合所需的组成部分，不是额外的主要用户输出，也不会计入主要对象数量；不会自动生成 provider 的 `M(Q)`。身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
 
 ## 主路线
 
@@ -103,9 +103,9 @@ M(P)
   -> 仅在 lifecycle-model 模式从 direct edges 派生 required Result set
   -> 确认 metadata completion policy
   -> 派生稳定 identity lineage并读取上一版 manifest
-  -> 逐条生成 required R(P) drafts
+  -> 仅按执行图逐条生成 required Result drafts
   -> 求解并冻结 Result version set / Result Catalog
-  -> 使用精确 R(Q)/R(P) references 逐条生成 M(P)
+  -> 仅在 lifecycle-model 模式使用精确 R(Q)/R(P) references 逐条生成 M(P)
   -> 求解 Model version set并渲染精确 references
   -> 生成 canonical dataset collection
   -> schema / reference / LCI-LCIA parity / one-hop reconstruction validation
@@ -149,9 +149,13 @@ node cli.mjs materialize \
 
 `intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。输出目录存在时拒绝覆盖。
 
-`materialize` 冻结 `materialization-request.json`，并根据最终对象选择内部路线。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider 扩展、Result Catalog 冻结和 `M(P)` 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
+`materialize` 冻结 `materialization-request.json`，并根据 `outputType` 选择内部执行图。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider Result 扩展、Result Catalog 冻结和 requested-root `M(P)` 生成。用户不需要、也不应该先单独运行一次 Result Process 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
 
-生成命令必须二选一提供 `--first-generation` 或 `--previous-manifest <path>`。相同 semantic hash 与 version-significant hash 复用版本；语义变化升 major；仅 metadata 等公开内容变化升 minor；同一 UUID/version 出现不同 canonical content时 fail closed。同一次请求中多个 exact axes 解析到同一 Result lineage 时也会在写出产物前 fail closed，并要求先解决 calculation graph 的精确 source version；不会再按 UUID 静默去重。整个过程不会查询数据库，也不会上传或发布。
+生成命令必须二选一提供 `--first-generation` 或 `--previous-manifest <path>`。相同 semantic hash 与 version-significant hash 复用版本；语义变化升 major；仅 metadata 等公开内容变化升 minor；同一 UUID/version 出现不同 canonical content时 fail closed。
+
+同一次请求中多个 exact axes 可以共享一个 Result UUID lineage。Workflow 不按 UUID 去重，而是为每个 exact source Process revision 分配独立 dataset version；previous manifest 按 source UUID@version 精确匹配，LifecycleModel 也按 process index 引用对应的 Result UUID@version。first generation 和新增 revision 使用确定性顺序分配未占用的 major version。
+
+Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。完整规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。整个过程不会上传或发布。
 
 CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下一条可复制命令；大数据集始终写入文件。
 
@@ -169,15 +173,14 @@ CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下�
 
 ```text
 materialization-request.json
-selection.json
-identity-plan.json
-version-plan.json
 result-catalog.json
+model-catalog.json                  # lifecycle-model 模式
 canonical-datasets/
-dataset-index.json
 materialization-manifest.json
 materialization-report.json
 ```
+
+当前 Catalog 与 Manifest 已包含 selection、identity/version plan、dataset index 和 role 信息，因此不重复输出同义文件。Result-only 模式的 canonical datasets 只有 primary Result Processes；LifecycleModel 模式同时包含 primary Models、resulting Result Processes 和 dependency Result Processes。
 
 Materialization Manifest 至少绑定：
 

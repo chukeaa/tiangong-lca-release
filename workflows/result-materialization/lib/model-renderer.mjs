@@ -49,7 +49,10 @@ export function renderLifecycleModel(context, axis, resultCatalog, version) {
   const processInstances = [
     {
       "@dataSetInternalID": "0",
-      "@multiplicationFactor": "1",
+      "@multiplicationFactor": finiteString(
+        axis.referencePivot.normalizationScale,
+        "quantitativeReference.normalizationScale",
+      ),
       referenceToProcess: globalReference({
         type: "process data set",
         category: "processes",

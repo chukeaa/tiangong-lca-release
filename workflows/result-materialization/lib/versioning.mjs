@@ -34,16 +34,11 @@ export function resolveVersion(current, previous) {
   return { version: previous.version, change: "reuse" };
 }
 
-export function indexPrevious(previousManifest) {
-  if (!previousManifest) return new Map();
-  const datasets =
-    previousManifest.datasets ?? previousManifest.resultCatalog?.datasets;
-  if (!Array.isArray(datasets)) {
-    fail(
-      "previous_manifest_invalid",
-      "Previous Manifest must contain datasets[]",
-    );
-  }
+export function indexPrevious(previousManifest, datasetTypes) {
+  const allowed = datasetTypes ? new Set(datasetTypes) : null;
+  const datasets = previousDatasets(previousManifest).filter(
+    (dataset) => !allowed || allowed.has(dataset.datasetType),
+  );
   const result = new Map();
   for (const dataset of datasets) {
     for (const field of [
@@ -75,6 +70,48 @@ export function indexPrevious(previousManifest) {
   return result;
 }
 
+export function indexPreviousResultVariants(previousManifest) {
+  const datasets = previousDatasets(previousManifest).filter(
+    (dataset) => dataset.datasetType === "process",
+  );
+  const bySource = new Map();
+  const byLineage = new Map();
+  for (const dataset of datasets) {
+    validatePreviousDataset(dataset);
+    const source = dataset.sourceProcess;
+    if (
+      typeof source?.id !== "string" ||
+      !source.id ||
+      typeof source.version !== "string" ||
+      !source.version
+    ) {
+      fail(
+        "previous_manifest_invalid",
+        `Previous Result Process is missing sourceProcess: ${dataset.uuid}@${dataset.version}`,
+      );
+    }
+    const lineageKey = `process:${dataset.uuid.toLowerCase()}`;
+    const sourceKey = `${lineageKey}:${source.id.toLowerCase()}@${source.version}`;
+    if (bySource.has(sourceKey)) {
+      fail(
+        "previous_source_variant_duplicate",
+        `Duplicate previous exact source variant: ${sourceKey}`,
+      );
+    }
+    bySource.set(sourceKey, dataset);
+    const variants = byLineage.get(lineageKey) ?? [];
+    if (variants.some((variant) => variant.version === dataset.version)) {
+      fail(
+        "previous_dataset_version_duplicate",
+        `Duplicate previous Result version in lineage: ${lineageKey}@${dataset.version}`,
+      );
+    }
+    variants.push(dataset);
+    byLineage.set(lineageKey, variants);
+  }
+  return { bySource, byLineage };
+}
+
 export function assertNoContentCollision(descriptor, previous) {
   if (
     previous &&
@@ -98,6 +135,40 @@ function stripExcluded(value) {
     );
   }
   return value;
+}
+
+function previousDatasets(previousManifest) {
+  if (!previousManifest) return [];
+  const datasets =
+    previousManifest.datasets ?? previousManifest.resultCatalog?.datasets;
+  if (!Array.isArray(datasets)) {
+    fail(
+      "previous_manifest_invalid",
+      "Previous Manifest must contain datasets[]",
+    );
+  }
+  return datasets;
+}
+
+function validatePreviousDataset(dataset) {
+  for (const field of [
+    "datasetType",
+    "uuid",
+    "version",
+    "versionSignificantHash",
+    "semanticHash",
+    "canonicalContentHash",
+  ]) {
+    if (typeof dataset[field] !== "string" || !dataset[field]) {
+      fail("previous_manifest_invalid", `Previous dataset is missing ${field}`);
+    }
+  }
+  if (!VERSION.test(dataset.version)) {
+    fail(
+      "previous_manifest_invalid",
+      `Invalid previous dataset version: ${dataset.version}`,
+    );
+  }
 }
 
 function bump(value, part) {
