@@ -3,6 +3,7 @@ import { fail, nearlyEqual } from "./common.mjs";
 import { resultIdentity, RESULT_PROFILES } from "./identity.mjs";
 import { sourceKey } from "./context.mjs";
 import { globalReference, suffixName } from "./references.mjs";
+import { normalizeCompatibleProcessDocument } from "./process-compat.mjs";
 
 export function renderResultProcess(
   context,
@@ -25,21 +26,8 @@ export function renderResultProcess(
       `Exact source Unit Process is missing: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
     );
   }
-  const name =
-    source.document?.processDataSet?.processInformation?.dataSetInformation
-      ?.name;
-  if (name) {
-    if (
-      !name.treatmentStandardsRoutes ||
-      name.treatmentStandardsRoutes.length === 0
-    ) {
-      name.treatmentStandardsRoutes = [{ "@xml:lang": "en", "#text": " " }];
-    }
-    if (!name.mixAndLocationTypes || name.mixAndLocationTypes.length === 0) {
-      name.mixAndLocationTypes = [{ "@xml:lang": "en", "#text": " " }];
-    }
-  }
-  const sourceValidation = ProcessSchema.safeParse(source.document);
+  const sourceDocument = normalizeCompatibleProcessDocument(source.document);
+  const sourceValidation = ProcessSchema.safeParse(sourceDocument);
   if (!sourceValidation.success) {
     fail(
       "source_tidas_validation_failed",
@@ -49,12 +37,12 @@ export function renderResultProcess(
       },
     );
   }
-  const referenceExchange = validateReference(source.document, axis);
+  const referenceExchange = validateReference(sourceDocument, axis);
   const identity = resultIdentity(
     axis.rootProcess.id,
     axis.quantitativeReference.flow.id,
   );
-  const result = structuredClone(source.document);
+  const result = structuredClone(sourceDocument);
   const data = result.processDataSet;
   data.processInformation.dataSetInformation["common:UUID"] = identity.uuid;
   const resultLabel =

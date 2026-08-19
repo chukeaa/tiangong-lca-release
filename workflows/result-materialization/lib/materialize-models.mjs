@@ -16,8 +16,8 @@ import { renderLifecycleModel } from "./model-renderer.mjs";
 import {
   assertNoContentCollision,
   hashJson,
-  indexPrevious,
-  resolveVersion,
+  indexPreviousModelVariants,
+  resolveExactSourceVariantVersions,
   versionSignificantHash,
 } from "./versioning.mjs";
 
@@ -42,7 +42,7 @@ export async function materializeModels({
   const previousManifest = previousManifestPath
     ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
     : null;
-  const previous = indexPrevious(previousManifest, ["lifecyclemodel"]);
+  const previous = indexPreviousModelVariants(previousManifest);
   const context =
     suppliedContext ?? (await loadMaterializationContext(intakeDir));
   const catalogFile = path.resolve(resultCatalogPath);
@@ -62,6 +62,38 @@ export async function materializeModels({
       );
     }
   }
+  await onProgress?.({
+    phase: "planning_model_versions",
+    completed: 0,
+    total: axes.length,
+  });
+  const drafts = [];
+  for (const [index, axis] of axes.entries()) {
+    const provisional = renderLifecycleModel(
+      context,
+      axis,
+      catalog,
+      "01.00.000",
+    );
+    drafts.push({
+      axis,
+      provisional: {
+        uuid: provisional.uuid,
+        sourceProcess: provisional.sourceProcess,
+      },
+      hashes: modelHashes(provisional),
+    });
+    await onProgress?.({
+      phase: "planning_model_versions",
+      completed: index + 1,
+      total: axes.length,
+      currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
+    });
+  }
+  const resolutions = resolveExactSourceVariantVersions(drafts, previous, {
+    datasetType: "lifecyclemodel",
+    duplicateCode: "model_source_variant_duplicate",
+  });
   const target = path.resolve(outDir);
   const staging = appendToExisting ? target : await mkdtemp(`${target}.tmp-`);
   const datasetDir = path.join(
@@ -97,21 +129,10 @@ export async function materializeModels({
     total: axes.length,
   });
   const descriptors = await mapWithConcurrency(
-    axes,
+    drafts,
     concurrency,
-    async (axis) => {
-      const provisional = renderLifecycleModel(
-        context,
-        axis,
-        catalog,
-        "01.00.000",
-      );
-      const hashes = modelHashes(provisional);
-      const historical = previous.get(`lifecyclemodel:${provisional.uuid}`);
-      const resolution = resolveVersion(
-        { uuid: provisional.uuid, ...hashes },
-        historical,
-      );
+    async ({ axis }) => {
+      const { historical, ...resolution } = resolutions.get(axis.processIndex);
       const rendered = renderLifecycleModel(
         context,
         axis,
@@ -231,7 +252,12 @@ export async function materializeModels({
   } catch (error) {
     if (!appendToExisting) await rm(staging, { recursive: true, force: true });
     if (error.code === "EEXIST" || error.code === "ENOTEMPTY") {
-      fail("output_exists", `Refusing to overwrite existing output: ${target}`);
+      fail(
+        error.syscall === "rename" ? "output_exists" : "duplicate_uuid",
+        error.syscall === "rename"
+          ? `Refusing to overwrite existing output: ${target}`
+          : `Duplicate canonical dataset UUID/version collision: ${error.message}`,
+      );
     }
     throw error;
   }

@@ -90,10 +90,12 @@ related:
 - 版本规划必须考虑 semantic hash、version-significant hash 和引用版本。
 - 先统一解析并冻结 Result UUID/version set，再生成绑定精确 `R(Q)`/`R(P)` references 的 Model version set。
 - 同一 Result UUID lineage 可以包含多个 exact source Process revisions；每个 revision 必须获得独立 dataset version，并由 process index/source provenance 精确绑定，不能按 UUID 折叠。
+- 同一 LifecycleModel UUID lineage 也可以包含多个 exact source Process revisions；Model 必须沿用相同的批次级 variant 规划，为每个 revision 分配独立 dataset version，而不是把 source version 加入 UUID。
 - previous manifest 按 exact source Process UUID@version 匹配 Result variant；新增 revision 按确定性顺序使用未占用的 major version。
 - 相互引用的数据集作为集合求解版本，不能分别生成后查询 mutable `latest` 补引用。
 - 相同 identity/version 的 canonical content 冲突必须 fail closed。
 - 同一 exact source revision 重复出现、Result version 碰撞或同一 identity/version 内容冲突必须 fail closed。
+- 缺失或为空的 `treatmentStandardsRoutes`、`mixAndLocationTypes` 使用既有单空格多语言字段兼容；兼容必须对源文档副本显式执行，Result/Model renderer 不得依赖修改共享 context 的副作用。
 - 输入或 recipe 改变时，不得静默复用无效 materialization evidence。
 
 ## Quantitative-reference pivot
@@ -122,6 +124,8 @@ Agent 提议不能替代用户对模型结构、重要 metadata 和首次 lineag
 - 不让 LifecycleModel 引用另一次 materialization 的未验证 Result Process。
 - 不忽略有效 direct provider edge，也不从源 Process 文本猜测 provider connection 或 factor。
 - 不跳过 TIDAS、引用闭合和数值一致性验证。
+- one-hop 数值一致性按相同 direction/unit 的可比数量组计算尺度，使用冻结的绝对与相对容差；不得用单个近零 flow 的相对误差放大正常的线性求解消减残差，也不得跨单位比较尺度。
+- 并发 worker 首次失败后不得领取新任务，必须等待已经启动的 worker 收敛后再清理；清理异常不得覆盖原始业务异常。
 - 不打包或远程发布。
 - 不写入远程 authoring tables。
 

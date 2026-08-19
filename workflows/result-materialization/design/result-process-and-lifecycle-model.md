@@ -180,12 +180,12 @@ Result Process 必须沿用计算时真正使用的归一化基准，不能假�
 
 Result Process 的 UUID 表示稳定的业务 lineage。它由源 Process 的 UUID 和 reference Flow 的 UUID 决定，因此同一业务对象在重复生成时保持稳定。
 
-源 Process 的精确 version 不进入 UUID，但会进入 Result Process 的 dataset version 和 provenance。这解决了两个不同问题：
+源 Process 的精确 version 不进入 UUID，但会进入 Result Process 和 LifecycleModel 的 dataset version 与 provenance。这解决了两个不同问题：
 
 - UUID 回答“它是不是同一个业务结果对象”；
 - version 回答“它对应源数据的哪一次精确修订”。
 
-因此，同一 Process UUID 的多个 source versions 可以共享一个 Result UUID，但必须生成不同的 Result dataset versions。LifecycleModel 和 provider instance 始终引用本次计算对应的精确版本，不读取可变化的 `latest`。
+因此，同一 Process UUID 的多个 source versions 可以共享一个 Result UUID，也可以共享一个 LifecycleModel UUID，但必须分别生成不同的 dataset versions。版本在写文件前按整个批次统一规划，避免两个精确源版本争用同一个 UUID/version。LifecycleModel 和 provider instance 始终引用本次计算对应的精确版本，不读取可变化的 `latest`。
 
 内容没有变化时可以复用已有版本；metadata 变化和结果语义变化按版本规则分别演进。具体版本分配算法属于执行契约，记录在 Workflow README 和代码测试中。
 

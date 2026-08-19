@@ -39,6 +39,7 @@ export async function materialize({
   const target = path.resolve(outDir);
   await mkdir(path.dirname(target), { recursive: true });
   const workspace = await mkdtemp(`${target}.work-`);
+  let primaryError;
   try {
     await onProgress?.({ phase: "preparing", completed: 0, total: null });
     const context = await loadMaterializationContext(intakeDir);
@@ -135,11 +136,31 @@ export async function materialize({
       },
     };
   } catch (error) {
-    if (error.code === "EEXIST" || error.code === "ENOTEMPTY")
-      fail("output_exists", `Refusing to overwrite existing output: ${target}`);
-    throw error;
+    primaryError = error;
+    if (
+      (error.code === "EEXIST" || error.code === "ENOTEMPTY") &&
+      error.syscall === "rename"
+    ) {
+      primaryError = new Error(
+        `Refusing to overwrite existing output: ${target}`,
+      );
+      primaryError.code = "output_exists";
+      primaryError.details = { causeCode: error.code };
+    }
+    throw primaryError;
   } finally {
-    await rm(workspace, { recursive: true, force: true });
+    try {
+      await rm(workspace, { recursive: true, force: true, maxRetries: 3 });
+    } catch (cleanupError) {
+      if (!primaryError) throw cleanupError;
+      primaryError.details = {
+        ...(primaryError.details ?? {}),
+        cleanupError: {
+          code: cleanupError.code ?? "cleanup_failed",
+          message: cleanupError.message,
+        },
+      };
+    }
   }
 }
 

@@ -234,9 +234,14 @@ Materialization Manifest 至少绑定：
 - Unit、Flow、direction 和 location 映射正确；
 - Calculation Bundle 到 Result Process 的 LCI/LCIA 数值一致；
 - one-hop Model 重构库存与对应 Result Process 数值一致；
+- one-hop 比较只在相同 direction/unit 的可比数量组内确定尺度，当前冻结容差为 `1e-12 + 1e-8 × groupScale`，用于容纳求解消减残差而不跨物理单位放宽校验；
 - 相同输入和 recipe 重放得到相同内容；
 - 同一 dataset identity/version 不对应冲突内容；
 - 版本集合能够收敛。
+
+源 Process 的 `treatmentStandardsRoutes` 或 `mixAndLocationTypes` 缺失/为空时，两个 renderer 都在独立文档副本上使用单空格占位符完成既有 TIDAS 兼容，不修改 intake context。Result Process 与 LifecycleModel 对同一稳定 UUID lineage 的多个 exact source revisions 都先完成批次级版本规划，再并发写入；因此每个 revision 获得独立 dataset version 和文件路径。
+
+任一并发 worker 失败后，调度器停止领取新项并等待已启动 worker 收敛，随后才清理 workspace。任务始终报告最早的领域错误；若清理也失败，只把清理信息附加到原错误，不用 `ENOTEMPTY` 覆盖根因。
 
 ## 不属于本 Workflow
 
