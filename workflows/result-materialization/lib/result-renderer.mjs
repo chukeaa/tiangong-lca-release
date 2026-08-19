@@ -1,5 +1,5 @@
 import { ProcessSchema } from "@tiangong-lca/tidas-sdk";
-import { fail } from "./common.mjs";
+import { fail, nearlyEqual } from "./common.mjs";
 import { resultIdentity, RESULT_PROFILES } from "./identity.mjs";
 import { sourceKey } from "./context.mjs";
 import { globalReference, suffixName } from "./references.mjs";
@@ -24,6 +24,15 @@ export function renderResultProcess(
       "unit_process_missing",
       `Exact source Unit Process is missing: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
     );
+  }
+  const name = source.document?.processDataSet?.processInformation?.dataSetInformation?.name;
+  if (name) {
+    if (!name.treatmentStandardsRoutes || name.treatmentStandardsRoutes.length === 0) {
+      name.treatmentStandardsRoutes = [{ "@xml:lang": "en", "#text": " " }];
+    }
+    if (!name.mixAndLocationTypes || name.mixAndLocationTypes.length === 0) {
+      name.mixAndLocationTypes = [{ "@xml:lang": "en", "#text": " " }];
+    }
   }
   const sourceValidation = ProcessSchema.safeParse(source.document);
   if (!sourceValidation.success) {
@@ -158,7 +167,7 @@ function validateReference(unitProcess, axis) {
     Number(exchange.meanAmount) === 0 ||
     normalizeDirection(exchange.exchangeDirection) !==
       axis.referencePivot.rawDirection ||
-    Number(exchange.meanAmount) !== axis.referencePivot.rawMeanAmount ||
+    !nearlyEqual(Number(exchange.meanAmount), axis.referencePivot.rawMeanAmount) ||
     flow?.["@refObjectId"]?.toLowerCase() !==
       axis.quantitativeReference.flow.id.toLowerCase() ||
     flow?.["@version"] !== axis.quantitativeReference.flow.version

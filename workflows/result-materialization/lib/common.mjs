@@ -35,6 +35,11 @@ function normalizeStrings(value) {
   return value;
 }
 
+export function nearlyEqual(left, right) {
+  const tolerance = 1e-12 * Math.max(Math.abs(left), Math.abs(right), 1);
+  return Math.abs(left - right) <= tolerance;
+}
+
 export function fail(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
