@@ -43,6 +43,7 @@ related:
 ## 本地后台 Job
 
 - `materialize start` 只用 `nohup` 启动现有 materialization engine，不拥有独立 recipe、队列、daemon 或自动重试语义。
+- 顶层命令及 `intake`、`materialize`、`materialize start`、`job get`、`job logs`、`job cancel` 都必须支持无副作用的 `--help`，以退出码 0 返回当前动作所需参数。
 - 每次后台尝试使用随机 `jobId`；它只标识执行尝试，不进入 Result/Model identity、version 或 canonical 输出路径。
 - `job.json` 和 request 创建后不可改写；`job.log` 只追加；`status.json` 使用临时 sibling + rename 原子更新；终态写入 `exit-code` 和 `result.json`。
 - `start` 成功只表示请求已持久化且 runner 已启动，不表示 Materialization 成功。

@@ -138,6 +138,29 @@ test("CLI exposes one intent-level materialize command and requires all three ch
   assert.match(JSON.parse(invalidConcurrency.stderr).error.message, /1 to 16/);
 });
 
+test("every Result Materialization action exposes local help without executing", () => {
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const cases = [
+    [["intake", "--help"], /--bundle <path>/],
+    [
+      ["materialize", "--help"],
+      /--output-type <result-process\|lifecycle-model>/,
+    ],
+    [["materialize", "start", "--help"], /observable local nohup job/],
+    [["job", "get", "--help"], /progress, resources, throughput, and ETA/],
+    [["job", "logs", "--help"], /--tail <1-500>/],
+    [["job", "cancel", "--help"], /Request cancellation/],
+  ];
+  for (const [arguments_, expected] of cases) {
+    const result = spawnSync(process.execPath, [cli.pathname, ...arguments_], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, `${arguments_.join(" ")}: ${result.stderr}`);
+    assert.equal(result.stderr, "");
+    assert.match(result.stdout, expected);
+  }
+});
+
 test("nohup jobs expose bounded status, logs, and terminal cancellation", async () => {
   const cli = new URL("../cli.mjs", import.meta.url);
   const temp = await mkdtemp(path.join(os.tmpdir(), "release-job-"));

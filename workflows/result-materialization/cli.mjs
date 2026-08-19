@@ -45,6 +45,15 @@ Common:
   --help               Show this help
 `;
 
+const ACTION_HELP = {
+  intake: `release-result-materialization intake --bundle <path> --out-dir <path> [--json]\n\nVerify a local Calculation Bundle and freeze an immutable intake.\n`,
+  materialize: `release-result-materialization materialize --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <path> (--first-generation | --previous-manifest <path>) [--concurrency <1-16>] [--json]\n\nRun Result Materialization in the foreground. LifecycleModel output includes the exact Result Processes it references.\n`,
+  "materialize start": `release-result-materialization materialize start --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <path> (--first-generation | --previous-manifest <path>) [--artifact-root <path>] [--concurrency <1-16>] [--json]\n\nStart the same deterministic engine as an observable local nohup job.\n`,
+  "job get": `release-result-materialization job get --job-id <uuid> [--artifact-root <path>] [--json]\n\nRead bounded status, progress, resources, throughput, and ETA for one job.\n`,
+  "job logs": `release-result-materialization job logs --job-id <uuid> [--tail <1-500>] [--artifact-root <path>] [--json]\n\nRead a bounded tail of one job's structured local log.\n`,
+  "job cancel": `release-result-materialization job cancel --job-id <uuid> [--artifact-root <path>] [--json]\n\nRequest cancellation after verifying the exact runner identity.\n`,
+};
+
 async function main() {
   const [command, ...initialTokens] = process.argv.slice(2);
   if (!command || command === "--help" || command === "-h") {
@@ -54,6 +63,11 @@ async function main() {
   const tokens = [...initialTokens];
   const subcommand =
     tokens[0] && !tokens[0].startsWith("--") ? tokens.shift() : null;
+  if (tokens.includes("--help") || tokens.includes("-h")) {
+    const route = subcommand ? `${command} ${subcommand}` : command;
+    process.stdout.write(ACTION_HELP[route] ?? HELP);
+    return;
+  }
   const options = parseArgs(tokens);
   if (command === "intake") {
     requireOptions(options, ["bundle", "out-dir"]);
@@ -241,7 +255,8 @@ function parseArgs(tokens) {
       });
     }
     const key = token.slice(2);
-    if (["json", "first-generation", "all"].includes(key)) result[key] = true;
+    if (["json", "first-generation", "all", "help"].includes(key))
+      result[key] = true;
     else {
       const value = tokens[index + 1];
       if (!value || value.startsWith("--")) {
