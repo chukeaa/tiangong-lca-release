@@ -14,7 +14,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
 lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
-lastReviewedNote: "Reviewed the executable contract against the conceptual Result Process and LifecycleModel design."
+lastReviewedNote: "Reviewed batch materialization resource observability, bounded concurrency, shared context, and single-staging execution."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -51,6 +51,10 @@ related:
 - `job cancel` 只向精确匹配的 runner 发送 `SIGTERM`；终态 Job 的 cancel 是无副作用的幂等读取。
 - Runner 消失且没有可信 exit code 时标记 `interrupted`，不得猜测成功或自动重试。
 - 进度写入属于 best-effort observability，失败不得改变已经确定性生成或提交的 canonical Materialization 结果。
+- Runner 每 5 秒以及 phase/progress 更新时记录结构化资源采样；`job get` 返回最新 RSS、heap、CPU、磁盘余量、吞吐和 ETA。资源采样失败只能降低可观测性，不能污染 canonical stdout 或改变任务结果。
+- 同一次请求只加载一次只读 Materialization Context；Result/Model 文档必须以有界并发逐条渲染并立即写入，不得用无界 `Promise.all` 或把所有 canonical 文档保存在数组/Map 中。
+- LifecycleModel 路线使用一个 staging collection：Result Catalog 冻结后在同一目录追加 Model，全部验证完成后只进行一次原子 rename。
+- 默认并发为 2，公开上限为 16；提高并发必须基于资源日志和代表性样本，不得把并发当作默认性能修复。
 - 首版不提供 checkpoint/resume。只有实际运行证明重跑代价不可接受时，才提升本地 Job representation 和 runner 复杂度。
 
 ## 输入最低要求

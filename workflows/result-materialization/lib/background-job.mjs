@@ -141,6 +141,7 @@ export async function getMaterializationJob({ artifactRoot: root, jobId }) {
     processAlive: alive,
     exitCode,
     progress: status.progress ?? null,
+    resources: status.resources ?? null,
     createdAt: job.createdAt,
     updatedAt: status.updatedAt,
     outputPath: job.outputPath,

@@ -21,7 +21,7 @@ checkPaths:
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-19
 lastReviewedCommit: 38e4c543b89d52f83bb0ae2db9d64504856abfe1
-lastReviewedNote: "Reviewed repository workflow boundaries while reframing Result Materialization around its domain model."
+lastReviewedNote: "Reviewed Result Materialization batch execution boundaries, bounded concurrency, resource observability, and atomic local output."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -118,6 +118,8 @@ workflows/
 - 同一稳定 Result UUID lineage 下按 exact source revision 生成并引用独立 dataset versions；
 - 保持 calculation-time quantitative-reference signed pivot，并为旧 Bundle 使用已校验 exact source closure 的有界兼容；
 - 渲染精确 identity/version 引用；
+- 对大批量任务使用共享只读 Context、有界并发和逐条落盘，并通过薄 `nohup` Job 暴露内存、CPU、吞吐、ETA 和磁盘余量；
+- LifecycleModel 路线在同一个 staging collection 内完成 Result/Model 组装，验证后只进行一次原子提交；
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 

@@ -14,7 +14,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
 lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
-lastReviewedNote: "Documented multi-revision Result lineages and quantitative-reference pivot handling."
+lastReviewedNote: "Documented observable bounded-concurrency batch execution and single-staging materialization."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -167,9 +167,15 @@ node cli.mjs job logs --job-id <UUID> --tail 100 --json
 node cli.mjs job cancel --job-id <UUID> --json
 ```
 
+生成阶段默认使用 2 个有界 render/write worker，可以用 `--concurrency 1..16` 调整。并发只控制已经冻结版本后的逐条渲染和写入，不改变 selection、identity/version 规划顺序，也不会启动无界任务集合。增加并发前应先观察相同样本的 RSS、heap、吞吐和磁盘余量。
+
 默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，包含 `job.json`、`process.json`、`status.json`、`job.log`、终态 `exit-code` 和 `result.json`。`--artifact-root` 可以整体调整这个本地 Job workspace；它不改变用户显式提供的 canonical `--out-dir`。
 
 后台命令不建立 daemon、队列或自动重试。`start` 只表示本地请求已经持久化并交给 `nohup` runner；只有 `job get` 返回 `succeeded` 且最终 manifest 存在时，Materialization 才成功。状态可区分 `queued`、`running`、`cancelling`、`succeeded`、`failed`、`cancelled` 和 `interrupted`。`job logs` 默认返回最后 100 行，允许 1–500 行，并截断超长单行，避免把大型内容写入 stdout。
+
+Runner 在 phase/progress 更新以及每 5 秒记录结构化资源采样。`job get` 的 `resources` 提供 RSS、heap used/limit、external/array buffers、CPU、阶段/总耗时、当前吞吐、ETA、已写 canonical bytes 和目标磁盘可用空间；`job logs` 中的 `resource_sample` 用于观察趋势。采样是 best-effort，不参与 canonical identity、version 或成功判定。
+
+一次请求只加载一次 Calculation Bundle Context。Result Process 和 LifecycleModel 先用轻量 descriptor 冻结版本，再以有界并发逐条渲染、立即写入，内存中只保留 catalog metadata；Result Catalog 校验逐条读取，不保留所有 Result JSON。LifecycleModel 路线在同一个 staging collection 中追加 Model，不再生成 `results`/`complete` 两套 Result Process，最终验证后只进行一次原子 rename。
 
 `job cancel` 只会向 PID 和 command line 都匹配该精确 Job 目录的 runner 发送 `SIGTERM`，避免 PID 被操作系统复用后终止无关进程。取消或异常退出不会提交 canonical target；可能遗留的 `.work-*`/`.tmp-*` 仍不是有效产物，可以在确认 runner 已停止后清理。首版不提供 checkpoint/resume，失败或中断使用同一冻结输入重新提交。
 

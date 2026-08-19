@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { canonicalJson, fail } from "./common.mjs";
+import { mapWithConcurrency } from "./concurrency.mjs";
 import { loadMaterializationContext, selectAxes } from "./context.mjs";
 import { RESULT_PROFILES } from "./identity.mjs";
 import { renderResultProcess } from "./result-renderer.mjs";
@@ -28,6 +29,8 @@ export async function materializeResults({
   firstGeneration = false,
   previousManifestPath,
   onProgress,
+  context: suppliedContext,
+  concurrency = 2,
 }) {
   if (firstGeneration === Boolean(previousManifestPath)) {
     fail(
@@ -39,7 +42,8 @@ export async function materializeResults({
     ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
     : null;
   const previous = indexPreviousResultVariants(previousManifest);
-  const context = await loadMaterializationContext(intakeDir);
+  const context =
+    suppliedContext ?? (await loadMaterializationContext(intakeDir));
   const rootAxes = selectAxes(context, processUuids);
   if (!rootAxes.length)
     fail("empty_selection", "Result materialization selection is empty");
@@ -61,9 +65,8 @@ export async function materializeResults({
   const axes = context.axes.filter((axis) =>
     requiredIndexes.has(axis.processIndex),
   );
-  const descriptors = [];
   await onProgress?.({
-    phase: "materializing_results",
+    phase: "planning_result_versions",
     completed: 0,
     total: axes.length,
   });
@@ -76,72 +79,98 @@ export async function materializeResults({
       resultProcessLayer,
     );
     const hashes = resultHashes(provisional);
-    drafts.push({ axis, provisional, hashes });
+    drafts.push({
+      axis,
+      provisional: {
+        uuid: provisional.uuid,
+        sourceProcess: provisional.sourceProcess,
+      },
+      hashes,
+    });
     await onProgress?.({
-      phase: "materializing_results",
+      phase: "planning_result_versions",
       completed: index + 1,
       total: axes.length,
       currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
     });
   }
   const resolutions = resolveResultVariantVersions(drafts, previous);
-  for (const { axis, provisional, hashes } of drafts) {
-    const { historical, ...resolution } = resolutions.get(axis.processIndex);
-    const rendered = renderResultProcess(
-      context,
-      axis,
-      resolution.version,
-      resultProcessLayer,
-    );
-    const finalHashes = resultHashes(rendered);
-    const descriptor = {
-      schemaVersion: "tiangong.release.dataset-descriptor.v1",
-      datasetType: "process",
-      role: "result_process",
-      processIndex: axis.processIndex,
-      uuid: rendered.uuid,
-      version: rendered.version,
-      profile,
-      materializationRole: rootIndexes.has(axis.processIndex)
-        ? includeDirectProviders
-          ? "resulting"
-          : "primary"
-        : "dependency",
-      sourceProcess: rendered.sourceProcess,
-      referencePivot: rendered.referencePivot,
-      identity: rendered.identity,
-      versionChange: resolution.change,
-      ...finalHashes,
-      counts: rendered.counts,
-      document: rendered.document,
-    };
-    assertNoContentCollision(descriptor, historical);
-    descriptors.push(descriptor);
-  }
-  descriptors.sort((left, right) => left.processIndex - right.processIndex);
-  await onProgress?.({
-    phase: "freezing_result_catalog",
-    completed: 0,
-    total: 1,
-  });
   const target = path.resolve(outDir);
   const staging = await mkdtemp(`${target}.tmp-`);
   try {
     const datasetDir = path.join(staging, "canonical-datasets", "processes");
     await mkdir(datasetDir, { recursive: true });
+    let completed = 0;
+    let outputBytes = 0;
+    await onProgress?.({
+      phase: "materializing_results",
+      completed,
+      total: drafts.length,
+    });
+    const descriptors = await mapWithConcurrency(
+      drafts,
+      concurrency,
+      async ({ axis }) => {
+        const { historical, ...resolution } = resolutions.get(
+          axis.processIndex,
+        );
+        const rendered = renderResultProcess(
+          context,
+          axis,
+          resolution.version,
+          resultProcessLayer,
+        );
+        const finalHashes = resultHashes(rendered);
+        const descriptor = {
+          schemaVersion: "tiangong.release.dataset-descriptor.v1",
+          datasetType: "process",
+          role: "result_process",
+          processIndex: axis.processIndex,
+          uuid: rendered.uuid,
+          version: rendered.version,
+          profile,
+          materializationRole: rootIndexes.has(axis.processIndex)
+            ? includeDirectProviders
+              ? "resulting"
+              : "primary"
+            : "dependency",
+          sourceProcess: rendered.sourceProcess,
+          referencePivot: rendered.referencePivot,
+          identity: rendered.identity,
+          versionChange: resolution.change,
+          ...finalHashes,
+          counts: rendered.counts,
+        };
+        assertNoContentCollision(descriptor, historical);
+        const fileName = `${descriptor.uuid}_${descriptor.version}.json`;
+        const content = canonicalJson(rendered.document);
+        await writeFile(path.join(datasetDir, fileName), content, {
+          flag: "wx",
+        });
+        outputBytes += Buffer.byteLength(content);
+        completed += 1;
+        await onProgress?.({
+          phase: "materializing_results",
+          completed,
+          total: drafts.length,
+          outputBytes,
+          currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
+        });
+        return {
+          ...descriptor,
+          path: `canonical-datasets/processes/${fileName}`,
+        };
+      },
+    );
+    descriptors.sort((left, right) => left.processIndex - right.processIndex);
+    await onProgress?.({
+      phase: "freezing_result_catalog",
+      completed: 0,
+      total: 1,
+    });
     const catalogDatasets = [];
     for (const descriptor of descriptors) {
-      const fileName = `${descriptor.uuid}_${descriptor.version}.json`;
-      await writeFile(
-        path.join(datasetDir, fileName),
-        canonicalJson(descriptor.document),
-        { flag: "wx" },
-      );
-      const { document: _document, ...catalogEntry } = descriptor;
-      catalogDatasets.push({
-        ...catalogEntry,
-        path: `canonical-datasets/processes/${fileName}`,
-      });
+      catalogDatasets.push(descriptor);
     }
     const catalog = {
       schemaVersion: "tiangong.release.result-catalog.v1",

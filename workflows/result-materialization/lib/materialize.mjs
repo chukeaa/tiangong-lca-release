@@ -11,6 +11,7 @@ import { canonicalJson, fail } from "./common.mjs";
 import { materializeModels } from "./materialize-models.mjs";
 import { materializeResults } from "./materialize-results.mjs";
 import { hashJson } from "./versioning.mjs";
+import { loadMaterializationContext } from "./context.mjs";
 
 export const OUTPUT_TYPES = new Set(["result-process", "lifecycle-model"]);
 export const RESULT_PROCESS_LAYERS = new Set(["lci", "lci-lcia"]);
@@ -24,6 +25,7 @@ export async function materialize({
   firstGeneration = false,
   previousManifestPath,
   onProgress,
+  concurrency = 2,
 }) {
   if (!OUTPUT_TYPES.has(outputType))
     fail("unsupported_output_type", `Unsupported output type: ${outputType}`);
@@ -38,15 +40,18 @@ export async function materialize({
   const workspace = await mkdtemp(`${target}.work-`);
   try {
     await onProgress?.({ phase: "preparing", completed: 0, total: null });
+    const context = await loadMaterializationContext(intakeDir);
     const results = await materializeResults({
       intakeDir,
-      outDir: path.join(workspace, "results"),
+      outDir: path.join(workspace, "complete"),
       processUuids,
       includeDirectProviders: outputType === "lifecycle-model",
       resultProcessLayer,
       firstGeneration,
       previousManifestPath,
       onProgress,
+      context,
+      concurrency,
     });
     const request = {
       schemaVersion: "tiangong.release.materialization-request.v1",
@@ -67,17 +72,15 @@ export async function materialize({
       completed = await materializeModels({
         intakeDir,
         resultCatalogPath: path.join(results.path, "result-catalog.json"),
-        outDir: path.join(workspace, "complete"),
+        outDir: results.path,
         processUuids,
         firstGeneration,
         previousManifestPath,
         onProgress,
+        context,
+        appendToExisting: true,
+        concurrency,
       });
-      await writeFile(
-        path.join(completed.path, "result-catalog.json"),
-        canonicalJson(results.catalog),
-        { flag: "wx" },
-      );
     } else {
       completed = await finalizeResultOnly({
         results,

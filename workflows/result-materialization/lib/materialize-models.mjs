@@ -1,4 +1,5 @@
 import {
+  copyFile,
   mkdtemp,
   mkdir,
   readFile,
@@ -8,6 +9,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { canonicalJson, fail, sha256Bytes } from "./common.mjs";
+import { mapWithConcurrency } from "./concurrency.mjs";
 import { loadMaterializationContext, selectAxes } from "./context.mjs";
 import { MODEL_PROFILE } from "./identity.mjs";
 import { renderLifecycleModel } from "./model-renderer.mjs";
@@ -27,6 +29,9 @@ export async function materializeModels({
   firstGeneration = false,
   previousManifestPath,
   onProgress,
+  context: suppliedContext,
+  appendToExisting = false,
+  concurrency = 2,
 }) {
   if (firstGeneration === Boolean(previousManifestPath)) {
     fail(
@@ -38,11 +43,12 @@ export async function materializeModels({
     ? JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8"))
     : null;
   const previous = indexPrevious(previousManifest, ["lifecyclemodel"]);
-  const context = await loadMaterializationContext(intakeDir);
+  const context =
+    suppliedContext ?? (await loadMaterializationContext(intakeDir));
   const catalogFile = path.resolve(resultCatalogPath);
   const catalog = JSON.parse(await readFile(catalogFile, "utf8"));
   validateCatalog(context, catalog);
-  const resultDocuments = await verifyCatalogDatasets(catalogFile, catalog);
+  await verifyCatalogDatasets(catalogFile, catalog);
   const allowedRoots = new Set(catalog.selection.map(exactIdentityKey));
   const requested = processUuids?.length
     ? processUuids
@@ -56,100 +62,103 @@ export async function materializeModels({
       );
     }
   }
-  const descriptors = [];
+  const target = path.resolve(outDir);
+  const staging = appendToExisting ? target : await mkdtemp(`${target}.tmp-`);
+  const datasetDir = path.join(
+    staging,
+    "canonical-datasets",
+    "lifecyclemodels",
+  );
+  await mkdir(datasetDir, { recursive: true });
+  if (!appendToExisting) {
+    const resultDir = path.join(staging, "canonical-datasets", "processes");
+    await mkdir(resultDir, { recursive: true });
+    const catalogRoot = path.dirname(catalogFile);
+    for (const dataset of catalog.datasets) {
+      const destination = path.resolve(staging, dataset.path);
+      if (!destination.startsWith(`${staging}${path.sep}`)) {
+        fail(
+          "unsafe_catalog_path",
+          `Unsafe Result Catalog path: ${dataset.path}`,
+        );
+      }
+      await mkdir(path.dirname(destination), { recursive: true });
+      await copyFile(
+        resolveCatalogDatasetPath(catalogRoot, dataset.path),
+        destination,
+      );
+    }
+  }
+  let completedCount = 0;
+  let outputBytes = 0;
   await onProgress?.({
     phase: "composing_models",
     completed: 0,
     total: axes.length,
   });
-  for (const [index, axis] of axes.entries()) {
-    const provisional = renderLifecycleModel(
-      context,
-      axis,
-      catalog,
-      "01.00.000",
-    );
-    const hashes = modelHashes(provisional);
-    const historical = previous.get(`lifecyclemodel:${provisional.uuid}`);
-    const resolution = resolveVersion(
-      { uuid: provisional.uuid, ...hashes },
-      historical,
-    );
-    const rendered = renderLifecycleModel(
-      context,
-      axis,
-      catalog,
-      resolution.version,
-    );
-    const finalHashes = modelHashes(rendered);
-    const descriptor = {
-      schemaVersion: "tiangong.release.dataset-descriptor.v1",
-      datasetType: "lifecyclemodel",
-      role: "lifecycle_model",
-      materializationRole: "primary",
-      processIndex: rendered.processIndex,
-      uuid: rendered.uuid,
-      version: rendered.version,
-      profile: MODEL_PROFILE,
-      identity: rendered.identity,
-      sourceProcess: rendered.sourceProcess,
-      resultProcess: rendered.resultProcess,
-      providerCount: rendered.providerCount,
-      reconstruction: rendered.reconstruction,
-      versionChange: resolution.change,
-      ...finalHashes,
-      document: rendered.document,
-    };
-    assertNoContentCollision(descriptor, historical);
-    descriptors.push(descriptor);
-    await onProgress?.({
-      phase: "composing_models",
-      completed: index + 1,
-      total: axes.length,
-      currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
-    });
-  }
-  descriptors.sort((left, right) => left.processIndex - right.processIndex);
-  const target = path.resolve(outDir);
-  const staging = await mkdtemp(`${target}.tmp-`);
-  try {
-    const datasetDir = path.join(
-      staging,
-      "canonical-datasets",
-      "lifecyclemodels",
-    );
-    const resultDir = path.join(staging, "canonical-datasets", "processes");
-    await mkdir(datasetDir, { recursive: true });
-    await mkdir(resultDir, { recursive: true });
-    const resultDatasets = [];
-    for (const dataset of catalog.datasets) {
-      const fileName = `${dataset.uuid}_${dataset.version}.json`;
-      await writeFile(
-        path.join(resultDir, fileName),
-        canonicalJson(
-          resultDocuments.get(exactDatasetKey(dataset.uuid, dataset.version)),
-        ),
-        { flag: "wx" },
+  const descriptors = await mapWithConcurrency(
+    axes,
+    concurrency,
+    async (axis) => {
+      const provisional = renderLifecycleModel(
+        context,
+        axis,
+        catalog,
+        "01.00.000",
       );
-      resultDatasets.push({
-        ...dataset,
-        path: `canonical-datasets/processes/${fileName}`,
-      });
-    }
-    const modelDatasets = [];
-    for (const descriptor of descriptors) {
+      const hashes = modelHashes(provisional);
+      const historical = previous.get(`lifecyclemodel:${provisional.uuid}`);
+      const resolution = resolveVersion(
+        { uuid: provisional.uuid, ...hashes },
+        historical,
+      );
+      const rendered = renderLifecycleModel(
+        context,
+        axis,
+        catalog,
+        resolution.version,
+      );
+      const finalHashes = modelHashes(rendered);
+      const descriptor = {
+        schemaVersion: "tiangong.release.dataset-descriptor.v1",
+        datasetType: "lifecyclemodel",
+        role: "lifecycle_model",
+        materializationRole: "primary",
+        processIndex: rendered.processIndex,
+        uuid: rendered.uuid,
+        version: rendered.version,
+        profile: MODEL_PROFILE,
+        identity: rendered.identity,
+        sourceProcess: rendered.sourceProcess,
+        resultProcess: rendered.resultProcess,
+        providerCount: rendered.providerCount,
+        reconstruction: rendered.reconstruction,
+        versionChange: resolution.change,
+        ...finalHashes,
+      };
+      assertNoContentCollision(descriptor, historical);
       const fileName = `${descriptor.uuid}_${descriptor.version}.json`;
-      await writeFile(
-        path.join(datasetDir, fileName),
-        canonicalJson(descriptor.document),
-        { flag: "wx" },
-      );
-      const { document: _document, ...entry } = descriptor;
-      modelDatasets.push({
-        ...entry,
-        path: `canonical-datasets/lifecyclemodels/${fileName}`,
+      const content = canonicalJson(rendered.document);
+      await writeFile(path.join(datasetDir, fileName), content, { flag: "wx" });
+      outputBytes += Buffer.byteLength(content);
+      completedCount += 1;
+      await onProgress?.({
+        phase: "composing_models",
+        completed: completedCount,
+        total: axes.length,
+        outputBytes,
+        currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
       });
-    }
+      return {
+        ...descriptor,
+        path: `canonical-datasets/lifecyclemodels/${fileName}`,
+      };
+    },
+  );
+  descriptors.sort((left, right) => left.processIndex - right.processIndex);
+  try {
+    const resultDatasets = catalog.datasets;
+    const modelDatasets = descriptors;
     const modelCatalog = {
       schemaVersion: "tiangong.release.model-catalog.v1",
       completeness: "complete-for-selected-roots",
@@ -208,17 +217,19 @@ export async function materializeModels({
         ),
         versionChanges: countChanges(descriptors),
       }),
-      { flag: "wx" },
+      appendToExisting ? undefined : { flag: "wx" },
     );
-    await mkdir(path.dirname(target), { recursive: true });
-    await rename(staging, target);
+    if (!appendToExisting) {
+      await mkdir(path.dirname(target), { recursive: true });
+      await rename(staging, target);
+    }
     return {
       path: target,
       catalog: modelCatalog,
       manifest: materializationManifest,
     };
   } catch (error) {
-    await rm(staging, { recursive: true, force: true });
+    if (!appendToExisting) await rm(staging, { recursive: true, force: true });
     if (error.code === "EEXIST" || error.code === "ENOTEMPTY") {
       fail("output_exists", `Refusing to overwrite existing output: ${target}`);
     }
@@ -249,15 +260,9 @@ function validateCatalog(context, catalog) {
 
 async function verifyCatalogDatasets(catalogFile, catalog) {
   const root = path.dirname(catalogFile);
-  const documents = new Map();
+  const keys = new Set();
   for (const dataset of catalog.datasets) {
-    const resolved = path.resolve(root, dataset.path);
-    if (!resolved.startsWith(`${root}${path.sep}`)) {
-      fail(
-        "unsafe_catalog_path",
-        `Unsafe Result Catalog path: ${dataset.path}`,
-      );
-    }
+    const resolved = resolveCatalogDatasetPath(root, dataset.path);
     const document = JSON.parse(await readFile(resolved, "utf8"));
     if (hashJson(document) !== dataset.canonicalContentHash) {
       fail(
@@ -266,15 +271,22 @@ async function verifyCatalogDatasets(catalogFile, catalog) {
       );
     }
     const key = exactDatasetKey(dataset.uuid, dataset.version);
-    if (documents.has(key)) {
+    if (keys.has(key)) {
       fail(
         "result_catalog_dataset_duplicate",
         `Duplicate Result Catalog dataset: ${dataset.uuid}@${dataset.version}`,
       );
     }
-    documents.set(key, document);
+    keys.add(key);
   }
-  return documents;
+}
+
+function resolveCatalogDatasetPath(root, relativePath) {
+  const resolved = path.resolve(root, relativePath);
+  if (!resolved.startsWith(`${root}${path.sep}`)) {
+    fail("unsafe_catalog_path", `Unsafe Result Catalog path: ${relativePath}`);
+  }
+  return resolved;
 }
 
 function exactIdentityKey(identity) {

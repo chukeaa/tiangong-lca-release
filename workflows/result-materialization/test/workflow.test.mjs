@@ -105,6 +105,30 @@ test("CLI exposes one intent-level materialize command and requires all three ch
   );
   assert.equal(invalid.status, 1);
   assert.equal(JSON.parse(invalid.stderr).error.code, "selection_required");
+
+  const invalidConcurrency = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "materialize",
+      "--intake",
+      "/tmp/intake",
+      "--out-dir",
+      "/tmp/output",
+      "--all",
+      "--output-type",
+      "result-process",
+      "--result-process-layer",
+      "lci",
+      "--first-generation",
+      "--concurrency",
+      "17",
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(invalidConcurrency.status, 1);
+  assert.match(JSON.parse(invalidConcurrency.stderr).error.message, /1 to 16/);
 });
 
 test("nohup jobs expose bounded status, logs, and terminal cancellation", async () => {
@@ -463,6 +487,9 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   }
   assert.equal(completedJob.state, "succeeded");
   assert.equal(completedJob.exitCode, 0);
+  assert.ok(completedJob.resources.rssBytes > 0);
+  assert.ok(completedJob.resources.heapLimitBytes > 0);
+  assert.ok(completedJob.resources.elapsedSeconds >= 0);
   const backgroundLogs = await readMaterializationJobLogs({
     artifactRoot: backgroundRoot,
     jobId: background.jobId,
@@ -473,6 +500,9 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   );
   assert.ok(
     backgroundLogs.lines.some((line) => line.includes('"phase":"committing"')),
+  );
+  assert.ok(
+    backgroundLogs.lines.some((line) => line.includes('"resources":{')),
   );
 });
 

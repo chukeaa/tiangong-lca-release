@@ -33,6 +33,7 @@ materialize options:
   --first-generation   Confirm that no previous Release Manifest exists
   --previous-manifest <path>  Previous materialization/release manifest
   --artifact-root <path>  Local job workspace root; defaults to repository .release
+  --concurrency <count>   Bounded render/write workers; defaults to 2, maximum 16
 
 job options:
   --job-id <uuid>      Exact local Materialization job identity
@@ -203,6 +204,10 @@ function materializationRequestFromOptions(options) {
     previousManifestPath: options["previous-manifest"]
       ? path.resolve(options["previous-manifest"])
       : undefined,
+    concurrency:
+      options.concurrency === undefined
+        ? 2
+        : parseBoundedInteger(options.concurrency, "concurrency", 1, 16),
   };
 }
 
@@ -213,6 +218,17 @@ function parseInteger(value, name) {
     });
   }
   return Number.parseInt(value, 10);
+}
+
+function parseBoundedInteger(value, name, minimum, maximum) {
+  const parsed = parseInteger(value, name);
+  if (parsed < minimum || parsed > maximum) {
+    throw Object.assign(
+      new Error(`--${name} must be an integer from ${minimum} to ${maximum}`),
+      { code: "invalid_arguments" },
+    );
+  }
+  return parsed;
 }
 
 function parseArgs(tokens) {
