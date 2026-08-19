@@ -108,6 +108,16 @@ node cli.mjs package build \
 
 `--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令只构建本地 Candidate，不上传、不批准、也不发布。
 
+CLI 同时面向人和 Agent：默认输出简洁的 `Summary / Next / Reply using template`；`--json` 输出一个有界对象，包含 `outcome`、`completeness`、精确 artifact 路径、结构化 `nextActions[]` 和 workflow-local `replyTemplate`。未知或重复参数会被拒绝，失败时使用非零退出码，并提供错误代码、恢复动作和对应回复模板。
+
+回复模板位于 `reply-templates/`，目前覆盖：
+
+- ✅ 本地 Candidate 已构建并验证；
+- ⚠️ frozen input 与当前字节发生漂移；
+- ❌ 参数、依赖、profile 或工具执行失败。
+
+Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板中的“成功”只表示本地候选构建完成，永远不表示已经批准、上传或发布。
+
 执行过程：
 
 ```text

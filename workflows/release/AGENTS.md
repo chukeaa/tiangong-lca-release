@@ -49,6 +49,9 @@ related:
 - 引用闭合、TIDAS/eILCD validation、conversion、round-trip 和四包构建必须委托 `tidas-tools release build-packages`，不得在本 Workflow 重写。
 - Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告，并显式记录 `publicationAuthorized=false`。
 - 输出目录不可覆盖；失败只能留下可清理的临时 workspace，不得形成可见 Candidate。
+- CLI 的人类输出必须包含有界 `Summary / Next / Reply using template`；JSON 输出必须保持单对象、可解析，并携带 `outcome`、`completeness`、artifact 引用、`nextActions[]` 和 `replyTemplate`。
+- CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
+- Agent 回复必须读取 CLI 指定的 workflow-local 模板，以真实字段替换占位符；不得把 Candidate build 回复成批准、上传或发布完成。
 
 ## 必须明确确认的动作
 

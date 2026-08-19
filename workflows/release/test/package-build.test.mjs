@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,6 +10,10 @@ import {
   buildPackageCandidate,
   PACKAGE_PROFILE,
 } from "../lib/package-build.mjs";
+import {
+  REPLY_TEMPLATE_COMMANDS,
+  replyTemplateFor,
+} from "../reply-template-registry.mjs";
 
 const CALCULATION_ID = "11111111-1111-4111-8111-111111111111";
 const MODEL_ID = "22222222-2222-4222-8222-222222222222";
@@ -17,6 +21,7 @@ const RESULT_ID = "33333333-3333-4333-8333-333333333333";
 const UNIT_ID = "44444444-4444-4444-8444-444444444444";
 const FLOW_ID = "55555555-5555-4555-8555-555555555555";
 const VERSION = "01.00.000";
+const REPOSITORY_ROOT = new URL("../../../", import.meta.url).pathname;
 
 test("package build assembles local closure and delegates four-package build", async () => {
   const fixture = await createFixture();
@@ -98,6 +103,8 @@ test("CLI exposes one bounded local package build route", () => {
   assert.equal(help.status, 0);
   assert.match(help.stdout, /package build/);
   assert.match(help.stdout, /does not authorize/);
+  assert.match(help.stdout, /Example:/);
+  assert.match(help.stdout, /replyTemplate/);
   const unsupported = spawnSync(
     process.execPath,
     [
@@ -117,10 +124,68 @@ test("CLI exposes one bounded local package build route", () => {
     { encoding: "utf8" },
   );
   assert.equal(unsupported.status, 1);
-  assert.equal(
-    JSON.parse(unsupported.stderr).error.code,
-    "unsupported_package_profile",
+  const unsupportedPayload = JSON.parse(unsupported.stderr);
+  assert.equal(unsupportedPayload.error.code, "unsupported_package_profile");
+  assert.equal(unsupportedPayload.command, "package build");
+  assert.equal(unsupportedPayload.outcome, "command_failed");
+  assert.equal(unsupportedPayload.completeness, "not_completed");
+  assert.equal(unsupportedPayload.nextActions[0].kind, "inspect_usage");
+  assert.equal(unsupportedPayload.replyTemplate.id, "release-command-failed");
+});
+
+test("CLI rejects unknown and duplicate options with actionable output", () => {
+  const cli = new URL("../cli.mjs", import.meta.url);
+  for (const [tokens, code] of [
+    [["--unknown", "value", "--json"], "unknown_option"],
+    [
+      ["--profile", PACKAGE_PROFILE, "--profile", PACKAGE_PROFILE, "--json"],
+      "duplicate_option",
+    ],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [cli.pathname, "package", "build", ...tokens],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 1);
+    const payload = JSON.parse(result.stderr);
+    assert.equal(payload.error.code, code);
+    assert.equal(payload.nextActions[0].kind, "inspect_usage");
+  }
+});
+
+test("CLI renders human failures separately from JSON mode", () => {
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const result = spawnSync(
+    process.execPath,
+    [cli.pathname, "package", "build", "--unknown", "value"],
+    { encoding: "utf8" },
   );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /^Release command failed/);
+  assert.match(result.stderr, /Summary:/);
+  assert.match(result.stderr, /Next:/);
+  assert.match(result.stderr, /Reply using template:/);
+  assert.doesNotMatch(result.stderr, /^\{/);
+});
+
+test("every Release CLI outcome maps to an existing bounded reply template", async () => {
+  assert.deepEqual(REPLY_TEMPLATE_COMMANDS, ["package build"]);
+  for (const template of [
+    replyTemplateFor("package build", { ok: true }),
+    replyTemplateFor("package build", {
+      ok: false,
+      errorCode: "materialized_dataset_hash_mismatch",
+    }),
+    replyTemplateFor("package build", {
+      ok: false,
+      errorCode: "unsupported_package_profile",
+    }),
+  ]) {
+    assert.ok(template.id);
+    assert.ok(template.requiredFacts.length > 0);
+    await access(path.resolve(REPOSITORY_ROOT, template.path));
+  }
 });
 
 async function createFixture() {

@@ -47,6 +47,7 @@ Calculation、Dataset Transformation、Result Materialization、Release 的顺�
 Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。
 Calculation 当前默认 profile 是 `global_eligible`、完整的 25 个 reviewed LCIA identity，以及独立的 Climate change/GWP 默认展示类别 `6209b35f-9447-40b5-b68c-a1099e3674a0`；命令输出会披露默认值的采用情况。
 Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接填值的 Markdown 回复模板，使用克制的状态 emoji 帮助 Agent 区分已提交、已完成、委托查询和远程结果未知等用户回复语义。
+Release 的本地 Package CLI 同样返回 workflow-local 回复模板、结构化恢复动作和精确 artifact 路径；人类输出使用 `Summary / Next`，JSON 输出保持有界且可解析，并明确 Candidate build 不构成发布授权。
 异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
 创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
 
