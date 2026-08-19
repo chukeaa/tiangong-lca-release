@@ -18,6 +18,7 @@ lastReviewedNote: "Reviewed the executable contract against the conceptual Resul
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
+  - design/local-artifact-path-convention.md
   - ../AGENTS.md
 ---
 
