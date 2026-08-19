@@ -14,7 +14,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed local two-phase Result Process materialization and resolved one-hop LifecycleModel composition rules."
+lastReviewedNote: "Confirmed one public scope/output/result-layer request over internal Result/Model convergence."
 related:
   - README.md
   - design/resolved-one-hop-materialization.md
@@ -32,7 +32,7 @@ related:
 - 识别 Calculation Bundle、Derived Result 或已有 materialization artifact。
 - 展示可用 recipe、已有证据和必须由用户决定的模型/metadata 问题。
 - 冻结精确 Materialization Request。
-- 冻结 requested Model roots、required Result set 和 direct-edge evidence。
+- 冻结 requested roots、最终输出类型、Result layer、required Result set 和 direct-edge evidence。
 - 调用确定性 identity、version、materializer 和 validator 实现。
 - 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
@@ -54,6 +54,9 @@ related:
 
 - LCI Result Process、LCI + LCIA Result Process、LifecycleModel 是同一 Workflow 的 recipe。
 - Recipe 必须声明输出 role、依赖、必需证据和 validator。
+- 公开入口必须先收敛 `scope + outputType + resultLayer`；内部 Result/Model 两阶段不得要求用户手动串联。
+- `result-process` 只物化 requested roots，不自动扩展 provider；`lifecycle-model` 才扩展 direct provider Results 并在同一次动作中生成 Model。
+- 主数据集、resulting Result 和 dependency Result 必须分别标记并分别计数。
 - LCIA recipe 必须包含或引用同一 Result Process 的完整 LCI 层。
 - LifecycleModel recipe 必须同时绑定精确 Result Process identity/version。
 - 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/resolved-one-hop-materialization.md`。
@@ -68,6 +71,7 @@ related:
 - 先统一解析并冻结 Result UUID/version set，再生成绑定精确 `R(Q)`/`R(P)` references 的 Model version set。
 - 相互引用的数据集作为集合求解版本，不能分别生成后查询 mutable `latest` 补引用。
 - 相同 identity/version 的 canonical content 冲突必须 fail closed。
+- 同一 run 中多个精确 calculation axes 若解析到同一 Result lineage，必须在规划阶段报告全部候选并 fail closed，不得按 UUID 静默去重。
 - 输入或 recipe 改变时，不得静默复用无效 materialization evidence。
 
 ## 可由 Agent 提出的内容

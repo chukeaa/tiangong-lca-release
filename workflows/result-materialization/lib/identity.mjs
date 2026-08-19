@@ -4,7 +4,11 @@ import { canonicalJson } from "./common.mjs";
 export const MODEL_NAMESPACE = "1f09df9a-9a14-5247-a355-90ce73b521dd";
 export const RESULT_NAMESPACE = "6d130f3d-ca65-5a6f-a842-4b2f9c2f5461";
 export const MODEL_PROFILE = "resolved-one-hop-aggregated-background.v1";
-export const RESULT_PROFILE = "lci-lcia-result.v2";
+export const RESULT_PROFILES = Object.freeze({
+  lci: "lci-result.v2",
+  "lci-lcia": "lci-lcia-result.v2",
+});
+export const RESULT_PROFILE = RESULT_PROFILES["lci-lcia"];
 
 export function modelIdentity(rootProcessUuid, referenceFlowUuid) {
   const document = {

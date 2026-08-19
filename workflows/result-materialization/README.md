@@ -14,7 +14,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed local two-phase Result Process materialization and resolved one-hop LifecycleModel composition."
+lastReviewedNote: "Confirmed one public scope/output/result-layer request over internal Result/Model convergence."
 related:
   - AGENTS.md
   - design/resolved-one-hop-materialization.md
@@ -71,7 +71,7 @@ M(P)
 
 ## Recipe，而不是多个顶层 Workflow
 
-LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 高度共享身份、版本、引用和验证，因此属于同一 Workflow 下的 recipe：
+用户先选择范围，再选择最终对象和结果层。它们高度共享身份、版本、引用和验证，因此属于同一 Workflow 下的 recipe：
 
 1. `lci-result-process`
    - 生成 quantitative reference 和聚合 LCI exchanges；
@@ -87,14 +87,20 @@ LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 高度共享�
    - 首版使用 `resolved-one-hop-aggregated-background.v1` 组合 profile；
    - 将根 `U(P)`、direct provider `R(Q)`、connections、multiplication factors 和 resulting `R(P)` 精确绑定。
 
-Recipe 可以单独选择，但身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
+稳定的请求维度是：
+
+1. `scope`：单条、指定一批或全部 eligible Process，显式选择使用 `UUID@version`；
+2. `outputType`：`result-process` 或 `lifecycle-model`；
+3. `resultLayer`：`lci` 或 `lci-lcia`，不支持 LCIA-only。
+
+`result-process` 对每个 root 只生成一个主要 `R(P)`，不扩展 provider。`lifecycle-model` 对每个 root 生成一个主要 `M(P)`，并在内部生成 resulting `R(P)` 和 direct provider dependency `R(Q)`。这些依赖不会计入主要对象数量。身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
 
 ## 主路线
 
 ```text
 读取并验证冻结输入
-  -> 选择 Model root 范围和 Materialization Recipe
-  -> 从 direct edges 派生 required Result set
+  -> 冻结 scope + outputType + resultLayer
+  -> 仅在 lifecycle-model 模式从 direct edges 派生 required Result set
   -> 确认 metadata completion policy
   -> 派生稳定 identity lineage并读取上一版 manifest
   -> 逐条生成 required R(P) drafts
@@ -120,40 +126,39 @@ node cli.mjs intake \
   --out-dir /path/to/intakes/<bundle-content-hash> \
   --json
 
-# 为全部 root 生成 required R(P)/R(Q) 并冻结 Result Catalog
-node cli.mjs materialize-results \
+# 生成指定 root 的 LCI + LCIA Result Process
+node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
-  --all \
-  --out-dir /path/to/materialized/results \
+  --processes <UUID@VERSION> \
+  --output-type result-process \
+  --result-layer lci-lcia \
+  --out-dir /path/to/materialized/result-process \
   --first-generation \
   --json
 
-# 只选择部分 root 时使用：--processes <UUID1>,<UUID2>
-
-# 使用冻结 Catalog 生成 resolved one-hop M(P)
-node cli.mjs materialize-models \
+# 一次完成依赖规划、Result Catalog 和 resolved one-hop LifecycleModel
+node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
-  --result-catalog /path/to/materialized/results/result-catalog.json \
-  --all-selected \
-  --out-dir /path/to/materialized/models \
+  --processes <UUID@VERSION> \
+  --output-type lifecycle-model \
+  --result-layer lci-lcia \
+  --out-dir /path/to/materialized/lifecycle-model \
   --first-generation \
   --json
 ```
 
 `intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。输出目录存在时拒绝覆盖。
 
-`materialize-results` 接受显式 root 范围，并自动把每个 root 的 direct provider `Q` 纳入 required Result set。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，不包含 schema/version 字段；Result profile、LCI/LCIA 数值、方法集、计算任务、source version 和生成时间也都不进入 UUID，而通过外层 identity evidence、profile、semantic hash、dataset version 和 provenance 表达。命令先解析整个 Result version set，再冻结 `result-catalog.json`。
+`materialize` 冻结 `materialization-request.json`，并根据最终对象选择内部路线。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider 扩展、Result Catalog 冻结和 `M(P)` 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
 
-`materialize-models` 只读取同一 intake 和已冻结 Result Catalog，以精确 `R(P)@version` / `R(Q)@version` 生成 `resolved-one-hop-aggregated-background.v1` 的 `M(P)`。每条 direct provider edge 产生一个 provider process instance，并执行 TIDAS schema、Catalog dataset hash 和 one-hop inventory reconstruction 校验。
-
-两个生成命令必须二选一提供 `--first-generation` 或 `--previous-manifest <path>`。相同 semantic hash 与 version-significant hash 复用版本；语义变化升 major；仅 metadata 等公开内容变化升 minor；同一 UUID/version 出现不同 canonical content 时 fail closed。整个过程不会查询数据库，也不会上传或发布。
+生成命令必须二选一提供 `--first-generation` 或 `--previous-manifest <path>`。相同 semantic hash 与 version-significant hash 复用版本；语义变化升 major；仅 metadata 等公开内容变化升 minor；同一 UUID/version 出现不同 canonical content时 fail closed。同一次请求中多个 exact axes 解析到同一 Result lineage 时也会在写出产物前 fail closed，并要求先解决 calculation graph 的精确 source version；不会再按 UUID 静默去重。整个过程不会查询数据库，也不会上传或发布。
 
 CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下一条可复制命令；大数据集始终写入文件。
 
 ## 需要用户决定的内容
 
-- 选择哪个 materialization recipe；
-- 是否需要 LifecycleModel；
+- 选择处理范围；
+- 选择最终对象 `result-process` 或 `lifecycle-model`；
 - 是否显式选择未来新增、已经过验证的非默认模型组织 profile；
 - 输出 LCI-only 还是 LCI + LCIA；
 - 需要使用的上一版 Release Manifest；
@@ -210,6 +215,6 @@ Materialization Manifest 至少绑定：
 ## 后续增强点
 
 1. 使用真实完整 Calculation Bundle 做大范围 replay、性能和内存基准。
-2. 明确 LCI-only 与 LCI + LCIA 的 lineage/version policy 后，再开放对应 recipe 选项。
+2. 根据真实 replay 继续验证 LCI-only 与 LCI + LCIA 的 lineage/version policy。
 3. 增加 metadata completion decision artifact，而不是对无法继承的字段做隐式猜测。
 4. 把完成的 `materialization-manifest.json` 接入 Release Workflow 的打包与发布入口。

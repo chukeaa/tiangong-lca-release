@@ -9,7 +9,7 @@ import {
 import path from "node:path";
 import { canonicalJson, fail } from "./common.mjs";
 import { loadMaterializationContext, selectAxes } from "./context.mjs";
-import { RESULT_PROFILE } from "./identity.mjs";
+import { resultIdentity, RESULT_PROFILES } from "./identity.mjs";
 import { renderResultProcess } from "./result-renderer.mjs";
 import {
   assertNoContentCollision,
@@ -23,6 +23,8 @@ export async function materializeResults({
   intakeDir,
   outDir,
   processUuids,
+  includeDirectProviders = false,
+  resultLayer = "lci-lcia",
   firstGeneration = false,
   previousManifestPath,
 }) {
@@ -40,26 +42,45 @@ export async function materializeResults({
   const rootAxes = selectAxes(context, processUuids);
   if (!rootAxes.length)
     fail("empty_selection", "Result materialization selection is empty");
+  const profile = RESULT_PROFILES[resultLayer];
+  if (!profile)
+    fail(
+      "unsupported_result_layer",
+      `Unsupported result layer: ${resultLayer}`,
+    );
   const rootIndexes = new Set(rootAxes.map((axis) => axis.processIndex));
   const requiredIndexes = new Set(rootIndexes);
-  for (const edge of context.technosphereEdges) {
-    if (rootIndexes.has(edge.dependentProcessIndex)) {
-      requiredIndexes.add(edge.balancingProcessIndex);
+  if (includeDirectProviders) {
+    for (const edge of context.technosphereEdges) {
+      if (rootIndexes.has(edge.dependentProcessIndex)) {
+        requiredIndexes.add(edge.balancingProcessIndex);
+      }
     }
   }
   const axes = context.axes.filter((axis) =>
     requiredIndexes.has(axis.processIndex),
   );
   const descriptors = [];
+  assertUniqueResultLineages(axes);
   for (const axis of axes) {
-    const provisional = renderResultProcess(context, axis, "01.00.000");
+    const provisional = renderResultProcess(
+      context,
+      axis,
+      "01.00.000",
+      resultLayer,
+    );
     const hashes = resultHashes(provisional);
     const historical = previous.get(`process:${provisional.uuid}`);
     const resolution = resolveVersion(
       { uuid: provisional.uuid, ...hashes },
       historical,
     );
-    const rendered = renderResultProcess(context, axis, resolution.version);
+    const rendered = renderResultProcess(
+      context,
+      axis,
+      resolution.version,
+      resultLayer,
+    );
     const finalHashes = resultHashes(rendered);
     const descriptor = {
       schemaVersion: "tiangong.release.dataset-descriptor.v1",
@@ -68,7 +89,12 @@ export async function materializeResults({
       processIndex: axis.processIndex,
       uuid: rendered.uuid,
       version: rendered.version,
-      profile: RESULT_PROFILE,
+      profile,
+      materializationRole: rootIndexes.has(axis.processIndex)
+        ? includeDirectProviders
+          ? "resulting"
+          : "primary"
+        : "dependency",
       sourceProcess: rendered.sourceProcess,
       identity: rendered.identity,
       versionChange: resolution.change,
@@ -102,6 +128,8 @@ export async function materializeResults({
     const catalog = {
       schemaVersion: "tiangong.release.result-catalog.v1",
       completeness: "complete-for-selection",
+      outputType: includeDirectProviders ? "lifecycle_model" : "result_process",
+      resultLayer,
       calculationId: context.intake.source.calculationId,
       bundleContentHash: context.intake.source.bundleContentHash,
       selection: rootAxes.map((axis) => axis.rootProcess).sort(compareIdentity),
@@ -133,9 +161,42 @@ export async function materializeResults({
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
     if (error.code === "EEXIST" || error.code === "ENOTEMPTY") {
-      fail("output_exists", `Refusing to overwrite existing output: ${target}`);
+      fail(
+        error.syscall === "rename" ? "output_exists" : "duplicate_uuid",
+        error.syscall === "rename"
+          ? `Refusing to overwrite existing output: ${target}`
+          : `Duplicate canonical dataset UUID collision: ${error.message}`,
+      );
     }
     throw error;
+  }
+}
+
+export function assertUniqueResultLineages(axes) {
+  const seen = new Map();
+  for (const axis of axes) {
+    const uuid = resultIdentity(
+      axis.rootProcess.id,
+      axis.quantitativeReference.flow.id,
+    ).uuid;
+    const previous = seen.get(uuid);
+    if (previous) {
+      fail(
+        "result_lineage_ambiguous",
+        `Multiple exact calculation axes resolve to Result lineage ${uuid}`,
+        {
+          resultUuid: uuid,
+          axes: [previous, axis].map((item) => ({
+            processIndex: item.processIndex,
+            sourceProcess: item.rootProcess,
+            referenceFlow: item.quantitativeReference.flow,
+          })),
+          recovery:
+            "Resolve the calculation graph to one exact source version per Result lineage before materialization.",
+        },
+      );
+    }
+    seen.set(uuid, axis);
   }
 }
 
@@ -143,7 +204,7 @@ function resultHashes(result) {
   const data = result.document.processDataSet;
   const semantic = {
     schema: "tiangong.release.result-process-semantic.v2",
-    profile: RESULT_PROFILE,
+    profile: result.profile,
     uuid: result.uuid,
     sourceProcess: result.sourceProcess,
     quantitativeReference: data.processInformation.quantitativeReference,

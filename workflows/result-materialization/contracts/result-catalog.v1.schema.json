@@ -9,6 +9,8 @@
     "completeness",
     "calculationId",
     "bundleContentHash",
+    "outputType",
+    "resultLayer",
     "selection",
     "requiredResults",
     "datasets"
@@ -18,6 +20,8 @@
     "completeness": { "const": "complete-for-selection" },
     "calculationId": { "type": "string", "format": "uuid" },
     "bundleContentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "outputType": { "enum": ["result_process", "lifecycle_model"] },
+    "resultLayer": { "enum": ["lci", "lci-lcia"] },
     "selection": { "type": "array", "items": { "$ref": "#/$defs/identity" } },
     "requiredResults": {
       "type": "array",

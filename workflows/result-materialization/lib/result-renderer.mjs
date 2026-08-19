@@ -1,10 +1,21 @@
 import { ProcessSchema } from "@tiangong-lca/tidas-sdk";
 import { fail } from "./common.mjs";
-import { resultIdentity, RESULT_PROFILE } from "./identity.mjs";
+import { resultIdentity, RESULT_PROFILES } from "./identity.mjs";
 import { sourceKey } from "./context.mjs";
 import { globalReference, suffixName } from "./references.mjs";
 
-export function renderResultProcess(context, axis, version) {
+export function renderResultProcess(
+  context,
+  axis,
+  version,
+  resultLayer = "lci-lcia",
+) {
+  const profile = RESULT_PROFILES[resultLayer];
+  if (!profile)
+    fail(
+      "unsupported_result_layer",
+      `Unsupported result layer: ${resultLayer}`,
+    );
   const source = context.sources.get(
     sourceKey("process", axis.rootProcess.id, axis.rootProcess.version),
   );
@@ -32,13 +43,17 @@ export function renderResultProcess(context, axis, version) {
   const result = structuredClone(source.document);
   const data = result.processDataSet;
   data.processInformation.dataSetInformation["common:UUID"] = identity.uuid;
+  const resultLabel =
+    resultLayer === "lci"
+      ? "aggregated LCI result"
+      : "aggregated LCI/LCIA result";
   data.processInformation.dataSetInformation.name = suffixName(
     data.processInformation.dataSetInformation.name,
-    "aggregated LCI/LCIA result",
+    resultLabel,
   );
   data.processInformation.dataSetInformation["common:generalComment"] = {
     "@xml:lang": "en",
-    "#text": `Aggregated LCI/LCIA result generated for ${axis.rootProcess.id}@${axis.rootProcess.version} under calculation ${context.intake.source.calculationId}.`,
+    "#text": `${resultLabel} generated for ${axis.rootProcess.id}@${axis.rootProcess.version} under calculation ${context.intake.source.calculationId}.`,
   };
   data.modellingAndValidation.LCIMethodAndAllocation.typeOfDataSet =
     "LCI result";
@@ -77,9 +92,10 @@ export function renderResultProcess(context, axis, version) {
       dataDerivationTypeStatus: "Calculated",
     }));
   data.exchanges = { exchange: [referenceExchange, ...inventory] };
-  const lcia = [...(context.lcia.get(axis.processIndex) ?? [])].sort(
-    compareLcia,
-  );
+  const lcia =
+    resultLayer === "lci-lcia"
+      ? [...(context.lcia.get(axis.processIndex) ?? [])].sort(compareLcia)
+      : [];
   if (lcia.length) {
     data.LCIAResults = {
       LCIAResult: lcia.map((record) => ({
@@ -109,7 +125,7 @@ export function renderResultProcess(context, axis, version) {
     processIndex: axis.processIndex,
     uuid: identity.uuid,
     version,
-    profile: RESULT_PROFILE,
+    profile,
     identity: identity.evidence,
     sourceProcess: structuredClone(axis.rootProcess),
     document: result,

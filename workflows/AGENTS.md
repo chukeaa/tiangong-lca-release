@@ -12,8 +12,8 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: ab21774eb5140f817b2679bcc06bf53fcfc896c5
+lastReviewedAt: 2026-08-19
+lastReviewedCommit: e3d36e6e5bb6253285c47362a9b03e0cb0633bbb
 lastReviewedNote: "Established shared Agent boundaries for root-level workflow packages."
 related:
   - ../AGENTS.md

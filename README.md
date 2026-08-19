@@ -21,7 +21,7 @@ checkPaths:
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed local two-phase Result Process materialization and resolved one-hop LifecycleModel composition."
+lastReviewedNote: "Confirmed intent-level scope, output type, and result layer selection over internal Result/Model convergence."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -110,8 +110,8 @@ workflows/
 
 它包括：
 
-- 选择 LCI Result Process、LCI + LCIA Result Process 或 LifecycleModel recipe；
-- 选择需要生成 LifecycleModel 的 root Process 范围，并从 direct edges 派生 required Result set；
+- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel）和结果层（LCI 或 LCI + LCIA）；
+- Result Process 只处理所选 roots；LifecycleModel 在一次动作中从 direct edges 派生依赖、冻结 Result Catalog 并生成最终 Model；
 - 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
 - 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
 - 读取上一版 manifest 并分阶段求解 Result/Model dataset version；

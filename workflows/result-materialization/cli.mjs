@@ -1,33 +1,24 @@
 #!/usr/bin/env node
 import { createIntake } from "./lib/intake.mjs";
-import { materializeResults } from "./lib/materialize-results.mjs";
-import { materializeModels } from "./lib/materialize-models.mjs";
+import { materialize } from "./lib/materialize.mjs";
 
 const HELP = `release-result-materialization <command> [options]
 
 Commands:
   intake              Verify a local Calculation Bundle v2 ZIP/directory and freeze an intake
-  materialize-results Generate the selected R(P) set and freeze result-catalog.json
-  materialize-models  Generate resolved one-hop M(P) from a frozen Result Catalog
+  materialize         Generate the requested Result Process or LifecycleModel delivery
 
 intake options:
   --bundle <path>      Local calculation-evidence-bundle.zip or extracted directory
   --out-dir <path>     New immutable intake directory
 
-materialize-results options:
+materialize options:
   --intake <path>      Verified intake directory
-  --processes <list>   Comma-separated Model root Process UUIDs
-  --all                Select every Process in the Calculation Bundle as a Model root
-  --out-dir <path>     New output directory
-  --first-generation   Confirm that no previous Release Manifest exists
-  --previous-manifest <path>  Previous materialization/release manifest
-
-materialize-models options:
-  --intake <path>      Same verified intake used for the Result Catalog
-  --result-catalog <path>  Frozen result-catalog.json
-  --processes <list>   Optional subset of the Catalog's selected Model roots
-  --all-selected       Generate every selected Model root from the Catalog
-  --out-dir <path>     New output directory
+  --processes <list>   Comma-separated UUID@version selectors
+  --all                Select every eligible Process in the Calculation Bundle
+  --output-type <type> result-process or lifecycle-model
+  --result-layer <layer> lci or lci-lcia
+  --out-dir <path>     New immutable materialization directory
   --first-generation   Confirm that no previous Release Manifest exists
   --previous-manifest <path>  Previous materialization/release manifest
 
@@ -57,20 +48,27 @@ async function main() {
       calculationId: result.intake.source.calculationId,
       bundleContentHash: result.intake.source.bundleContentHash,
       nextAction: {
-        command: `node cli.mjs materialize-results --intake ${quote(result.path)} --all --out-dir <RESULT_OUTPUT_DIR> --first-generation --json`,
+        command: `node cli.mjs materialize --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
         description:
-          "Generate the required local Result Process set and freeze Result Catalog.",
+          "Choose scope, final dataset type, and result layer, then materialize the complete local delivery.",
       },
     });
     return;
   }
-  if (command === "materialize-results") {
-    requireOptions(options, ["intake", "out-dir"]);
-    requireSelection(options, "all");
-    const result = await materializeResults({
+  if (command === "materialize") {
+    requireOptions(options, [
+      "intake",
+      "out-dir",
+      "output-type",
+      "result-layer",
+    ]);
+    requireSelection(options);
+    const result = await materialize({
       intakeDir: options.intake,
       outDir: options["out-dir"],
-      processUuids: options.all ? undefined : splitUuids(options.processes),
+      processUuids: options.all ? undefined : splitSelectors(options.processes),
+      outputType: options["output-type"],
+      resultLayer: options["result-layer"],
       firstGeneration: Boolean(options["first-generation"]),
       previousManifestPath: options["previous-manifest"],
     });
@@ -79,38 +77,10 @@ async function main() {
       command,
       outcome: "materialized",
       output: result.path,
-      completeness: result.catalog.completeness,
-      rootCount: result.catalog.selection.length,
-      resultCount: result.catalog.datasets.length,
-      catalog: `${result.path}/result-catalog.json`,
-      nextAction: {
-        command: `node cli.mjs materialize-models --intake ${quote(options.intake)} --result-catalog ${quote(`${result.path}/result-catalog.json`)} --all-selected --out-dir <MODEL_OUTPUT_DIR> ${options["previous-manifest"] ? `--previous-manifest ${quote(options["previous-manifest"])}` : "--first-generation"} --json`,
-        description:
-          "Generate resolved one-hop LifecycleModels from the frozen Result Catalog.",
-      },
-    });
-    return;
-  }
-  if (command === "materialize-models") {
-    requireOptions(options, ["intake", "result-catalog", "out-dir"]);
-    requireSelection(options, "all-selected");
-    const result = await materializeModels({
-      intakeDir: options.intake,
-      resultCatalogPath: options["result-catalog"],
-      outDir: options["out-dir"],
-      processUuids: options["all-selected"]
-        ? undefined
-        : splitUuids(options.processes),
-      firstGeneration: Boolean(options["first-generation"]),
-      previousManifestPath: options["previous-manifest"],
-    });
-    respond(options, {
-      ok: true,
-      command,
-      outcome: "materialized",
-      output: result.path,
-      completeness: result.catalog.completeness,
-      modelCount: result.catalog.datasets.length,
+      completeness: result.manifest.completeness,
+      outputType: result.request.outputType,
+      resultLayer: result.request.resultLayer,
+      ...result.summary,
       manifest: `${result.path}/materialization-manifest.json`,
       nextAction: {
         description:
@@ -134,8 +104,7 @@ function parseArgs(tokens) {
       });
     }
     const key = token.slice(2);
-    if (["json", "first-generation", "all", "all-selected"].includes(key))
-      result[key] = true;
+    if (["json", "first-generation", "all"].includes(key)) result[key] = true;
     else {
       const value = tokens[index + 1];
       if (!value || value.startsWith("--")) {
@@ -150,26 +119,26 @@ function parseArgs(tokens) {
   return result;
 }
 
-function requireSelection(options, allFlag) {
-  if (Boolean(options[allFlag]) === Boolean(options.processes)) {
+function requireSelection(options) {
+  if (Boolean(options.all) === Boolean(options.processes)) {
     throw Object.assign(
-      new Error(`Choose exactly one of --${allFlag} or --processes <uuid,...>`),
+      new Error(
+        "Choose exactly one of --all or --processes <UUID@version,...>",
+      ),
       { code: "selection_required" },
     );
   }
 }
 
-function splitUuids(value) {
+function splitSelectors(value) {
   const result = String(value)
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   if (!result.length) {
     throw Object.assign(
-      new Error("--processes must contain at least one UUID"),
-      {
-        code: "selection_required",
-      },
+      new Error("--processes must contain at least one UUID@version selector"),
+      { code: "selection_required" },
     );
   }
   return result;

@@ -17,7 +17,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-18
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Defined local two-phase Result Process materialization and resolved one-hop LifecycleModel composition."
+lastReviewedNote: "Defined intent-level materialization requests and internal Result/Model convergence."
 related:
   - ../README.md
   - ../AGENTS.md
@@ -184,39 +184,49 @@ and exact R(e.providerProcess) exists in the finalized Result Catalog
 
 ## 范围编排
 
-用户选择范围定义需要生成 LifecycleModel 的根集合：
+请求首先冻结 `scope + outputType + resultLayer`。用户选择范围定义 requested roots：
 
 ```text
-requestedModelRoots = selected P set
+requestedRoots = selected P set
 ```
 
-Result 阶段需要的范围由冻结 direct edges 确定：
+当 `outputType = result-process`：
+
+```text
+primaryResults = requestedRoots
+requiredResults = requestedRoots
+```
+
+当 `outputType = lifecycle-model`，Result 阶段需要的范围才由冻结 direct edges 扩展：
 
 ```text
 requiredResults
-  = requestedModelRoots
-    union directProviders(requestedModelRoots)
+  = requestedRoots
+    union directProviders(requestedRoots)
 ```
 
 依赖扩展只加入直接 provider Result，不递归加入 provider Model。范围计划必须区分：
 
-- `requested`：用户要求生成 `M(P)` 的根 Process；
+- `primary`：用户要求的 `R(P)` 或 `M(P)`；
+- `resulting`：仅在 Model recipe 中由 `M(P)` 指向的 `R(P)`；
 - `dependency`：仅为了完成 requested Model 而需要物化的 `R(Q)`。
 
 例如用户只选择 `P1`，而其直接 providers 为 `Q1`、`Q2`：
 
 ```text
-生成 R(P1), R(Q1), R(Q2), M(P1)
+主要产物 M(P1)
+resulting 依赖 R(P1)
+provider 依赖 R(Q1), R(Q2)
 不自动生成 M(Q1), M(Q2)
 ```
 
-`global_eligible` 下，所有合格 Process 通常同时是 requested Model root 和 required Result。
+`global_eligible` 下，Result-only recipe 把所有合格 Process 作为 primary Results；LifecycleModel recipe 把它们作为 requested Model roots，并按 direct edges 扩展 required Results。
 
 ## 两阶段身份和版本解析
 
 一次本地 materialization run 必须按以下顺序收敛：
 
-1. 冻结 Calculation Bundle、requested Model roots、required Result set 和 recipe profiles；
+1. 冻结 Calculation Bundle、requested roots、output type、result layer、required Result set 和 recipe profiles；
 2. 为所有 required Results 派生稳定 identity，并生成 Result drafts/descriptors；
 3. 对照 previous manifest 或显式 first-generation policy，统一解析并冻结所有 `R(P)` UUID/version/hash；
 4. 生成 finalized Result Catalog；
@@ -225,6 +235,8 @@ requiredResults
 7. 验证版本集合、内容 hash 和引用收敛后，冻结本地 materialization manifest。
 
 Identity 不使用随机 UUID；version 解析不查询 mutable `latest`；相同 dataset identity/version 不得对应不同 canonical content。
+
+如果多个 exact calculation axes 解析到同一个 Result UUID lineage，范围规划必须 fail closed 并报告所有 source UUID/version、process index 和 reference flow。不得使用 UUID 去重掩盖精确版本冲突。
 
 ## 本地产物
 

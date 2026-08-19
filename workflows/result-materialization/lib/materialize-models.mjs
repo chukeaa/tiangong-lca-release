@@ -42,19 +42,19 @@ export async function materializeModels({
   const catalog = JSON.parse(await readFile(catalogFile, "utf8"));
   validateCatalog(context, catalog);
   const resultDocuments = await verifyCatalogDatasets(catalogFile, catalog);
-  const allowedRoots = new Set(
-    catalog.selection.map((item) => item.id.toLowerCase()),
-  );
-  const requested = processUuids?.length ? processUuids : [...allowedRoots];
-  for (const uuid of requested) {
-    if (!allowedRoots.has(uuid.toLowerCase())) {
+  const allowedRoots = new Set(catalog.selection.map(exactIdentityKey));
+  const requested = processUuids?.length
+    ? processUuids
+    : catalog.selection.map((item) => `${item.id}@${item.version}`);
+  const axes = selectAxes(context, requested);
+  for (const axis of axes) {
+    if (!allowedRoots.has(exactIdentityKey(axis.rootProcess))) {
       fail(
         "model_selection_outside_result_roots",
-        `Process is not a selected Model root: ${uuid}`,
+        `Process is not a selected Model root: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
       );
     }
   }
-  const axes = selectAxes(context, requested);
   const descriptors = [];
   for (const axis of axes) {
     const provisional = renderLifecycleModel(
@@ -80,6 +80,7 @@ export async function materializeModels({
       schemaVersion: "tiangong.release.dataset-descriptor.v1",
       datasetType: "lifecyclemodel",
       role: "lifecycle_model",
+      materializationRole: "primary",
       processIndex: rendered.processIndex,
       uuid: rendered.uuid,
       version: rendered.version,
@@ -113,7 +114,9 @@ export async function materializeModels({
       const fileName = `${dataset.uuid}_${dataset.version}.json`;
       await writeFile(
         path.join(resultDir, fileName),
-        canonicalJson(resultDocuments.get(dataset.uuid.toLowerCase())),
+        canonicalJson(
+          resultDocuments.get(exactDatasetKey(dataset.uuid, dataset.version)),
+        ),
         { flag: "wx" },
       );
       resultDatasets.push({
@@ -250,15 +253,24 @@ async function verifyCatalogDatasets(catalogFile, catalog) {
         `Result dataset hash mismatch: ${dataset.uuid}`,
       );
     }
-    if (documents.has(dataset.uuid.toLowerCase())) {
+    const key = exactDatasetKey(dataset.uuid, dataset.version);
+    if (documents.has(key)) {
       fail(
-        "result_catalog_lineage_duplicate",
-        `Duplicate Result Catalog UUID: ${dataset.uuid}`,
+        "result_catalog_dataset_duplicate",
+        `Duplicate Result Catalog dataset: ${dataset.uuid}@${dataset.version}`,
       );
     }
-    documents.set(dataset.uuid.toLowerCase(), document);
+    documents.set(key, document);
   }
   return documents;
+}
+
+function exactIdentityKey(identity) {
+  return `${identity.id.toLowerCase()}@${identity.version}`;
+}
+
+function exactDatasetKey(uuid, version) {
+  return `${uuid.toLowerCase()}@${version}`;
 }
 
 function modelHashes(model) {

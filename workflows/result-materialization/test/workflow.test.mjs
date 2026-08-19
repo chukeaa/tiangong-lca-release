@@ -10,7 +10,11 @@ import { canonicalJson } from "../lib/common.mjs";
 import { createIntake } from "../lib/intake.mjs";
 import { modelIdentity, resultIdentity } from "../lib/identity.mjs";
 import { materializeModels } from "../lib/materialize-models.mjs";
-import { materializeResults } from "../lib/materialize-results.mjs";
+import { materialize } from "../lib/materialize.mjs";
+import {
+  assertUniqueResultLineages,
+  materializeResults,
+} from "../lib/materialize-results.mjs";
 import { resolveVersion } from "../lib/versioning.mjs";
 
 const PROCESS_ID = "11111111-1111-4111-8111-111111111111";
@@ -58,23 +62,30 @@ test("version policy reuses, bumps minor metadata, and bumps major semantics", (
   );
 });
 
-test("CLI help exposes the two-phase path and ambiguous scope fails with structured guidance", () => {
+test("CLI exposes one intent-level materialize command and requires all three choices", () => {
   const cli = new URL("../cli.mjs", import.meta.url);
   const help = spawnSync(process.execPath, [cli.pathname, "--help"], {
     encoding: "utf8",
   });
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /materialize-results/);
-  assert.match(help.stdout, /materialize-models/);
+  assert.match(help.stdout, /materialize\s+/);
+  assert.match(help.stdout, /--output-type <type>/);
+  assert.match(help.stdout, /--result-layer <layer>/);
+  assert.doesNotMatch(help.stdout, /materialize-results/);
+  assert.doesNotMatch(help.stdout, /materialize-models/);
   const invalid = spawnSync(
     process.execPath,
     [
       cli.pathname,
-      "materialize-results",
+      "materialize",
       "--intake",
       "/tmp/input",
       "--out-dir",
       "/tmp/output",
+      "--output-type",
+      "result-process",
+      "--result-layer",
+      "lci",
       "--json",
     ],
     { encoding: "utf8" },
@@ -208,6 +219,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     intakeDir: intakePath,
     outDir: resultPath,
     processUuids: [PROCESS_ID],
+    includeDirectProviders: true,
     firstGeneration: true,
   });
   assert.equal(results.catalog.selection.length, 1);
@@ -238,6 +250,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     intakeDir: intakePath,
     outDir: path.join(temp, "results-replay"),
     processUuids: [PROCESS_ID],
+    includeDirectProviders: true,
     previousManifestPath,
   });
   assert.ok(
@@ -255,6 +268,56 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     replayModels.catalog.datasets.every(
       (item) => item.versionChange === "reuse",
     ),
+  );
+
+  const resultOnly = await materialize({
+    intakeDir: intakePath,
+    outDir: path.join(temp, "result-only-delivery"),
+    processUuids: [`${PROCESS_ID}@01.00.000`],
+    outputType: "result-process",
+    resultLayer: "lci",
+    firstGeneration: true,
+  });
+  assert.deepEqual(resultOnly.summary, {
+    requestedRootCount: 1,
+    primaryDatasetCount: 1,
+    dependencyDatasetCount: 0,
+    resultingDatasetCount: 0,
+  });
+  assert.equal(resultOnly.manifest.profiles.result, "lci-result.v2");
+  assert.equal(resultOnly.manifest.profiles.model, null);
+
+  const modelDelivery = await materialize({
+    intakeDir: intakePath,
+    outDir: path.join(temp, "model-delivery"),
+    processUuids: [`${PROCESS_ID}@01.00.000`],
+    outputType: "lifecycle-model",
+    resultLayer: "lci-lcia",
+    firstGeneration: true,
+  });
+  assert.deepEqual(modelDelivery.summary, {
+    requestedRootCount: 1,
+    primaryDatasetCount: 1,
+    dependencyDatasetCount: 1,
+    resultingDatasetCount: 1,
+  });
+  assert.equal(modelDelivery.manifest.datasets.length, 3);
+});
+
+test("multiple exact axes cannot be silently collapsed into one Result lineage", () => {
+  const axis = (processIndex, version) => ({
+    processIndex,
+    rootProcess: { id: PROCESS_ID, version },
+    quantitativeReference: {
+      flow: { id: FLOW_ID, version: "01.00.000" },
+    },
+  });
+  assert.throws(
+    () =>
+      assertUniqueResultLineages([axis(1, "01.01.002"), axis(2, "01.01.005")]),
+    (error) =>
+      error.code === "result_lineage_ambiguous" &&
+      error.details.axes.length === 2,
   );
 });
 

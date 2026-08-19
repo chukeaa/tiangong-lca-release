@@ -21,9 +21,9 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-18
+lastReviewedAt: 2026-08-19
 lastReviewedCommit: ab21774eb5140f817b2679bcc06bf53fcfc896c5
-lastReviewedNote: "Kept runtime ownership workflow-local and isolated provider ResultSet schemas behind a Release-owned reference."
+lastReviewedNote: "Kept Result Materialization workflow-local while exposing one scope/output/result-layer request over deterministic internal convergence."
 related:
   - README.md
   - .docpact/config.yaml
@@ -105,7 +105,7 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`codex/issue-11-workflow-control-plane`
+- 当前工作分支：`codex/fix-issue-11-materialization-recipes`
 - 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
@@ -126,4 +126,5 @@ related:
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
 - Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
+- Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和结果层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
 - 当前变更通过仓库门禁并形成独立 Git commit。

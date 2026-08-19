@@ -10,6 +10,7 @@
     "uuid",
     "version",
     "profile",
+    "materializationRole",
     "versionSignificantHash",
     "semanticHash",
     "canonicalContentHash",
@@ -19,6 +20,9 @@
     "schemaVersion": { "const": "tiangong.release.dataset-descriptor.v1" },
     "datasetType": { "enum": ["process", "lifecyclemodel"] },
     "role": { "enum": ["result_process", "lifecycle_model"] },
+    "materializationRole": {
+      "enum": ["primary", "resulting", "dependency"]
+    },
     "uuid": { "type": "string", "format": "uuid" },
     "version": {
       "type": "string",

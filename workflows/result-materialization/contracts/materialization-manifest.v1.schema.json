@@ -23,6 +23,7 @@
         "calculationId",
         "bundleContentHash",
         "intakeManifestSha256",
+        "materializationRequestSha256",
         "resultCatalogSha256",
         "firstGeneration"
       ]
@@ -33,7 +34,7 @@
     },
     "datasets": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 1,
       "items": { "type": "object" }
     },
     "validation": {

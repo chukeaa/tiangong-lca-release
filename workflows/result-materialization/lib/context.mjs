@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { canonicalJson, fail, sha256Bytes } from "./common.mjs";
+import canonicalize from "canonicalize";
 import { readNdjson } from "./records.mjs";
 
 export async function loadMaterializationContext(intakeDir) {
@@ -22,8 +23,7 @@ export async function loadMaterializationContext(intakeDir) {
   const sources = new Map();
   for await (const record of recordsFor(artifacts.source_closure)) {
     if (
-      sha256Bytes(Buffer.from(canonicalJson(record.document).trimEnd())) !==
-      record.sha256
+      sha256Bytes(Buffer.from(canonicalize(record.document))) !== record.sha256
     ) {
       fail(
         "source_document_hash_mismatch",
@@ -49,17 +49,36 @@ export async function loadMaterializationContext(intakeDir) {
 
 export function selectAxes(context, processUuids) {
   if (!processUuids?.length) return context.axes;
-  const requested = new Set(processUuids.map((value) => value.toLowerCase()));
-  const selected = context.axes.filter((axis) =>
-    requested.delete(axis.rootProcess.id.toLowerCase()),
-  );
-  if (requested.size) {
-    fail(
-      "process_not_in_bundle",
-      `Processes are not in Calculation Bundle: ${[...requested].sort().join(", ")}`,
+  const selected = [];
+  for (const selector of processUuids) {
+    const [uuid, version] = String(selector).toLowerCase().split("@");
+    const matches = context.axes.filter(
+      (axis) =>
+        axis.rootProcess.id.toLowerCase() === uuid &&
+        (!version || axis.rootProcess.version.toLowerCase() === version),
     );
+    if (!matches.length) {
+      fail(
+        "process_not_in_bundle",
+        `Process is not in Calculation Bundle: ${selector}`,
+      );
+    }
+    if (matches.length > 1) {
+      fail(
+        "ambiguous_process_selection",
+        `Process selector matches multiple calculation axes; use UUID@version: ${selector}`,
+        {
+          candidates: matches.map((axis) => ({
+            ...axis.rootProcess,
+            processIndex: axis.processIndex,
+          })),
+        },
+      );
+    }
+    if (!selected.some((axis) => axis.processIndex === matches[0].processIndex))
+      selected.push(matches[0]);
   }
-  return selected;
+  return selected.sort((left, right) => left.processIndex - right.processIndex);
 }
 
 export function sourceKey(datasetType, uuid, version) {
