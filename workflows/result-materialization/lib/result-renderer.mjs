@@ -25,9 +25,14 @@ export function renderResultProcess(
       `Exact source Unit Process is missing: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
     );
   }
-  const name = source.document?.processDataSet?.processInformation?.dataSetInformation?.name;
+  const name =
+    source.document?.processDataSet?.processInformation?.dataSetInformation
+      ?.name;
   if (name) {
-    if (!name.treatmentStandardsRoutes || name.treatmentStandardsRoutes.length === 0) {
+    if (
+      !name.treatmentStandardsRoutes ||
+      name.treatmentStandardsRoutes.length === 0
+    ) {
       name.treatmentStandardsRoutes = [{ "@xml:lang": "en", "#text": " " }];
     }
     if (!name.mixAndLocationTypes || name.mixAndLocationTypes.length === 0) {
@@ -167,7 +172,10 @@ function validateReference(unitProcess, axis) {
     Number(exchange.meanAmount) === 0 ||
     normalizeDirection(exchange.exchangeDirection) !==
       axis.referencePivot.rawDirection ||
-    !nearlyEqual(Number(exchange.meanAmount), axis.referencePivot.rawMeanAmount) ||
+    !nearlyEqual(
+      Number(exchange.meanAmount),
+      axis.referencePivot.rawMeanAmount,
+    ) ||
     flow?.["@refObjectId"]?.toLowerCase() !==
       axis.quantitativeReference.flow.id.toLowerCase() ||
     flow?.["@version"] !== axis.quantitativeReference.flow.version

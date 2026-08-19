@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { canonicalJson } from "../lib/common.mjs";
 import { createIntake } from "../lib/intake.mjs";
+import {
+  getMaterializationJob,
+  readMaterializationJobLogs,
+  startMaterializationJob,
+} from "../lib/background-job.mjs";
 import { resolveReferencePivot, sourceKey } from "../lib/context.mjs";
 import { modelIdentity, resultIdentity } from "../lib/identity.mjs";
 import { materializeModels } from "../lib/materialize-models.mjs";
@@ -75,6 +80,10 @@ test("CLI exposes one intent-level materialize command and requires all three ch
   assert.match(help.stdout, /materialize\s+/);
   assert.match(help.stdout, /--output-type <type>/);
   assert.match(help.stdout, /--result-process-layer <layer>/);
+  assert.match(help.stdout, /materialize start/);
+  assert.match(help.stdout, /job get/);
+  assert.match(help.stdout, /job logs/);
+  assert.match(help.stdout, /job cancel/);
   assert.doesNotMatch(help.stdout, /materialize-results/);
   assert.doesNotMatch(help.stdout, /materialize-models/);
   const invalid = spawnSync(
@@ -96,6 +105,128 @@ test("CLI exposes one intent-level materialize command and requires all three ch
   );
   assert.equal(invalid.status, 1);
   assert.equal(JSON.parse(invalid.stderr).error.code, "selection_required");
+});
+
+test("nohup jobs expose bounded status, logs, and terminal cancellation", async () => {
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const temp = await mkdtemp(path.join(os.tmpdir(), "release-job-"));
+  const artifactRoot = path.join(temp, "artifacts");
+  const started = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "materialize",
+      "start",
+      "--intake",
+      path.join(temp, "missing-intake"),
+      "--out-dir",
+      path.join(temp, "output"),
+      "--processes",
+      `${PROCESS_ID}@01.00.000`,
+      "--output-type",
+      "result-process",
+      "--result-process-layer",
+      "lci",
+      "--first-generation",
+      "--artifact-root",
+      artifactRoot,
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(started.status, 0, started.stderr);
+  const startResult = JSON.parse(started.stdout);
+  assert.equal(startResult.outcome, "started");
+  assert.match(startResult.jobId, /^[0-9a-f-]{36}$/);
+  assert.equal(startResult.jobDir.startsWith(artifactRoot), true);
+  assert.ok(
+    startResult.nextActions.every((item) => item.includes(artifactRoot)),
+  );
+  let observed;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const status = spawnSync(
+      process.execPath,
+      [
+        cli.pathname,
+        "job",
+        "get",
+        "--job-id",
+        startResult.jobId,
+        "--artifact-root",
+        artifactRoot,
+        "--json",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(status.status, 0, status.stderr);
+    observed = JSON.parse(status.stdout);
+    if (["failed", "interrupted"].includes(observed.state)) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(observed.state, "failed");
+  assert.equal(observed.exitCode, 1);
+  const logs = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "job",
+      "logs",
+      "--job-id",
+      startResult.jobId,
+      "--artifact-root",
+      artifactRoot,
+      "--tail",
+      "2",
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(logs.status, 0, logs.stderr);
+  const logResult = JSON.parse(logs.stdout);
+  assert.ok(logResult.returnedLineCount >= 1);
+  assert.ok(logResult.lines.some((line) => line.includes("job_failed")));
+  await appendFile(startResult.logPath, `${"x".repeat(5000)}\n`);
+  const boundedLogs = await readMaterializationJobLogs({
+    artifactRoot,
+    jobId: startResult.jobId,
+    tail: 1,
+  });
+  assert.equal(boundedLogs.lines[0].length, 4001);
+  assert.equal(boundedLogs.truncatedLineCount, 1);
+  const cancelled = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "job",
+      "cancel",
+      "--job-id",
+      startResult.jobId,
+      "--artifact-root",
+      artifactRoot,
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(cancelled.status, 0, cancelled.stderr);
+  assert.equal(JSON.parse(cancelled.stdout).state, "failed");
+  const oversizedTail = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "job",
+      "logs",
+      "--job-id",
+      startResult.jobId,
+      "--artifact-root",
+      artifactRoot,
+      "--tail",
+      "501",
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(oversizedTail.status, 1);
+  assert.equal(JSON.parse(oversizedTail.stderr).error.code, "invalid_tail");
 });
 
 test("intake, Result Catalog, and resolved one-hop Model complete locally", async () => {
@@ -306,6 +437,43 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     resultingDatasetCount: 1,
   });
   assert.equal(modelDelivery.manifest.datasets.length, 3);
+
+  const backgroundRoot = path.join(temp, "background-artifacts");
+  const background = await startMaterializationJob({
+    artifactRoot: backgroundRoot,
+    request: {
+      intakeDir: intakePath,
+      outDir: path.join(temp, "background-delivery"),
+      processUuids: [`${PROCESS_ID}@01.00.000`],
+      outputType: "result-process",
+      resultProcessLayer: "lci",
+      firstGeneration: true,
+    },
+  });
+  let completedJob;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    completedJob = await getMaterializationJob({
+      artifactRoot: backgroundRoot,
+      jobId: background.jobId,
+    });
+    if (["succeeded", "failed", "interrupted"].includes(completedJob.state)) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(completedJob.state, "succeeded");
+  assert.equal(completedJob.exitCode, 0);
+  const backgroundLogs = await readMaterializationJobLogs({
+    artifactRoot: backgroundRoot,
+    jobId: background.jobId,
+    tail: 100,
+  });
+  assert.ok(
+    backgroundLogs.lines.some((line) => line.includes('"event":"progress"')),
+  );
+  assert.ok(
+    backgroundLogs.lines.some((line) => line.includes('"phase":"committing"')),
+  );
 });
 
 test("multiple exact source revisions share a Result UUID but receive exact versions", () => {

@@ -23,6 +23,7 @@ export async function materialize({
   resultProcessLayer,
   firstGeneration = false,
   previousManifestPath,
+  onProgress,
 }) {
   if (!OUTPUT_TYPES.has(outputType))
     fail("unsupported_output_type", `Unsupported output type: ${outputType}`);
@@ -36,6 +37,7 @@ export async function materialize({
   await mkdir(path.dirname(target), { recursive: true });
   const workspace = await mkdtemp(`${target}.work-`);
   try {
+    await onProgress?.({ phase: "preparing", completed: 0, total: null });
     const results = await materializeResults({
       intakeDir,
       outDir: path.join(workspace, "results"),
@@ -44,6 +46,7 @@ export async function materialize({
       resultProcessLayer,
       firstGeneration,
       previousManifestPath,
+      onProgress,
     });
     const request = {
       schemaVersion: "tiangong.release.materialization-request.v1",
@@ -68,6 +71,7 @@ export async function materialize({
         processUuids,
         firstGeneration,
         previousManifestPath,
+        onProgress,
       });
       await writeFile(
         path.join(completed.path, "result-catalog.json"),
@@ -83,6 +87,7 @@ export async function materialize({
       });
     }
     completed.manifest.inputs.materializationRequestSha256 = hashJson(request);
+    await onProgress?.({ phase: "validating", completed: 0, total: 1 });
     await writeFile(
       path.join(completed.path, "materialization-manifest.json"),
       canonicalJson(completed.manifest),
@@ -92,7 +97,9 @@ export async function materialize({
       canonicalJson(request),
       { flag: "wx" },
     );
+    await onProgress?.({ phase: "committing", completed: 0, total: 1 });
     await rename(completed.path, target);
+    await onProgress?.({ phase: "committing", completed: 1, total: 1 });
     const datasets = completed.manifest.datasets;
     return {
       path: target,

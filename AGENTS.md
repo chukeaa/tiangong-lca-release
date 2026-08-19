@@ -22,7 +22,7 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 46b711949c4e91eff1a817ec4abd87615cd5a276
+lastReviewedCommit: 38e4c543b89d52f83bb0ae2db9d64504856abfe1
 lastReviewedNote: "Reviewed the repository contract while reframing Result Materialization documentation around its current domain model."
 related:
   - README.md
@@ -105,8 +105,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`codex/docs-issue-17-conceptual-materialization`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#17`
+- 当前工作分支：`codex/feature-issue-21-background-materialization`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#21`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

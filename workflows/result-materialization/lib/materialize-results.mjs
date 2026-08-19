@@ -27,6 +27,7 @@ export async function materializeResults({
   resultProcessLayer = "lci-lcia",
   firstGeneration = false,
   previousManifestPath,
+  onProgress,
 }) {
   if (firstGeneration === Boolean(previousManifestPath)) {
     fail(
@@ -61,7 +62,13 @@ export async function materializeResults({
     requiredIndexes.has(axis.processIndex),
   );
   const descriptors = [];
-  const drafts = axes.map((axis) => {
+  await onProgress?.({
+    phase: "materializing_results",
+    completed: 0,
+    total: axes.length,
+  });
+  const drafts = [];
+  for (const [index, axis] of axes.entries()) {
     const provisional = renderResultProcess(
       context,
       axis,
@@ -69,8 +76,14 @@ export async function materializeResults({
       resultProcessLayer,
     );
     const hashes = resultHashes(provisional);
-    return { axis, provisional, hashes };
-  });
+    drafts.push({ axis, provisional, hashes });
+    await onProgress?.({
+      phase: "materializing_results",
+      completed: index + 1,
+      total: axes.length,
+      currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
+    });
+  }
   const resolutions = resolveResultVariantVersions(drafts, previous);
   for (const { axis, provisional, hashes } of drafts) {
     const { historical, ...resolution } = resolutions.get(axis.processIndex);
@@ -106,6 +119,11 @@ export async function materializeResults({
     descriptors.push(descriptor);
   }
   descriptors.sort((left, right) => left.processIndex - right.processIndex);
+  await onProgress?.({
+    phase: "freezing_result_catalog",
+    completed: 0,
+    total: 1,
+  });
   const target = path.resolve(outDir);
   const staging = await mkdtemp(`${target}.tmp-`);
   try {
@@ -143,6 +161,11 @@ export async function materializeResults({
       canonicalJson(catalog),
       { flag: "wx" },
     );
+    await onProgress?.({
+      phase: "freezing_result_catalog",
+      completed: 1,
+      total: 1,
+    });
     await writeFile(
       path.join(staging, "materialization-report.json"),
       canonicalJson({

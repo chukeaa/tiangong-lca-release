@@ -20,7 +20,7 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 46b711949c4e91eff1a817ec4abd87615cd5a276
+lastReviewedCommit: 38e4c543b89d52f83bb0ae2db9d64504856abfe1
 lastReviewedNote: "Reviewed repository workflow boundaries while reframing Result Materialization around its domain model."
 related:
   - AGENTS.md
@@ -239,7 +239,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#17`
-- 当前分支：`codex/docs-issue-17-conceptual-materialization`
-- 当前阶段：Result Materialization 的领域设计说明正在改写为面向用户的概念模型
-- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成与验证入口
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#21`
+- 当前分支：`codex/feature-issue-21-background-materialization`
+- 当前阶段：为大批量 Result Materialization 增加可观测的本地 `nohup` 执行入口
+- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证以及薄后台 Job 入口

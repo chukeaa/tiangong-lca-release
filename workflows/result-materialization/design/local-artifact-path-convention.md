@@ -69,6 +69,8 @@ Calculation 已有路径保持兼容，Result Materialization 在同一个根目
 │   └── bundles/
 │       └── <result-package-id>/
 └── result-materialization/
+    ├── jobs/
+    │   └── <job-id>/
     ├── intakes/
     │   └── <calculation-id>/
     │       └── <bundle-content-hash>/

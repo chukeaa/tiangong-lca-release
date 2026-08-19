@@ -149,9 +149,33 @@ node cli.mjs materialize \
   --json
 ```
 
+大批量任务使用同一个 materialization engine 的薄 `nohup` 包装：
+
+```bash
+# 立即返回 jobId、PID、日志路径和下一条查询命令
+node cli.mjs materialize start \
+  --intake /path/to/intakes/<bundle-content-hash> \
+  --all \
+  --output-type lifecycle-model \
+  --result-process-layer lci-lcia \
+  --out-dir /path/to/materialized/lifecycle-model \
+  --first-generation \
+  --json
+
+node cli.mjs job get --job-id <UUID> --json
+node cli.mjs job logs --job-id <UUID> --tail 100 --json
+node cli.mjs job cancel --job-id <UUID> --json
+```
+
+默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，包含 `job.json`、`process.json`、`status.json`、`job.log`、终态 `exit-code` 和 `result.json`。`--artifact-root` 可以整体调整这个本地 Job workspace；它不改变用户显式提供的 canonical `--out-dir`。
+
+后台命令不建立 daemon、队列或自动重试。`start` 只表示本地请求已经持久化并交给 `nohup` runner；只有 `job get` 返回 `succeeded` 且最终 manifest 存在时，Materialization 才成功。状态可区分 `queued`、`running`、`cancelling`、`succeeded`、`failed`、`cancelled` 和 `interrupted`。`job logs` 默认返回最后 100 行，允许 1–500 行，并截断超长单行，避免把大型内容写入 stdout。
+
+`job cancel` 只会向 PID 和 command line 都匹配该精确 Job 目录的 runner 发送 `SIGTERM`，避免 PID 被操作系统复用后终止无关进程。取消或异常退出不会提交 canonical target；可能遗留的 `.work-*`/`.tmp-*` 仍不是有效产物，可以在确认 runner 已停止后清理。首版不提供 checkpoint/resume，失败或中断使用同一冻结输入重新提交。
+
 `intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。输出目录存在时拒绝覆盖。
 
-`materialize` 冻结 `materialization-request.json`，并根据 `outputType` 选择内部执行图。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider Result 扩展、Result Catalog 冻结和 requested-root `M(P)` 生成。用户不需要、也不应该先单独运行一次 Result Process 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
+`materialize` 与 `materialize start` 使用同一个确定性 engine，冻结相同的 `materialization-request.json`，并根据 `outputType` 选择内部执行图。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider Result 扩展、Result Catalog 冻结和 requested-root `M(P)` 生成。用户不需要、也不应该先单独运行一次 Result Process 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
 
 生成命令必须二选一提供 `--first-generation` 或 `--previous-manifest <path>`。相同 semantic hash 与 version-significant hash 复用版本；语义变化升 major；仅 metadata 等公开内容变化升 minor；同一 UUID/version 出现不同 canonical content时 fail closed。
 

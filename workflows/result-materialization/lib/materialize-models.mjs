@@ -26,6 +26,7 @@ export async function materializeModels({
   processUuids,
   firstGeneration = false,
   previousManifestPath,
+  onProgress,
 }) {
   if (firstGeneration === Boolean(previousManifestPath)) {
     fail(
@@ -56,7 +57,12 @@ export async function materializeModels({
     }
   }
   const descriptors = [];
-  for (const axis of axes) {
+  await onProgress?.({
+    phase: "composing_models",
+    completed: 0,
+    total: axes.length,
+  });
+  for (const [index, axis] of axes.entries()) {
     const provisional = renderLifecycleModel(
       context,
       axis,
@@ -96,6 +102,12 @@ export async function materializeModels({
     };
     assertNoContentCollision(descriptor, historical);
     descriptors.push(descriptor);
+    await onProgress?.({
+      phase: "composing_models",
+      completed: index + 1,
+      total: axes.length,
+      currentProcess: `${axis.rootProcess.id}@${axis.rootProcess.version}`,
+    });
   }
   descriptors.sort((left, right) => left.processIndex - right.processIndex);
   const target = path.resolve(outDir);
