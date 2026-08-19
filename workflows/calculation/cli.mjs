@@ -30,9 +30,19 @@ import {
   EnvironmentBootstrapError,
   syncDataPlaneEnvironment,
 } from "./runtime/environment-bootstrap.mjs";
+import {
+  CALCULATION_CLI_PATH,
+  CALCULATION_COMMAND,
+  shellQuote,
+} from "./runtime/cli-command.mjs";
 
 const CLI_SCHEMA = "tiangong.calculation-cli-result.v1";
-const COMMAND = "npm --prefix workflows/calculation run --silent cli --";
+const COMMAND = CALCULATION_COMMAND;
+const MATERIALIZATION_COMMAND = shellCommand(
+  "node",
+  fileURLToPath(new URL("../result-materialization/cli.mjs", import.meta.url)),
+);
+const WORKSPACE_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
 const WORKSPACE_ENV = fileURLToPath(new URL("../../../.env", import.meta.url));
 const REPOSITORY_CONTEXT = fileURLToPath(
@@ -43,6 +53,9 @@ const HELP = `Calculation Workflow CLI
 
 Manage the ResultSet entry point owned by workflows/calculation. This is not a
 repository-wide tiangong-release command.
+
+The displayed command uses the absolute CLI path (${CALCULATION_CLI_PATH}) and is safe to copy from any
+working directory. Portable repository-root form: node workflows/calculation/cli.mjs
 
 Usage:
   ${COMMAND} result-set list [--limit 20] [--format human|json]
@@ -182,7 +195,7 @@ function selection(value, flag) {
 
 function workspaceLogsCommand(jobId, { environment, since } = {}) {
   const parts = [
-    "python -m workspace_ops.cli worker job",
+    `cd ${shellQuote(WORKSPACE_ROOT)} && python -m workspace_ops.cli worker job`,
     jobId,
     "--all-configs",
     "--kind all",
@@ -191,6 +204,10 @@ function workspaceLogsCommand(jobId, { environment, since } = {}) {
   if (since) parts.push("--since", JSON.stringify(since));
   parts.push("--execute");
   return parts.join(" ");
+}
+
+function shellCommand(executable, script) {
+  return `${shellQuote(executable)} ${shellQuote(script)}`;
 }
 
 function success(command, result) {
@@ -505,7 +522,7 @@ export async function runCli(
             signedUrlsCreated: false,
           },
           nextActions: [
-            `node workflows/result-materialization/cli.mjs intake --bundle ${JSON.stringify(downloaded.bundleDirectory)} --out-dir <path> --json`,
+            `${MATERIALIZATION_COMMAND} intake --bundle ${shellQuote(downloaded.bundleDirectory)} --out-dir <path> --json`,
           ],
         };
         result.replyTemplate = replyTemplateFor(command, { ok: true });

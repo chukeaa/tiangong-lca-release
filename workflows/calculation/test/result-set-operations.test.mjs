@@ -38,6 +38,8 @@ test("preserves the exact remote identity when local recovery persistence fails"
       error instanceof ResultSetOperationError &&
       error.code === "local_context_write_failed" &&
       error.details.resultSet.id === resultSet.id &&
+      !error.details.nextCommand.includes("npm --prefix") &&
+      error.details.nextCommand.includes("/workflows/calculation/cli.mjs") &&
       error.details.nextCommand.endsWith(resultSet.id),
   );
 });

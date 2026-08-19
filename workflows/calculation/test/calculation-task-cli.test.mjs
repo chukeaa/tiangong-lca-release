@@ -51,6 +51,7 @@ test("worker logs delegates exact job lookup to workspace_ops", async () => {
     result.data.instruction,
     /python -m workspace_ops\.cli worker job/,
   );
+  assert.match(result.data.instruction, /^cd '/);
   assert.match(result.data.instruction, new RegExp(jobId));
   assert.match(result.data.instruction, /--all-configs/);
   assert.equal(result.replyTemplate.id, "worker-log-delegated");

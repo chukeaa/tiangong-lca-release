@@ -61,19 +61,21 @@ Workflow 首先识别当前入口，不能要求用户为了流程完整而重�
 Calculation 的操作入口由本目录拥有，不通过仓库级 `tiangong-release` CLI 聚合：
 
 ```bash
-npm --prefix workflows/calculation run --silent cli -- result-set list --limit 20
-npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id <uuid>
-npm --prefix workflows/calculation run --silent cli -- result-set create --name <name> --confirm-create
-npm --prefix workflows/calculation run --silent cli -- closure start --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-token <token> --confirm-start
-npm --prefix workflows/calculation run --silent cli -- closure get --closure-check-id <uuid>
-npm --prefix workflows/calculation run --silent cli -- calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
-npm --prefix workflows/calculation run --silent cli -- calculation get --job-id <uuid>
-npm --prefix workflows/calculation run --silent cli -- calculation-bundle list --limit 20
-npm --prefix workflows/calculation run --silent cli -- calculation-bundle get --package-id <uuid>
-npm --prefix workflows/calculation run --silent cli -- calculation-bundle download --package-id <uuid> --concurrency 8
-npm --prefix workflows/calculation run --silent cli -- environment sync --confirm-sync
-npm --prefix workflows/calculation run --silent cli -- worker logs --job-id <uuid>
+node workflows/calculation/cli.mjs result-set list --limit 20
+node workflows/calculation/cli.mjs result-set get --result-set-id <uuid>
+node workflows/calculation/cli.mjs result-set create --name <name> --confirm-create
+node workflows/calculation/cli.mjs closure start --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-token <token> --confirm-start
+node workflows/calculation/cli.mjs closure get --closure-check-id <uuid>
+node workflows/calculation/cli.mjs calculation start --name <name> --closure-check-id <uuid> --requested-scope-hash <hash> --policy-fingerprint <hash> --coverage-mode global_eligible --method <uuid>@<00.00.000> --idempotency-key <key> --confirm-start
+node workflows/calculation/cli.mjs calculation get --job-id <uuid>
+node workflows/calculation/cli.mjs calculation-bundle list --limit 20
+node workflows/calculation/cli.mjs calculation-bundle get --package-id <uuid>
+node workflows/calculation/cli.mjs calculation-bundle download --package-id <uuid> --concurrency 8
+node workflows/calculation/cli.mjs environment sync --confirm-sync
+node workflows/calculation/cli.mjs worker logs --job-id <uuid>
 ```
+
+上面的便携写法以仓库根目录为起点；如果当前目录已经是 `workflows/calculation`，可使用 `node cli.mjs ...`。CLI 自己在 help、错误恢复和 `nextActions` 中输出当前机器上的绝对 `cli.mjs` 路径，因此这些返回命令可以从任意工作目录直接复制执行，不使用 cwd-sensitive 的 `npm --prefix workflows/calculation`。委托 `workspace_ops` 的 Worker 日志命令也会显式进入 workspace 根目录。
 
 所有命令都支持 `--format json`。JSON stdout 使用
 `tiangong.calculation-cli-result.v1`，包含结果、完整性、错误和下一步，不混入日志。

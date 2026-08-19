@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -41,6 +42,36 @@ test("help keeps the CLI inside the Calculation workflow", async () => {
     /Manage the ResultSet entry point owned by workflows\/calculation/,
   );
   assert.doesNotMatch(stdout.value(), /tiangong-release calculation/);
+  assert.match(stdout.value(), /safe to copy from any/);
+  assert.doesNotMatch(stdout.value(), /npm --prefix workflows\/calculation/);
+});
+
+test("public help and returned recovery commands are cwd-independent", async (t) => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "calculation-cli-cwd-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const help = spawnSync(process.execPath, [cli.pathname, "--help"], {
+    cwd,
+    encoding: "utf8",
+  });
+  assert.equal(help.status, 0);
+  assert.match(
+    help.stdout,
+    new RegExp(cli.pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+
+  const recommendation = spawnSync(
+    process.execPath,
+    [cli.pathname, "result-set", "create", "--format", "json"],
+    { cwd, encoding: "utf8" },
+  );
+  assert.equal(recommendation.status, 3);
+  const payload = JSON.parse(recommendation.stdout);
+  assert.match(
+    payload.nextActions[0],
+    new RegExp(cli.pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+  assert.doesNotMatch(payload.nextActions[0], /npm --prefix/);
 });
 
 test("list emits clean bounded JSON with a usable next action", async () => {

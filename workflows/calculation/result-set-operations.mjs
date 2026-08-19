@@ -1,4 +1,5 @@
 import { isUuid } from "./contracts/result-set.mjs";
+import { CALCULATION_COMMAND } from "./runtime/cli-command.mjs";
 
 export class ResultSetOperationError extends Error {
   constructor(code, message, details = undefined) {
@@ -19,7 +20,7 @@ async function saveContext(contextStore, resultSet, target) {
       {
         resultSet,
         cause: error instanceof Error ? error.name : "unknown",
-        nextCommand: `npm --prefix workflows/calculation run --silent cli -- result-set get --result-set-id ${resultSet.id}`,
+        nextCommand: `${CALCULATION_COMMAND} result-set get --result-set-id ${resultSet.id}`,
       },
     );
   }

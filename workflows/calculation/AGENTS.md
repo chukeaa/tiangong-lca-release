@@ -47,7 +47,8 @@ related:
 
 ## ResultSet 操作入口
 
-- 使用 `npm --prefix workflows/calculation run --silent cli -- result-set ...`；CLI script 和命令实现都由本目录拥有，不得提升为仓库级 `tiangong-release` CLI。
+- 从仓库根目录使用 `node workflows/calculation/cli.mjs ...`，或在本目录使用 `node cli.mjs ...`；CLI script 和命令实现都由本目录拥有，不得提升为仓库级 `tiangong-release` CLI。
+- CLI help 与 `nextActions` 必须使用由 `import.meta.url` 求得的绝对入口，保证复制命令不依赖调用者 cwd；不得把相对 `npm --prefix workflows/calculation` 作为 Agent-facing 恢复命令。跨到 `workspace_ops` 时必须在命令中显式进入 workspace 根目录。
 - `list` 默认最多返回 20 条，最大 200 条，并把无 cursor 的结果标记为 bounded。
 - `get` 必须使用精确 `resultSetId`；不得按名称隐式选择。
 - `create` 必须在用户确认精确名称后使用 `--confirm-create`。
