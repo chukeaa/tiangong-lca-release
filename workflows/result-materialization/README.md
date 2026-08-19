@@ -69,6 +69,8 @@ M(P)
 
 对象关系、生成模式和 provider 连接原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。
 
+当前 CLI 仍要求显式 `--out-dir`。默认 `.release/` 路径、materialization key、验证后复用和显式覆盖的目标规则见 proposed design：[本地产物默认路径设计](design/local-artifact-path-convention.md)。在该设计完成实现和测试前，不把它描述为当前运行行为。
+
 ## 一个入口，由三个选择决定执行图
 
 用户先选择范围，再选择最终对象，以及本次需要生成的 Result Process 内容层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令。LifecycleModel 本身没有 LCI/LCIA 结果字段，第三个选择只控制 `R(P)` 和依赖 `R(Q)` 的内容：
