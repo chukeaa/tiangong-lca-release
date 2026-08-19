@@ -13,11 +13,11 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed exact source-version Result variants and quantitative-reference pivot evidence handling."
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
+lastReviewedNote: "Reviewed the executable contract against the conceptual Result Process and LifecycleModel design."
 related:
   - README.md
-  - design/resolved-one-hop-materialization.md
+  - design/result-process-and-lifecycle-model.md
   - ../AGENTS.md
 ---
 
@@ -52,16 +52,16 @@ related:
 
 ## Recipe 规则
 
-- LCI Result Process、LCI + LCIA Result Process、LifecycleModel 是同一 Workflow 的 recipe。
+- LCI Result Process、LCI + LCIA Result Process、LifecycleModel 是同一 Workflow 的 recipe；LifecycleModel 本身不含 LCI/LCIA 数值，`resultProcessLayer` 只控制它引用的 resulting/dependency Result Process。
 - Recipe 必须声明输出 role、依赖、必需证据和 validator。
-- 公开入口必须先收敛 `scope + outputType + resultLayer`；内部 Result/Model 两阶段不得要求用户手动串联。
+- 公开入口必须先收敛 `scope + outputType + resultProcessLayer`；内部 Result/Model 两阶段不得要求用户手动串联。
 - `materialize-result` 和 `compose-model` 只是一个 `materialize` 请求内的执行节点，不得作为需要用户先后运行的公开工作流呈现。
 - `result-process` 只物化 requested roots，不自动扩展 provider；`lifecycle-model` 才扩展 direct provider Results 并在同一次动作中生成 Model。
 - `lifecycle-model` 的主要对象是 requested-root `M(P)`；内部 `R(P)` 标记为 resulting、`R(Q)` 标记为 dependency，且不得自动生成 provider `M(Q)`。
 - 主数据集、resulting Result 和 dependency Result 必须分别标记并分别计数。
 - LCIA recipe 必须包含或引用同一 Result Process 的完整 LCI 层。
 - LifecycleModel recipe 必须同时绑定精确 Result Process identity/version。
-- 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/resolved-one-hop-materialization.md`。
+- 首版 LifecycleModel recipe 使用 `resolved-one-hop-aggregated-background.v1` 组合 profile，并遵守 `design/result-process-and-lifecycle-model.md`。
 - 每条有效 direct provider edge 对应一个引用聚合 `R(Q)` 的 provider process instance；不得只用 root `U(P)` 包装聚合 `R(P)`。
 - one-hop 是 LifecycleModel recipe 的显式 profile，不得被隐式套用到不生成 LifecycleModel 的 Result-only recipe。
 

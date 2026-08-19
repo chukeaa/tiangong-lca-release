@@ -8,13 +8,13 @@ export function renderResultProcess(
   context,
   axis,
   version,
-  resultLayer = "lci-lcia",
+  resultProcessLayer = "lci-lcia",
 ) {
-  const profile = RESULT_PROFILES[resultLayer];
+  const profile = RESULT_PROFILES[resultProcessLayer];
   if (!profile)
     fail(
-      "unsupported_result_layer",
-      `Unsupported result layer: ${resultLayer}`,
+      "unsupported_result_process_layer",
+      `Unsupported Result Process layer: ${resultProcessLayer}`,
     );
   const source = context.sources.get(
     sourceKey("process", axis.rootProcess.id, axis.rootProcess.version),
@@ -44,7 +44,7 @@ export function renderResultProcess(
   const data = result.processDataSet;
   data.processInformation.dataSetInformation["common:UUID"] = identity.uuid;
   const resultLabel =
-    resultLayer === "lci"
+    resultProcessLayer === "lci"
       ? "aggregated LCI result"
       : "aggregated LCI/LCIA result";
   data.processInformation.dataSetInformation.name = suffixName(
@@ -96,7 +96,7 @@ export function renderResultProcess(
     }));
   data.exchanges = { exchange: [referenceExchange, ...inventory] };
   const lcia =
-    resultLayer === "lci-lcia"
+    resultProcessLayer === "lci-lcia"
       ? [...(context.lcia.get(axis.processIndex) ?? [])].sort(compareLcia)
       : [];
   if (lcia.length) {

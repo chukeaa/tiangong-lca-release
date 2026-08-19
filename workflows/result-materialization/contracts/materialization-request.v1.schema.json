@@ -8,7 +8,7 @@
     "schemaVersion",
     "scope",
     "outputType",
-    "resultLayer",
+    "resultProcessLayer",
     "modelProfile"
   ],
   "properties": {
@@ -43,7 +43,10 @@
       }
     },
     "outputType": { "enum": ["result-process", "lifecycle-model"] },
-    "resultLayer": { "enum": ["lci", "lci-lcia"] },
+    "resultProcessLayer": {
+      "description": "Content layer of every Result Process generated for this request. LifecycleModel itself does not contain LCI or LCIA results.",
+      "enum": ["lci", "lci-lcia"]
+    },
     "modelProfile": { "type": ["string", "null"] }
   }
 }

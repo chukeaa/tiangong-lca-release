@@ -13,11 +13,11 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
 lastReviewedNote: "Documented multi-revision Result lineages and quantitative-reference pivot handling."
 related:
   - AGENTS.md
-  - design/resolved-one-hop-materialization.md
+  - design/result-process-and-lifecycle-model.md
   - ../../README.md
 ---
 
@@ -67,11 +67,11 @@ M(P)
 - LCIA 默认作为同一 Result Process 上的可选结果层，不单独制造只有 LCIA、没有 LCI 的 Process。
 - 如果未来标准或消费者确实要求独立 LCIA Process，再增加经过验证的 recipe。
 
-完整的单条、范围、provider instance 和验证规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。
+对象关系、生成模式和 provider 连接原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。
 
 ## 一个入口，由三个选择决定执行图
 
-用户先选择范围，再选择最终对象和结果层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令：
+用户先选择范围，再选择最终对象，以及本次需要生成的 Result Process 内容层。公开 CLI 只有一个 `materialize` 动作；下面的 recipe 由这三个选择组合得到，不是需要手动串联的子命令。LifecycleModel 本身没有 LCI/LCIA 结果字段，第三个选择只控制 `R(P)` 和依赖 `R(Q)` 的内容：
 
 1. `lci-result-process`
    - 生成 quantitative reference 和聚合 LCI exchanges；
@@ -83,7 +83,7 @@ M(P)
    - 方法集变化必须进入版本和 provenance 判断。
 3. `lifecycle-model-with-result`
    - 生成 LifecycleModel；
-   - 同时选择 LCI-only 或 LCI + LCIA Result Process；
+   - 同时生成 LCI-only 或 LCI + LCIA 的 resulting/dependency Result Process；
    - 首版使用 `resolved-one-hop-aggregated-background.v1` 组合 profile；
    - 将根 `U(P)`、direct provider `R(Q)`、connections、multiplication factors 和 resulting `R(P)` 精确绑定。
 
@@ -91,7 +91,7 @@ M(P)
 
 1. `scope`：单条、指定一批或全部 eligible Process，显式选择使用 `UUID@version`；
 2. `outputType`：`result-process` 或 `lifecycle-model`；
-3. `resultLayer`：`lci` 或 `lci-lcia`，不支持 LCIA-only。
+3. `resultProcessLayer`：本次生成的 Result Process 包含 `lci` 或 `lci-lcia`，不支持 LCIA-only；它不是 LifecycleModel 的结果层。
 
 `result-process` 对每个 root 只生成一个主要 `R(P)`，不扩展 provider。`lifecycle-model` 对每个 root 生成一个主要 `M(P)`，并在同一次动作的内部执行图中生成 resulting `R(P)` 和 direct provider dependency `R(Q)`。这些 Result datasets 是 Model 闭合所需的组成部分，不是额外的主要用户输出，也不会计入主要对象数量；不会自动生成 provider 的 `M(Q)`。身份与版本集合必须在一次 materialization 中共同求解，不能各自生成后再猜测引用。
 
@@ -99,7 +99,7 @@ M(P)
 
 ```text
 读取并验证冻结输入
-  -> 冻结 scope + outputType + resultLayer
+  -> 冻结 scope + outputType + resultProcessLayer
   -> 仅在 lifecycle-model 模式从 direct edges 派生 required Result set
   -> 确认 metadata completion policy
   -> 派生稳定 identity lineage并读取上一版 manifest
@@ -131,7 +131,7 @@ node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
   --processes <UUID@VERSION> \
   --output-type result-process \
-  --result-layer lci-lcia \
+  --result-process-layer lci-lcia \
   --out-dir /path/to/materialized/result-process \
   --first-generation \
   --json
@@ -141,7 +141,7 @@ node cli.mjs materialize \
   --intake /path/to/intakes/<bundle-content-hash> \
   --processes <UUID@VERSION> \
   --output-type lifecycle-model \
-  --result-layer lci-lcia \
+  --result-process-layer lci-lcia \
   --out-dir /path/to/materialized/lifecycle-model \
   --first-generation \
   --json
@@ -155,7 +155,7 @@ node cli.mjs materialize \
 
 同一次请求中多个 exact axes 可以共享一个 Result UUID lineage。Workflow 不按 UUID 去重，而是为每个 exact source Process revision 分配独立 dataset version；previous manifest 按 source UUID@version 精确匹配，LifecycleModel 也按 process index 引用对应的 Result UUID@version。first generation 和新增 revision 使用确定性顺序分配未占用的 major version。
 
-Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。完整规则见 [Resolved One-hop Result Materialization](design/resolved-one-hop-materialization.md)。整个过程不会上传或发布。
+Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。领域原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。整个过程不会上传或发布。
 
 CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下一条可复制命令；大数据集始终写入文件。
 
@@ -164,7 +164,7 @@ CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下�
 - 选择处理范围；
 - 选择最终对象 `result-process` 或 `lifecycle-model`；
 - 是否显式选择未来新增、已经过验证的非默认模型组织 profile；
-- 输出 LCI-only 还是 LCI + LCIA；
+- 本次生成并由 Model 引用的 Result Process 是 LCI-only 还是 LCI + LCIA；
 - 需要使用的上一版 Release Manifest；
 - 无法从输入确定的名称、描述、分类、地理、时间、技术和来源字段；
 - metadata 冲突时继承、声明或阻塞。

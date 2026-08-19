@@ -10,7 +10,7 @@
     "calculationId",
     "bundleContentHash",
     "outputType",
-    "resultLayer",
+    "resultProcessLayer",
     "selection",
     "requiredResults",
     "datasets"
@@ -21,7 +21,10 @@
     "calculationId": { "type": "string", "format": "uuid" },
     "bundleContentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "outputType": { "enum": ["result_process", "lifecycle_model"] },
-    "resultLayer": { "enum": ["lci", "lci-lcia"] },
+    "resultProcessLayer": {
+      "description": "Content layer of Result Process datasets in this catalog; it is not a LifecycleModel result layer.",
+      "enum": ["lci", "lci-lcia"]
+    },
     "selection": { "type": "array", "items": { "$ref": "#/$defs/identity" } },
     "requiredResults": {
       "type": "array",

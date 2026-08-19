@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 7e47912bee706c7c8cdd0ba8b807d01598e07ff3
-lastReviewedNote: "Reviewed repository workflow boundaries after exact Result variants and pivot evidence handling were defined."
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
+lastReviewedNote: "Reviewed repository workflow boundaries while reframing Result Materialization around its domain model."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -110,7 +110,7 @@ workflows/
 
 它包括：
 
-- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel）和结果层（LCI 或 LCI + LCIA）；
+- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel），以及本次生成的 Result Process 内容层（LCI 或 LCI + LCIA）；
 - Result Process 只处理所选 roots；LifecycleModel 在一次动作中从 direct edges 派生依赖、冻结 Result Catalog 并生成最终 Model；
 - 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
 - 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
@@ -121,7 +121,7 @@ workflows/
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 
-LCI Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。
+LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。LifecycleModel 本身不保存 LCI/LCIA 数值，只引用本次生成的精确 Result Process。
 
 详见 [Result Materialization Workflow](workflows/result-materialization/README.md)。
 
@@ -239,7 +239,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#11`
-- 当前分支：`codex/issue-11-workflow-control-plane`
-- 当前阶段：Calculation Workflow 正在按已确认能力逐步实现
-- 运行时状态：ResultSet create/list/get、Closure/计算提交、数据库任务状态、数据库/S3 Bundle list/get/download 和 Worker job 日志委托已由 `workflows/calculation` 本地拥有
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#17`
+- 当前分支：`codex/docs-issue-17-conceptual-materialization`
+- 当前阶段：Result Materialization 的领域设计说明正在改写为面向用户的概念模型
+- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成与验证入口

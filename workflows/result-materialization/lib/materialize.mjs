@@ -13,23 +13,23 @@ import { materializeResults } from "./materialize-results.mjs";
 import { hashJson } from "./versioning.mjs";
 
 export const OUTPUT_TYPES = new Set(["result-process", "lifecycle-model"]);
-export const RESULT_LAYERS = new Set(["lci", "lci-lcia"]);
+export const RESULT_PROCESS_LAYERS = new Set(["lci", "lci-lcia"]);
 
 export async function materialize({
   intakeDir,
   outDir,
   processUuids,
   outputType,
-  resultLayer,
+  resultProcessLayer,
   firstGeneration = false,
   previousManifestPath,
 }) {
   if (!OUTPUT_TYPES.has(outputType))
     fail("unsupported_output_type", `Unsupported output type: ${outputType}`);
-  if (!RESULT_LAYERS.has(resultLayer))
+  if (!RESULT_PROCESS_LAYERS.has(resultProcessLayer))
     fail(
-      "unsupported_result_layer",
-      `Unsupported result layer: ${resultLayer}`,
+      "unsupported_result_process_layer",
+      `Unsupported Result Process layer: ${resultProcessLayer}`,
     );
 
   const target = path.resolve(outDir);
@@ -41,7 +41,7 @@ export async function materialize({
       outDir: path.join(workspace, "results"),
       processUuids,
       includeDirectProviders: outputType === "lifecycle-model",
-      resultLayer,
+      resultProcessLayer,
       firstGeneration,
       previousManifestPath,
     });
@@ -53,7 +53,7 @@ export async function materialize({
         processes: results.catalog.selection,
       },
       outputType,
-      resultLayer,
+      resultProcessLayer,
       modelProfile:
         outputType === "lifecycle-model"
           ? "resolved-one-hop-aggregated-background.v1"
