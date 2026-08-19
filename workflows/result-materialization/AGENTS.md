@@ -14,7 +14,7 @@ checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
 lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
-lastReviewedNote: "Reviewed the executable contract against the conceptual Result Process and LifecycleModel design."
+lastReviewedNote: "Reviewed batch materialization resource observability, bounded concurrency, shared context, and single-staging execution."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -33,12 +33,29 @@ related:
 - 识别 Calculation Bundle、Derived Result 或已有 materialization artifact。
 - 展示可用 recipe、已有证据和必须由用户决定的模型/metadata 问题。
 - 冻结精确 Materialization Request。
-- 冻结 requested roots、最终输出类型、Result layer、required Result set 和 direct-edge evidence。
+- 冻结 requested roots、最终输出类型、Result Process 内容层、required Result set 和 direct-edge evidence。
 - 调用确定性 identity、version、materializer 和 validator 实现。
 - 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
 - 只把通过验证的 canonical dataset collection 交给 Release Workflow。
 - Worker Calculation Bundle v2 的 content hash 必须在原始 canonical manifest bytes 上移除顶层 `bundleContentHash` 后验证；不得先把任意 JSON number 转成 JavaScript `number` 再重序列化，因为超出安全整数范围时会改变证据字节。
+
+## 本地后台 Job
+
+- `materialize start` 只用 `nohup` 启动现有 materialization engine，不拥有独立 recipe、队列、daemon 或自动重试语义。
+- 每次后台尝试使用随机 `jobId`；它只标识执行尝试，不进入 Result/Model identity、version 或 canonical 输出路径。
+- `job.json` 和 request 创建后不可改写；`job.log` 只追加；`status.json` 使用临时 sibling + rename 原子更新；终态写入 `exit-code` 和 `result.json`。
+- `start` 成功只表示请求已持久化且 runner 已启动，不表示 Materialization 成功。
+- `job get` 必须同时核对 PID 存活和 command line 中的 runner/job directory，不能只用 `kill(pid, 0)` 判断或操作进程。
+- `job logs` 必须限制 tail 为 1–500，并限制单行长度；不得把数据集内容、secret 或无界错误详情写入 stdout。
+- `job cancel` 只向精确匹配的 runner 发送 `SIGTERM`；终态 Job 的 cancel 是无副作用的幂等读取。
+- Runner 消失且没有可信 exit code 时标记 `interrupted`，不得猜测成功或自动重试。
+- 进度写入属于 best-effort observability，失败不得改变已经确定性生成或提交的 canonical Materialization 结果。
+- Runner 每 5 秒以及 phase/progress 更新时记录结构化资源采样；`job get` 返回最新 RSS、heap、CPU、磁盘余量、吞吐和 ETA。资源采样失败只能降低可观测性，不能污染 canonical stdout 或改变任务结果。
+- 同一次请求只加载一次只读 Materialization Context；Result/Model 文档必须以有界并发逐条渲染并立即写入，不得用无界 `Promise.all` 或把所有 canonical 文档保存在数组/Map 中。
+- LifecycleModel 路线使用一个 staging collection：Result Catalog 冻结后在同一目录追加 Model，全部验证完成后只进行一次原子 rename。
+- 默认并发为 2，公开上限为 16；提高并发必须基于资源日志和代表性样本，不得把并发当作默认性能修复。
+- 首版不提供 checkpoint/resume。只有实际运行证明重跑代价不可接受时，才提升本地 Job representation 和 runner 复杂度。
 
 ## 输入最低要求
 

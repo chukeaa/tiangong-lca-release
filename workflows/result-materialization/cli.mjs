@@ -1,5 +1,12 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { createIntake } from "./lib/intake.mjs";
+import {
+  cancelMaterializationJob,
+  getMaterializationJob,
+  readMaterializationJobLogs,
+  startMaterializationJob,
+} from "./lib/background-job.mjs";
 import { materialize } from "./lib/materialize.mjs";
 
 const HELP = `release-result-materialization <command> [options]
@@ -7,6 +14,10 @@ const HELP = `release-result-materialization <command> [options]
 Commands:
   intake              Verify a local Calculation Bundle v2 ZIP/directory and freeze an intake
   materialize         Generate the requested Result Process or LifecycleModel delivery
+  materialize start   Start the same Materialization engine as an observable nohup job
+  job get             Read bounded local status for one exact background job
+  job logs            Read the last 1-500 lines from one exact background job log
+  job cancel          Request SIGTERM cancellation for one exact running job
 
 intake options:
   --bundle <path>      Local calculation-evidence-bundle.zip or extracted directory
@@ -21,6 +32,13 @@ materialize options:
   --out-dir <path>     New immutable materialization directory
   --first-generation   Confirm that no previous Release Manifest exists
   --previous-manifest <path>  Previous materialization/release manifest
+  --artifact-root <path>  Local job workspace root; defaults to repository .release
+  --concurrency <count>   Bounded render/write workers; defaults to 2, maximum 16
+
+job options:
+  --job-id <uuid>      Exact local Materialization job identity
+  --tail <count>       Log lines to return; defaults to 100, maximum 500
+  --artifact-root <path>  Same optional local workspace root used by start
 
 Common:
   --json               Emit one bounded JSON result on stdout
@@ -28,11 +46,14 @@ Common:
 `;
 
 async function main() {
-  const [command, ...tokens] = process.argv.slice(2);
+  const [command, ...initialTokens] = process.argv.slice(2);
   if (!command || command === "--help" || command === "-h") {
     process.stdout.write(HELP);
     return;
   }
+  const tokens = [...initialTokens];
+  const subcommand =
+    tokens[0] && !tokens[0].startsWith("--") ? tokens.shift() : null;
   const options = parseArgs(tokens);
   if (command === "intake") {
     requireOptions(options, ["bundle", "out-dir"]);
@@ -48,30 +69,33 @@ async function main() {
       calculationId: result.intake.source.calculationId,
       bundleContentHash: result.intake.source.bundleContentHash,
       nextAction: {
-        command: `node cli.mjs materialize --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
+        command: `node cli.mjs materialize start --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
         description:
-          "Choose scope, final dataset type, and the Result Process content layer, then materialize the complete local delivery. LifecycleModel itself does not contain LCI/LCIA results.",
+          "Choose scope, final dataset type, and the Result Process content layer, then start an observable background run. Omit 'start' for a foreground run. LifecycleModel itself does not contain LCI/LCIA results.",
       },
     });
     return;
   }
-  if (command === "materialize") {
-    requireOptions(options, [
-      "intake",
-      "out-dir",
-      "output-type",
-      "result-process-layer",
-    ]);
-    requireSelection(options);
-    const result = await materialize({
-      intakeDir: options.intake,
-      outDir: options["out-dir"],
-      processUuids: options.all ? undefined : splitSelectors(options.processes),
-      outputType: options["output-type"],
-      resultProcessLayer: options["result-process-layer"],
-      firstGeneration: Boolean(options["first-generation"]),
-      previousManifestPath: options["previous-manifest"],
+  if (command === "materialize" && subcommand === "start") {
+    requireMaterializationOptions(options);
+    const result = await startMaterializationJob({
+      artifactRoot: options["artifact-root"],
+      request: materializationRequestFromOptions(options),
     });
+    respond(options, {
+      ...result,
+      command: "materialize start",
+      outcome: "started",
+      nextAction: {
+        description: result.nextActions.join("; "),
+      },
+    });
+    return;
+  }
+  if (command === "materialize" && subcommand === null) {
+    requireMaterializationOptions(options);
+    const request = materializationRequestFromOptions(options);
+    const result = await materialize(request);
     respond(options, {
       ok: true,
       command,
@@ -89,9 +113,122 @@ async function main() {
     });
     return;
   }
+  if (command === "job" && subcommand === "get") {
+    requireOptions(options, ["job-id"]);
+    const result = await getMaterializationJob({
+      artifactRoot: options["artifact-root"],
+      jobId: options["job-id"],
+    });
+    respond(options, {
+      ...result,
+      command: "job get",
+      outcome: result.state,
+      nextAction: { description: result.nextActions.join("; ") },
+    });
+    return;
+  }
+  if (command === "job" && subcommand === "logs") {
+    requireOptions(options, ["job-id"]);
+    const result = await readMaterializationJobLogs({
+      artifactRoot: options["artifact-root"],
+      jobId: options["job-id"],
+      tail:
+        options.tail === undefined ? 100 : parseInteger(options.tail, "tail"),
+    });
+    respond(options, {
+      ...result,
+      command: "job logs",
+      outcome: "read",
+      nextAction: {
+        description: `node cli.mjs job get --job-id ${result.jobId} --artifact-root ${quote(result.artifactRoot)} --json`,
+      },
+    });
+    return;
+  }
+  if (command === "job" && subcommand === "cancel") {
+    requireOptions(options, ["job-id"]);
+    const result = await cancelMaterializationJob({
+      artifactRoot: options["artifact-root"],
+      jobId: options["job-id"],
+    });
+    respond(options, {
+      ...result,
+      command: "job cancel",
+      outcome: result.state,
+      nextAction: {
+        description: `node cli.mjs job get --job-id ${result.jobId} --artifact-root ${quote(result.artifactRoot)} --json`,
+      },
+    });
+    return;
+  }
+  if (command === "materialize" || command === "job") {
+    throw Object.assign(
+      new Error(`Unknown ${command} action: ${subcommand ?? "<none>"}`),
+      { code: "unknown_command" },
+    );
+  }
   throw Object.assign(new Error(`Unknown command: ${command}`), {
     code: "unknown_command",
   });
+}
+
+function requireMaterializationOptions(options) {
+  requireOptions(options, [
+    "intake",
+    "out-dir",
+    "output-type",
+    "result-process-layer",
+  ]);
+  requireSelection(options);
+  if (
+    Boolean(options["first-generation"]) ===
+    Boolean(options["previous-manifest"])
+  ) {
+    throw Object.assign(
+      new Error(
+        "Choose exactly one of --first-generation or --previous-manifest <path>",
+      ),
+      { code: "version_history_choice_required" },
+    );
+  }
+}
+
+function materializationRequestFromOptions(options) {
+  return {
+    intakeDir: path.resolve(options.intake),
+    outDir: path.resolve(options["out-dir"]),
+    processUuids: options.all ? undefined : splitSelectors(options.processes),
+    outputType: options["output-type"],
+    resultProcessLayer: options["result-process-layer"],
+    firstGeneration: Boolean(options["first-generation"]),
+    previousManifestPath: options["previous-manifest"]
+      ? path.resolve(options["previous-manifest"])
+      : undefined,
+    concurrency:
+      options.concurrency === undefined
+        ? 2
+        : parseBoundedInteger(options.concurrency, "concurrency", 1, 16),
+  };
+}
+
+function parseInteger(value, name) {
+  if (!/^[0-9]+$/.test(String(value))) {
+    throw Object.assign(new Error(`--${name} must be an integer`), {
+      code: "invalid_arguments",
+    });
+  }
+  return Number.parseInt(value, 10);
+}
+
+function parseBoundedInteger(value, name, minimum, maximum) {
+  const parsed = parseInteger(value, name);
+  if (parsed < minimum || parsed > maximum) {
+    throw Object.assign(
+      new Error(`--${name} must be an integer from ${minimum} to ${maximum}`),
+      { code: "invalid_arguments" },
+    );
+  }
+  return parsed;
 }
 
 function parseArgs(tokens) {
@@ -162,6 +299,9 @@ function respond(options, value) {
     process.stdout.write(`✅ ${value.outcome}\n`);
     if (value.intake) process.stdout.write(`Intake: ${value.intake}\n`);
     if (value.output) process.stdout.write(`Output: ${value.output}\n`);
+    if (value.jobId) process.stdout.write(`Job: ${value.jobId}\n`);
+    if (value.logPath) process.stdout.write(`Log: ${value.logPath}\n`);
+    if (value.lines) process.stdout.write(`${value.lines.join("\n")}\n`);
     process.stdout.write(`Next: ${value.nextAction.description}\n`);
   }
 }

@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 46b711949c4e91eff1a817ec4abd87615cd5a276
-lastReviewedNote: "Reviewed repository workflow boundaries while reframing Result Materialization around its domain model."
+lastReviewedCommit: 38e4c543b89d52f83bb0ae2db9d64504856abfe1
+lastReviewedNote: "Reviewed Result Materialization batch execution boundaries, bounded concurrency, resource observability, and atomic local output."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -118,6 +118,8 @@ workflows/
 - 同一稳定 Result UUID lineage 下按 exact source revision 生成并引用独立 dataset versions；
 - 保持 calculation-time quantitative-reference signed pivot，并为旧 Bundle 使用已校验 exact source closure 的有界兼容；
 - 渲染精确 identity/version 引用；
+- 对大批量任务使用共享只读 Context、有界并发和逐条落盘，并通过薄 `nohup` Job 暴露内存、CPU、吞吐、ETA 和磁盘余量；
+- LifecycleModel 路线在同一个 staging collection 内完成 Result/Model 组装，验证后只进行一次原子提交；
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 
@@ -239,7 +241,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#17`
-- 当前分支：`codex/docs-issue-17-conceptual-materialization`
-- 当前阶段：Result Materialization 的领域设计说明正在改写为面向用户的概念模型
-- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成与验证入口
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#21`
+- 当前分支：`codex/feature-issue-21-background-materialization`
+- 当前阶段：为大批量 Result Materialization 增加可观测的本地 `nohup` 执行入口
+- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证以及薄后台 Job 入口
