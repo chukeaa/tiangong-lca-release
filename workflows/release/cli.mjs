@@ -11,6 +11,7 @@ const VALUE_OPTIONS = new Set([
   "materialization",
   "intake",
   "profile",
+  "release-version",
   "out-dir",
   "tidas-bin",
 ]);
@@ -25,6 +26,7 @@ package build options:
   --materialization <path>  Completed Result Materialization directory
   --intake <path>           Verified local intake containing source_closure
   --profile <id>            ${PACKAGE_PROFILE}
+  --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
   --tidas-bin <path>        tidas executable; defaults to TIDAS_BIN or PATH lookup
 
@@ -38,7 +40,8 @@ TIDAS/eILCD validation, semantic round-trip, and deterministic ZIP creation to t
 Example:
   release-package package build --materialization .release/materialization/lifecycle-model \\
     --intake .release/materialization/intakes/<bundle-hash> \\
-    --profile ${PACKAGE_PROFILE} --out-dir .release/candidates/<candidate-name> --json
+    --profile ${PACKAGE_PROFILE} --release-version 2026.08.0 \
+    --out-dir .release/candidates/<candidate-name> --json
 
 JSON results include outcome, completeness, artifact paths, nextActions, and a workflow-local replyTemplate.
 `;
@@ -73,19 +76,25 @@ async function main() {
       { code: "unsupported_package_profile" },
     );
   }
+  if (!options["release-version"]) {
+    respondVersionConfirmation(options);
+    return;
+  }
   const result = await buildPackageCandidate({
     materializationDir: path.resolve(options.materialization),
     intakeDir: path.resolve(options.intake),
     outDir: path.resolve(options["out-dir"]),
     tidasBin: options["tidas-bin"],
+    releaseVersion: options["release-version"],
   });
   const candidateManifest = path.join(result.path, "release-candidate.json");
   respond(options, {
     ok: true,
     command: COMMAND,
     outcome: "candidate_built",
-    completeness: "full-closure-validated",
+    completeness: "full-closure-and-archives-validated",
     profile: result.candidate.profile,
+    releaseVersion: result.candidate.releaseVersion,
     candidate: result.path,
     packageCount: result.candidate.packages.length,
     packageSetHash: result.candidate.packageSetHash,
@@ -98,6 +107,10 @@ async function main() {
         "canonical-dataset-index.json",
       ),
       tidasReport: path.join(result.path, "tidas-release-report.json"),
+      packageVerification: path.join(
+        result.path,
+        "package-verification-report.json",
+      ),
       packagesDirectory: path.join(result.path, "packages"),
     },
     nextActions: [
@@ -111,6 +124,79 @@ async function main() {
     ],
     replyTemplate: replyTemplateFor(COMMAND, { ok: true }),
   });
+}
+
+function respondVersionConfirmation(options) {
+  const recommendedVersion = recommendedReleaseVersion();
+  const fileNames = [
+    "UnitProcessDatabase.tidas.zip",
+    "UnitProcessDatabase.ilcd.zip",
+    "ResultDatabase.tidas.zip",
+    "ResultDatabase.ilcd.zip",
+  ].map((suffix) => `TiangongLCA-${recommendedVersion}-${suffix}`);
+  const argv = [
+    "node",
+    "workflows/release/cli.mjs",
+    "package",
+    "build",
+    "--materialization",
+    path.resolve(options.materialization),
+    "--intake",
+    path.resolve(options.intake),
+    "--profile",
+    options.profile,
+    "--release-version",
+    recommendedVersion,
+    "--out-dir",
+    path.resolve(options["out-dir"]),
+  ];
+  if (options["tidas-bin"])
+    argv.push("--tidas-bin", path.resolve(options["tidas-bin"]));
+  argv.push("--json");
+  const payload = {
+    ok: true,
+    command: COMMAND,
+    outcome: "release_version_confirmation_required",
+    completeness: "awaiting_user_confirmation",
+    recommendedVersion,
+    fileNames,
+    nextActions: [
+      {
+        kind: "confirm_release_version",
+        description:
+          "Ask the user to confirm or replace the recommended release version before building.",
+        command: argv.map(shellQuote).join(" "),
+        argv,
+      },
+    ],
+    replyTemplate: replyTemplateFor(COMMAND, {
+      outcome: "release_version_confirmation_required",
+    }),
+  };
+  if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+  else {
+    process.stdout.write(`Release version confirmation required\n\nSummary:\n`);
+    process.stdout.write(`- Recommended version: ${recommendedVersion}\n`);
+    for (const fileName of fileNames) process.stdout.write(`- ${fileName}\n`);
+    process.stdout.write(
+      `\nNext:\n- Ask the user to confirm or replace this version.\n\n`,
+    );
+    process.stdout.write(
+      `Reply using template:\n- ${payload.replyTemplate.path}\n`,
+    );
+  }
+}
+
+function recommendedReleaseVersion(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const value = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  );
+  return `${value.year}.${value.month}.0`;
 }
 
 function parseArgs(tokens) {

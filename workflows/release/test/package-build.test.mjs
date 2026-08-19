@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,6 +16,7 @@ import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
 import {
   buildPackageCandidate,
   PACKAGE_PROFILE,
+  verifyBuiltPackages,
 } from "../lib/package-build.mjs";
 import {
   REPLY_TEMPLATE_COMMANDS,
@@ -22,6 +30,7 @@ const UNIT_ID = "44444444-4444-4444-8444-444444444444";
 const FLOW_ID = "55555555-5555-4555-8555-555555555555";
 const VERSION = "01.00.000";
 const REPOSITORY_ROOT = new URL("../../../", import.meta.url).pathname;
+const RELEASE_VERSION = "2026.08.0";
 
 test("package build assembles local closure and delegates four-package build", async () => {
   const fixture = await createFixture();
@@ -30,6 +39,7 @@ test("package build assembles local closure and delegates four-package build", a
     materializationDir: fixture.materialization,
     intakeDir: fixture.intake,
     outDir: fixture.output,
+    releaseVersion: RELEASE_VERSION,
     runTool: async (request) => {
       observed = request;
       const index = JSON.parse(await readFile(request.indexPath, "utf8"));
@@ -42,10 +52,10 @@ test("package build assembles local closure and delegates four-package build", a
       ]);
       await mkdir(request.packagesDir, { recursive: true });
       for (const name of [
-        "unit-tidas.zip",
-        "unit-eilcd.zip",
-        "result-tidas.zip",
-        "result-eilcd.zip",
+        "unit-process-full-closure.v1.tidas.zip",
+        "unit-process-full-closure.v1.ilcd.zip",
+        "standalone-lifecyclemodel-result-full-closure.v1.tidas.zip",
+        "standalone-lifecyclemodel-result-full-closure.v1.ilcd.zip",
       ])
         await writeFile(
           path.join(request.packagesDir, name),
@@ -53,9 +63,25 @@ test("package build assembles local closure and delegates four-package build", a
         );
       return { ok: true, release: { outcome: "built", packageCount: 4 } };
     },
+    verifyTool: async ({ packagesDir, releaseVersion }) => {
+      assert.equal(releaseVersion, RELEASE_VERSION);
+      assert.deepEqual((await readdir(packagesDir)).sort(), [
+        `TiangongLCA-${RELEASE_VERSION}-ResultDatabase.ilcd.zip`,
+        `TiangongLCA-${RELEASE_VERSION}-ResultDatabase.tidas.zip`,
+        `TiangongLCA-${RELEASE_VERSION}-UnitProcessDatabase.ilcd.zip`,
+        `TiangongLCA-${RELEASE_VERSION}-UnitProcessDatabase.tidas.zip`,
+      ]);
+      return {
+        schemaVersion: "tiangong.release.package-verification.v1",
+        releaseVersion,
+        outcome: "passed",
+        packages: [],
+      };
+    },
   });
   assert.equal(observed.tidasBin, "tidas");
   assert.equal(result.candidate.profile, PACKAGE_PROFILE);
+  assert.equal(result.candidate.releaseVersion, RELEASE_VERSION);
   assert.equal(result.candidate.publicationAuthorized, false);
   assert.equal(result.candidate.packages.length, 4);
   assert.equal(
@@ -65,6 +91,15 @@ test("package build assembles local closure and delegates four-package build", a
         "utf8",
       ),
     ).validation.outcome,
+    "passed",
+  );
+  assert.equal(
+    JSON.parse(
+      await readFile(
+        path.join(fixture.output, "package-verification-report.json"),
+        "utf8",
+      ),
+    ).outcome,
     "passed",
   );
 });
@@ -86,6 +121,7 @@ test("package build fails before tidas-tools when materialized bytes drift", asy
       materializationDir: fixture.materialization,
       intakeDir: fixture.intake,
       outDir: fixture.output,
+      releaseVersion: RELEASE_VERSION,
       runTool: async () => {
         invoked = true;
       },
@@ -93,6 +129,61 @@ test("package build fails before tidas-tools when materialized bytes drift", asy
     (error) => error.code === "materialized_dataset_hash_mismatch",
   );
   assert.equal(invoked, false);
+});
+
+test("release version is filename-safe before any input is read", async () => {
+  await assert.rejects(
+    buildPackageCandidate({
+      materializationDir: "/missing/materialization",
+      intakeDir: "/missing/intake",
+      outDir: "/missing/output",
+      releaseVersion: "../latest",
+    }),
+    (error) => error.code === "release_version_invalid",
+  );
+});
+
+test("final distribution ZIPs are independently extracted and validated", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "release-readback-"));
+  const packagesDir = path.join(root, "packages");
+  await mkdir(packagesDir);
+  for (const product of ["UnitProcessDatabase", "ResultDatabase"])
+    for (const format of ["tidas", "ilcd"])
+      await writeFile(
+        path.join(
+          packagesDir,
+          `TiangongLCA-${RELEASE_VERSION}-${product}.${format}.zip`,
+        ),
+        `${product}:${format}`,
+      );
+  const calls = [];
+  const report = await verifyBuiltPackages({
+    tidasBin: "/tools/tidas",
+    packagesDir,
+    workspace: root,
+    releaseVersion: RELEASE_VERSION,
+    spawnCommand: async (command, args) => {
+      calls.push([command, ...args]);
+      if (command === "unzip" && args[0] === "-Z1")
+        return { code: 0, stdout: "data/example.json\n", stderr: "" };
+      if (command === "unzip") return { code: 0, stdout: "", stderr: "" };
+      return {
+        code: 0,
+        stdout: JSON.stringify({ ok: true, summary: { release: {} } }),
+        stderr: "",
+      };
+    },
+  });
+  assert.equal(report.outcome, "passed");
+  assert.equal(report.packages.length, 4);
+  assert.equal(calls.filter(([command]) => command === "unzip").length, 8);
+  assert.deepEqual(
+    calls
+      .filter(([command]) => command === "/tools/tidas")
+      .map(([, , action]) => action)
+      .sort(),
+    ["validate-ilcd", "validate-ilcd", "validate-tidas", "validate-tidas"],
+  );
 });
 
 test("CLI exposes one bounded local package build route", () => {
@@ -117,6 +208,8 @@ test("CLI exposes one bounded local package build route", () => {
       "/tmp/intake",
       "--profile",
       "result-process-only.v1",
+      "--release-version",
+      RELEASE_VERSION,
       "--out-dir",
       "/tmp/candidate",
       "--json",
@@ -131,6 +224,41 @@ test("CLI exposes one bounded local package build route", () => {
   assert.equal(unsupportedPayload.completeness, "not_completed");
   assert.equal(unsupportedPayload.nextActions[0].kind, "inspect_usage");
   assert.equal(unsupportedPayload.replyTemplate.id, "release-command-failed");
+
+  const confirmation = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "package",
+      "build",
+      "--materialization",
+      "/tmp/materialization",
+      "--intake",
+      "/tmp/intake",
+      "--profile",
+      PACKAGE_PROFILE,
+      "--out-dir",
+      "/tmp/candidate",
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(confirmation.status, 0);
+  const confirmationPayload = JSON.parse(confirmation.stdout);
+  assert.equal(
+    confirmationPayload.outcome,
+    "release_version_confirmation_required",
+  );
+  assert.equal(confirmationPayload.completeness, "awaiting_user_confirmation");
+  assert.match(confirmationPayload.recommendedVersion, /^\d{4}\.\d{2}\.0$/u);
+  assert.equal(confirmationPayload.fileNames.length, 4);
+  assert.equal(
+    confirmationPayload.replyTemplate.id,
+    "release-version-confirmation-required",
+  );
+  assert.ok(
+    confirmationPayload.nextActions[0].argv.includes("--release-version"),
+  );
 });
 
 test("CLI rejects unknown and duplicate options with actionable output", () => {
