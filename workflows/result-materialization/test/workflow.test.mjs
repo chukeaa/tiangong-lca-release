@@ -8,14 +8,18 @@ import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { canonicalJson } from "../lib/common.mjs";
 import { createIntake } from "../lib/intake.mjs";
+import { resolveReferencePivot, sourceKey } from "../lib/context.mjs";
 import { modelIdentity, resultIdentity } from "../lib/identity.mjs";
 import { materializeModels } from "../lib/materialize-models.mjs";
 import { materialize } from "../lib/materialize.mjs";
 import {
-  assertUniqueResultLineages,
   materializeResults,
+  resolveResultVariantVersions,
 } from "../lib/materialize-results.mjs";
-import { resolveVersion } from "../lib/versioning.mjs";
+import {
+  indexPreviousResultVariants,
+  resolveVersion,
+} from "../lib/versioning.mjs";
 
 const PROCESS_ID = "11111111-1111-4111-8111-111111111111";
 const FLOW_ID = "22222222-2222-4222-8222-222222222222";
@@ -304,20 +308,89 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   assert.equal(modelDelivery.manifest.datasets.length, 3);
 });
 
-test("multiple exact axes cannot be silently collapsed into one Result lineage", () => {
-  const axis = (processIndex, version) => ({
-    processIndex,
-    rootProcess: { id: PROCESS_ID, version },
-    quantitativeReference: {
-      flow: { id: FLOW_ID, version: "01.00.000" },
+test("multiple exact source revisions share a Result UUID but receive exact versions", () => {
+  const resultUuid = resultIdentity(PROCESS_ID, FLOW_ID).uuid;
+  const hash = (value) => value.repeat(64);
+  const draft = (processIndex, version, value) => ({
+    axis: { processIndex },
+    provisional: {
+      uuid: resultUuid,
+      sourceProcess: { id: PROCESS_ID, version },
+    },
+    hashes: {
+      semanticHash: hash(value),
+      versionSignificantHash: hash(value),
+      canonicalContentHash: hash(value),
     },
   });
-  assert.throws(
-    () =>
-      assertUniqueResultLineages([axis(1, "01.01.002"), axis(2, "01.01.005")]),
-    (error) =>
-      error.code === "result_lineage_ambiguous" &&
-      error.details.axes.length === 2,
+  const drafts = [draft(1, "01.01.002", "a"), draft(2, "01.01.005", "b")];
+  const first = resolveResultVariantVersions(
+    drafts,
+    indexPreviousResultVariants(null),
+  );
+  assert.equal(first.get(1).version, "01.00.000");
+  assert.equal(first.get(2).version, "02.00.000");
+  const previousManifest = {
+    datasets: drafts.map((item) => ({
+      datasetType: "process",
+      uuid: resultUuid,
+      version: first.get(item.axis.processIndex).version,
+      sourceProcess: item.provisional.sourceProcess,
+      ...item.hashes,
+    })),
+  };
+  const replay = resolveResultVariantVersions(
+    drafts,
+    indexPreviousResultVariants(previousManifest),
+  );
+  assert.equal(replay.get(1).change, "reuse");
+  assert.equal(replay.get(2).change, "reuse");
+});
+
+test("quantitative-reference pivot uses Bundle v2 evidence and bounded legacy fallback", () => {
+  const process = validUnitProcess(
+    PROCESS_ID,
+    FLOW_ID,
+    "Input reference fixture",
+  );
+  const referenceExchange = process.processDataSet.exchanges.exchange[0];
+  referenceExchange.exchangeDirection = "Input";
+  referenceExchange.meanAmount = "2.5";
+  const sources = new Map([
+    [
+      sourceKey("process", PROCESS_ID, "01.00.000"),
+      { role: "unit_process", document: process },
+    ],
+  ]);
+  const axis = {
+    processIndex: 0,
+    rootProcess: { id: PROCESS_ID, version: "01.00.000" },
+    quantitativeReference: {
+      exchangeInternalId: "0",
+      flow: { id: FLOW_ID, version: "01.00.000" },
+      meanAmount: 1,
+    },
+  };
+  const legacy = resolveReferencePivot(axis, sources);
+  assert.deepEqual(legacy, {
+    rawDirection: "Input",
+    rawMeanAmount: 2.5,
+    signedRawCoefficient: -2.5,
+    normalizationScale: 0.4,
+    normalizedCoefficient: -1,
+    normalizedMeanAmount: 1,
+    evidenceSource: "exact_source_closure_legacy_fallback.v1",
+  });
+  axis.quantitativeReference.pivot = {
+    rawDirection: "Input",
+    rawMeanAmount: 2.5,
+    signedRawCoefficient: -2.5,
+    normalizationScale: 0.4,
+    normalizedCoefficient: -1,
+  };
+  assert.equal(
+    resolveReferencePivot(axis, sources).evidenceSource,
+    "calculation_bundle_process_axis.v2",
   );
 });
 

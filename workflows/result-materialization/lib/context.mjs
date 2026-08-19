@@ -35,6 +35,9 @@ export async function loadMaterializationContext(intakeDir) {
       record,
     );
   }
+  for (const axis of axes) {
+    axis.referencePivot = resolveReferencePivot(axis, sources);
+  }
   return {
     root,
     intake,
@@ -44,6 +47,138 @@ export async function loadMaterializationContext(intakeDir) {
     lcia: await recordsByProcess(artifacts.lcia),
     biosphere: await recordsByProcess(artifacts.biosphere_edges),
     technosphereEdges: await allRecords(artifacts.technosphere_edges),
+  };
+}
+
+export function resolveReferencePivot(axis, sources) {
+  const source = sources.get(
+    sourceKey("process", axis.rootProcess.id, axis.rootProcess.version),
+  );
+  if (!source || source.role !== "unit_process") {
+    fail(
+      "unit_process_missing",
+      `Exact source Unit Process is missing: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
+    );
+  }
+  const data = source.document?.processDataSet;
+  const internalId = String(
+    data?.processInformation?.quantitativeReference?.referenceToReferenceFlow,
+  );
+  const exchanges = (data?.exchanges?.exchange ?? []).filter(
+    (exchange) => String(exchange["@dataSetInternalID"]) === internalId,
+  );
+  if (
+    exchanges.length !== 1 ||
+    internalId !== String(axis.quantitativeReference.exchangeInternalId)
+  ) {
+    fail(
+      "invalid_quantitative_reference",
+      "Calculation axis does not identify the exact source quantitative-reference exchange",
+    );
+  }
+  const exchange = exchanges[0];
+  const flow = exchange.referenceToFlowDataSet;
+  const sourceDirection = normalizeDirection(exchange.exchangeDirection);
+  const sourceAmount = finiteNonzero(
+    exchange.meanAmount,
+    "source quantitative-reference meanAmount",
+  );
+  if (
+    flow?.["@refObjectId"]?.toLowerCase() !==
+      axis.quantitativeReference.flow.id.toLowerCase() ||
+    flow?.["@version"] !== axis.quantitativeReference.flow.version
+  ) {
+    fail(
+      "invalid_quantitative_reference",
+      "Source quantitative-reference Flow does not match the Calculation Bundle axis",
+    );
+  }
+  const supplied = axis.quantitativeReference.pivot;
+  const rawDirection = supplied
+    ? normalizeDirection(supplied.rawDirection)
+    : sourceDirection;
+  const rawMeanAmount = supplied
+    ? finiteNonzero(
+        supplied.rawMeanAmount,
+        "quantitativeReference.pivot.rawMeanAmount",
+      )
+    : sourceAmount;
+  const signedRawCoefficient = supplied
+    ? finiteNonzero(
+        supplied.signedRawCoefficient,
+        "quantitativeReference.pivot.signedRawCoefficient",
+      )
+    : directionSign(rawDirection) * rawMeanAmount;
+  const normalizationScale = supplied
+    ? finiteNonzero(
+        supplied.normalizationScale,
+        "quantitativeReference.pivot.normalizationScale",
+      )
+    : 1 / Math.abs(signedRawCoefficient);
+  const normalizedCoefficient = supplied
+    ? finiteNonzero(
+        supplied.normalizedCoefficient,
+        "quantitativeReference.pivot.normalizedCoefficient",
+      )
+    : Math.sign(signedRawCoefficient);
+  const normalizedMeanAmount = rawMeanAmount * normalizationScale;
+  for (const [actual, expected, field] of [
+    [rawDirection, sourceDirection, "rawDirection"],
+    [rawMeanAmount, sourceAmount, "rawMeanAmount"],
+  ]) {
+    if (
+      typeof actual === "string"
+        ? actual !== expected
+        : !nearlyEqual(actual, expected)
+    ) {
+      fail(
+        "quantitative_reference_pivot_mismatch",
+        `Calculation Bundle pivot ${field} does not match the exact source closure`,
+      );
+    }
+  }
+  for (const [actual, expected, field] of [
+    [
+      signedRawCoefficient,
+      directionSign(rawDirection) * rawMeanAmount,
+      "signedRawCoefficient",
+    ],
+    [
+      normalizationScale,
+      1 / Math.abs(signedRawCoefficient),
+      "normalizationScale",
+    ],
+    [
+      normalizedCoefficient,
+      Math.sign(signedRawCoefficient),
+      "normalizedCoefficient",
+    ],
+    [
+      finiteNonzero(
+        axis.quantitativeReference.meanAmount,
+        "quantitativeReference.meanAmount",
+      ),
+      normalizedMeanAmount,
+      "meanAmount",
+    ],
+  ]) {
+    if (!nearlyEqual(actual, expected)) {
+      fail(
+        "quantitative_reference_pivot_mismatch",
+        `Calculation Bundle pivot ${field} is internally inconsistent`,
+      );
+    }
+  }
+  return {
+    rawDirection,
+    rawMeanAmount,
+    signedRawCoefficient,
+    normalizationScale,
+    normalizedCoefficient,
+    normalizedMeanAmount,
+    evidenceSource: supplied
+      ? "calculation_bundle_process_axis.v2"
+      : "exact_source_closure_legacy_fallback.v1",
   };
 }
 
@@ -90,6 +225,32 @@ function groupArtifacts(entries, root) {
   for (const entry of entries)
     (result[entry.kind] ??= []).push(path.join(root, entry.path));
   return result;
+}
+
+function normalizeDirection(value) {
+  const normalized = String(value).toLowerCase();
+  if (normalized === "input") return "Input";
+  if (normalized === "output") return "Output";
+  fail("invalid_quantitative_reference", `Unsupported direction: ${value}`);
+}
+
+function directionSign(direction) {
+  return direction === "Input" ? -1 : 1;
+}
+
+function finiteNonzero(value, field) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number === 0)
+    fail(
+      "invalid_quantitative_reference",
+      `${field} must be finite and non-zero`,
+    );
+  return number;
+}
+
+function nearlyEqual(left, right) {
+  const tolerance = 1e-12 * Math.max(Math.abs(left), Math.abs(right), 1);
+  return Math.abs(left - right) <= tolerance;
 }
 
 async function* recordsFor(paths = []) {

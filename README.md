@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-18
+lastReviewedAt: 2026-08-19
 lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
-lastReviewedNote: "Confirmed intent-level scope, output type, and result layer selection over internal Result/Model convergence."
+lastReviewedNote: "Reviewed repository workflow boundaries after exact Result variants and pivot evidence handling were defined."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -115,6 +115,8 @@ workflows/
 - 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
 - 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
 - 读取上一版 manifest 并分阶段求解 Result/Model dataset version；
+- 同一稳定 Result UUID lineage 下按 exact source revision 生成并引用独立 dataset versions；
+- 保持 calculation-time quantitative-reference signed pivot，并为旧 Bundle 使用已校验 exact source closure 的有界兼容；
 - 渲染精确 identity/version 引用；
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
@@ -226,13 +228,14 @@ Agent 不能替代用户决定：
 6. Release 只消费已经 materialize 的 canonical datasets，不在打包过程中临时生成 Process/Model。
 7. 其他仓库保持不变；缺少能力时本项目明确停止并报告，而不是跨仓补实现。
 8. LifecycleModel 首版采用 resolved one-hop aggregated-background：根 instance 引用 `U(P)`，每条有效 direct provider edge 引用对应聚合 `R(Q)`，resulting Process 引用 `R(P)`。
+9. 同一 Result UUID lineage 可包含多个 exact source Process revisions；每个 revision 使用独立 dataset version，Model 引用 calculation axis 对应的精确版本。
+10. Quantitative reference 保持 Worker 的 raw direction/amount 与 signed normalization pivot；旧 Bundle 只从本地已校验 exact source closure 回推，不访问 mutable 远端状态。
 
 ## 仍需确认的细节
 
 1. Dataset Transformation 的默认产物是否只保留在本地工作区，不直接写回线上 authoring tables。
 2. 加权组合默认优先生成 LifecycleModel 或 Derived Result，还是每次都由用户选择输出类型。
-3. Result Materialization 首版 recipe 集合、Result Process lineage 和 previous manifest 规则。
-4. Release 首版 formats、package recipes、subset 限制和本地预览边界。
+3. Release 首版 formats、package recipes、subset 限制和本地预览边界。
 
 ## 开发状态
 
