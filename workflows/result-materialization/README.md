@@ -167,6 +167,11 @@ node cli.mjs job logs --job-id <UUID> --tail 100 --json
 node cli.mjs job cancel --job-id <UUID> --json
 ```
 
+顶层命令和每一个可执行动作都支持就地帮助，例如 `intake --help`、
+`materialize --help`、`materialize start --help`、`job get --help`、
+`job logs --help` 和 `job cancel --help`。帮助请求退出码为 0，不要求业务参数，
+也不会启动或读取任务。
+
 生成阶段默认使用 2 个有界 render/write worker，可以用 `--concurrency 1..16` 调整。并发只控制已经冻结版本后的逐条渲染和写入，不改变 selection、identity/version 规划顺序，也不会启动无界任务集合。增加并发前应先观察相同样本的 RSS、heap、吞吐和磁盘余量。
 
 默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，包含 `job.json`、`process.json`、`status.json`、`job.log`、终态 `exit-code` 和 `result.json`。`--artifact-root` 可以整体调整这个本地 Job workspace；它不改变用户显式提供的 canonical `--out-dir`。
