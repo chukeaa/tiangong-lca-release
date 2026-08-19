@@ -255,7 +255,8 @@ function parseArgs(tokens) {
       });
     }
     const key = token.slice(2);
-    if (["json", "first-generation", "all", "help"].includes(key)) result[key] = true;
+    if (["json", "first-generation", "all", "help"].includes(key))
+      result[key] = true;
     else {
       const value = tokens[index + 1];
       if (!value || value.startsWith("--")) {

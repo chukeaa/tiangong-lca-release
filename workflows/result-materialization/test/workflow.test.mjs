@@ -142,7 +142,10 @@ test("every Result Materialization action exposes local help without executing",
   const cli = new URL("../cli.mjs", import.meta.url);
   const cases = [
     [["intake", "--help"], /--bundle <path>/],
-    [["materialize", "--help"], /--output-type <result-process\|lifecycle-model>/],
+    [
+      ["materialize", "--help"],
+      /--output-type <result-process\|lifecycle-model>/,
+    ],
     [["materialize", "start", "--help"], /observable local nohup job/],
     [["job", "get", "--help"], /progress, resources, throughput, and ETA/],
     [["job", "logs", "--help"], /--tail <1-500>/],
