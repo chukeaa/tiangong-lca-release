@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 9adfbf11942428fba306360c264e9a39d27a4f3e
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
 lastReviewedNote: "Reviewed the executable contract against the conceptual Result Process and LifecycleModel design."
 related:
   - README.md

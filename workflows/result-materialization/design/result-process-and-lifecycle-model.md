@@ -60,6 +60,29 @@ LifecycleModel 本身没有 LCI 或 LCIA 结果字段。它保存过程实例和
 
 `R(P)` 和 `M(P)` 不是同一种信息的两种文件格式。`R(P)` 侧重“结果是多少”，`M(P)` 侧重“结果由什么关系构成”。
 
+## M(P) 的物理意义
+
+`M(P)` 表达的是：**为了按照 `P` 的 quantitative reference 生产一个归一化单位的参考产品，前景过程 `U(P)` 需要多少直接背景产品或服务，以及这些需求由哪些背景结果过程提供。**
+
+它包含三类物理含义不同的元素：
+
+- 根 instance `U(P)` 表示被研究的前景生产活动，并按照 quantitative reference 的归一化基准缩放；
+- 每个 provider instance `R(Q)` 表示满足某一条直接 technosphere 输入所需的背景产品或服务；
+- connection 表示 `U(P)` 的一项具体需求由哪个 `R(Q)` 满足，以及需要多少。
+
+例如，生产一吨产品 `P` 需要 500 kWh 电力和 20 tkm 运输，那么 `M(P)` 表达的是“一吨产品的前景过程 + 满足 500 kWh 电力需求的背景结果 + 满足 20 tkm 运输需求的背景结果”这套产品系统关系。它不是把电力和运输的 LCIA 指标连接到 `P`，而是连接实际的产品或服务需求；环境结果仍保存在对应的 Result Process 中。
+
+因此，`M(P)` 的功能单位由 `P` 的 quantitative reference 决定，provider 的 multiplication factor 则表示在这个功能单位下所需的背景活动量。连接的方向、单位、换算、分配和权重都必须来自同一次计算的已冻结证据。
+
+当前 `M(P)` 是一个 **one-hop resolved、background aggregated** 的产品系统：
+
+- 它显式保留 `U(P)` 与直接 provider 之间的物理需求关系；
+- 它不展开 `Q` 内部更上游的过程网络；
+- `R(Q)` 已经聚合承载 `Q` 及其上游系统的计算结果；
+- `R(P)` 是这套模型关系在相同基准下得到的 resulting Process。
+
+所以 `M(P)` 既不是原始 Unit Process，也不是完整展开的供应链图，更不是 LCI/LCIA 结果容器。它是一份**可重构 `R(P)` 的、边界明确的产品系统结构说明**。
+
 ## 两种生成模式
 
 ### 生成 Result Process

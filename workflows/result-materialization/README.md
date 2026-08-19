@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/result-materialization/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 5125fd8b6a1679f25b29032127e41d82bf063002
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
 lastReviewedNote: "Documented multi-revision Result lineages and quantitative-reference pivot handling."
 related:
   - AGENTS.md

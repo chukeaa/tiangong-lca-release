@@ -22,7 +22,7 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 9adfbf11942428fba306360c264e9a39d27a4f3e
+lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
 lastReviewedNote: "Reviewed the repository contract while reframing Result Materialization documentation around its current domain model."
 related:
   - README.md
