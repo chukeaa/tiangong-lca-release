@@ -25,20 +25,27 @@ const inputDriftCodes = new Set([
   "canonical_index_hash_mismatch",
 ]);
 
-export function replyTemplateFor(command, { ok, errorCode } = {}) {
-  const entry = ok
-    ? templates[command]
-    : inputDriftCodes.has(errorCode)
+export function replyTemplateFor(command, { ok, outcome, errorCode } = {}) {
+  const entry =
+    outcome === "release_version_confirmation_required"
       ? [
-          "release-input-drift",
-          "release-input-drift.md",
-          ["command", "error", "nextActions"],
+          "release-version-confirmation-required",
+          "release-version-confirmation-required.md",
+          ["recommendedVersion", "fileNames", "nextActions"],
         ]
-      : [
-          "release-command-failed",
-          "release-command-failed.md",
-          ["command", "error", "nextActions"],
-        ];
+      : ok
+        ? templates[command]
+        : inputDriftCodes.has(errorCode)
+          ? [
+              "release-input-drift",
+              "release-input-drift.md",
+              ["command", "error", "nextActions"],
+            ]
+          : [
+              "release-command-failed",
+              "release-command-failed.md",
+              ["command", "error", "nextActions"],
+            ];
   if (!entry) return undefined;
   const [id, filename, requiredFacts] = entry;
   return {

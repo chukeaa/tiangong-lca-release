@@ -224,6 +224,41 @@ test("CLI exposes one bounded local package build route", () => {
   assert.equal(unsupportedPayload.completeness, "not_completed");
   assert.equal(unsupportedPayload.nextActions[0].kind, "inspect_usage");
   assert.equal(unsupportedPayload.replyTemplate.id, "release-command-failed");
+
+  const confirmation = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "package",
+      "build",
+      "--materialization",
+      "/tmp/materialization",
+      "--intake",
+      "/tmp/intake",
+      "--profile",
+      PACKAGE_PROFILE,
+      "--out-dir",
+      "/tmp/candidate",
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(confirmation.status, 0);
+  const confirmationPayload = JSON.parse(confirmation.stdout);
+  assert.equal(
+    confirmationPayload.outcome,
+    "release_version_confirmation_required",
+  );
+  assert.equal(confirmationPayload.completeness, "awaiting_user_confirmation");
+  assert.match(confirmationPayload.recommendedVersion, /^\d{4}\.\d{2}\.0$/u);
+  assert.equal(confirmationPayload.fileNames.length, 4);
+  assert.equal(
+    confirmationPayload.replyTemplate.id,
+    "release-version-confirmation-required",
+  );
+  assert.ok(
+    confirmationPayload.nextActions[0].argv.includes("--release-version"),
+  );
 });
 
 test("CLI rejects unknown and duplicate options with actionable output", () => {

@@ -109,6 +109,8 @@ node cli.mjs package build \
 
 `--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令只构建本地 Candidate，不上传、不批准、也不发布。
 
+如果省略 `--release-version`，命令不会开始构建，而是以 `release_version_confirmation_required` 返回按 Asia/Shanghai 当前年月生成的推荐版本（例如 `2026.08.0`）、四个预期文件名和专用回复模板。Agent 必须先请用户确认或替换版本号，再使用返回的 argv 带上 `--release-version` 重跑；显式传入版本号即表示该前置确认已经完成。
+
 CLI 同时面向人和 Agent：默认输出简洁的 `Summary / Next / Reply using template`；`--json` 输出一个有界对象，包含 `outcome`、`completeness`、精确 artifact 路径、结构化 `nextActions[]` 和 workflow-local `replyTemplate`。未知或重复参数会被拒绝，失败时使用非零退出码，并提供错误代码、恢复动作和对应回复模板。
 
 回复模板位于 `reply-templates/`，目前覆盖：

@@ -67,13 +67,7 @@ async function main() {
     process.stdout.write(HELP);
     return;
   }
-  requireOptions(options, [
-    "materialization",
-    "intake",
-    "profile",
-    "release-version",
-    "out-dir",
-  ]);
+  requireOptions(options, ["materialization", "intake", "profile", "out-dir"]);
   if (options.profile !== PACKAGE_PROFILE) {
     throw Object.assign(
       new Error(
@@ -81,6 +75,10 @@ async function main() {
       ),
       { code: "unsupported_package_profile" },
     );
+  }
+  if (!options["release-version"]) {
+    respondVersionConfirmation(options);
+    return;
   }
   const result = await buildPackageCandidate({
     materializationDir: path.resolve(options.materialization),
@@ -126,6 +124,79 @@ async function main() {
     ],
     replyTemplate: replyTemplateFor(COMMAND, { ok: true }),
   });
+}
+
+function respondVersionConfirmation(options) {
+  const recommendedVersion = recommendedReleaseVersion();
+  const fileNames = [
+    "UnitProcessDatabase.tidas.zip",
+    "UnitProcessDatabase.ilcd.zip",
+    "ResultDatabase.tidas.zip",
+    "ResultDatabase.ilcd.zip",
+  ].map((suffix) => `TiangongLCA-${recommendedVersion}-${suffix}`);
+  const argv = [
+    "node",
+    "workflows/release/cli.mjs",
+    "package",
+    "build",
+    "--materialization",
+    path.resolve(options.materialization),
+    "--intake",
+    path.resolve(options.intake),
+    "--profile",
+    options.profile,
+    "--release-version",
+    recommendedVersion,
+    "--out-dir",
+    path.resolve(options["out-dir"]),
+  ];
+  if (options["tidas-bin"])
+    argv.push("--tidas-bin", path.resolve(options["tidas-bin"]));
+  argv.push("--json");
+  const payload = {
+    ok: true,
+    command: COMMAND,
+    outcome: "release_version_confirmation_required",
+    completeness: "awaiting_user_confirmation",
+    recommendedVersion,
+    fileNames,
+    nextActions: [
+      {
+        kind: "confirm_release_version",
+        description:
+          "Ask the user to confirm or replace the recommended release version before building.",
+        command: argv.map(shellQuote).join(" "),
+        argv,
+      },
+    ],
+    replyTemplate: replyTemplateFor(COMMAND, {
+      outcome: "release_version_confirmation_required",
+    }),
+  };
+  if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+  else {
+    process.stdout.write(`Release version confirmation required\n\nSummary:\n`);
+    process.stdout.write(`- Recommended version: ${recommendedVersion}\n`);
+    for (const fileName of fileNames) process.stdout.write(`- ${fileName}\n`);
+    process.stdout.write(
+      `\nNext:\n- Ask the user to confirm or replace this version.\n\n`,
+    );
+    process.stdout.write(
+      `Reply using template:\n- ${payload.replyTemplate.path}\n`,
+    );
+  }
+}
+
+function recommendedReleaseVersion(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const value = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  );
+  return `${value.year}.${value.month}.0`;
 }
 
 function parseArgs(tokens) {
