@@ -24,6 +24,7 @@
         "bundleContentHash",
         "intakeManifestSha256",
         "materializationRequestSha256",
+        "canonicalDatasetIndexSha256",
         "resultCatalogSha256",
         "firstGeneration"
       ]

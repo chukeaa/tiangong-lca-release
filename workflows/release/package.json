@@ -1,0 +1,22 @@
+{
+  "name": "@tiangong-lca/release-workflow-publication",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "bin": {
+    "release-package": "./cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "canonicalize": "4.0.0"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

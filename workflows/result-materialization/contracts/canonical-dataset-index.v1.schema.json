@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/canonical-dataset-index.v1.schema.json",
+  "title": "Canonical Dataset Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "datasetCount",
+    "byteSize",
+    "artifactSetHash",
+    "datasets"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.canonical-dataset-index.v1" },
+    "datasetCount": { "type": "integer", "minimum": 1 },
+    "byteSize": { "type": "integer", "minimum": 1 },
+    "artifactSetHash": { "$ref": "#/$defs/hash" },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "datasetType",
+          "role",
+          "uuid",
+          "version",
+          "path",
+          "sha256",
+          "byteSize",
+          "canonicalContentHash"
+        ],
+        "properties": {
+          "datasetType": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "minLength": 1 },
+          "uuid": { "type": "string", "format": "uuid" },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+          },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "$ref": "#/$defs/hash" },
+          "byteSize": { "type": "integer", "minimum": 1 },
+          "canonicalContentHash": { "$ref": "#/$defs/hash" }
+        }
+      }
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

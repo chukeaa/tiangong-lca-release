@@ -12,6 +12,7 @@ import { materializeModels } from "./materialize-models.mjs";
 import { materializeResults } from "./materialize-results.mjs";
 import { hashJson } from "./versioning.mjs";
 import { loadMaterializationContext } from "./context.mjs";
+import { writeCanonicalDatasetIndex } from "./canonical-index.mjs";
 
 export const OUTPUT_TYPES = new Set(["result-process", "lifecycle-model"]);
 export const RESULT_PROCESS_LAYERS = new Set(["lci", "lci-lcia"]);
@@ -99,6 +100,16 @@ export async function materialize({
       path.join(completed.path, "materialization-request.json"),
       canonicalJson(request),
       { flag: "wx" },
+    );
+    const canonicalIndex = await writeCanonicalDatasetIndex(
+      completed.path,
+      completed.manifest.datasets,
+    );
+    completed.manifest.inputs.canonicalDatasetIndexSha256 =
+      hashJson(canonicalIndex);
+    await writeFile(
+      path.join(completed.path, "materialization-manifest.json"),
+      canonicalJson(completed.manifest),
     );
     await onProgress?.({ phase: "committing", completed: 0, total: 1 });
     await rename(completed.path, target);

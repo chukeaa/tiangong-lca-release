@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/package-plan.v1.schema.json",
+  "title": "Release Package Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profile",
+    "materialization",
+    "intake",
+    "canonicalInput",
+    "packager"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.package-plan.v1" },
+    "profile": { "const": "standalone-lifecyclemodel-result-full-closure.v1" },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256", "canonicalDatasetIndexSha256"],
+      "properties": {
+        "manifestSha256": { "$ref": "#/$defs/hash" },
+        "canonicalDatasetIndexSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256", "calculationId", "bundleContentHash"],
+      "properties": {
+        "manifestSha256": { "$ref": "#/$defs/hash" },
+        "calculationId": { "type": "string", "format": "uuid" },
+        "bundleContentHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "canonicalInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datasetCount", "byteSize", "artifactSetHash"],
+      "properties": {
+        "datasetCount": { "type": "integer", "minimum": 1 },
+        "byteSize": { "type": "integer", "minimum": 1 },
+        "artifactSetHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "packager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter"],
+      "properties": {
+        "adapter": { "const": "tidas-tools.release-build-packages.v1" }
+      }
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

@@ -207,12 +207,13 @@ CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下�
 materialization-request.json
 result-catalog.json
 model-catalog.json                  # lifecycle-model 模式
+canonical-dataset-index.json        # 生成数据集的精确 path/bytes/hash index
 canonical-datasets/
 materialization-manifest.json
 materialization-report.json
 ```
 
-当前 Catalog 与 Manifest 已包含 selection、identity/version plan、dataset index 和 role 信息，因此不重复输出同义文件。Result-only 模式的 canonical datasets 只有 primary Result Processes；LifecycleModel 模式同时包含 primary Models、resulting Result Processes 和 dependency Result Processes。
+`canonical-dataset-index.json` 使用 `tiangong.release.canonical-dataset-index.v1`，把每个已生成数据集的 type、role、UUID/version、相对路径、原始文件 SHA-256、canonical content hash 和 byte size 冻结为 `tidas-tools` 可消费的交接契约。Materialization Manifest 绑定该 Index 的 canonical SHA-256。Result-only 模式的 canonical datasets 只有 primary Result Processes；LifecycleModel 模式同时包含 primary Models、resulting Result Processes 和 dependency Result Processes。
 
 Materialization Manifest 至少绑定：
 

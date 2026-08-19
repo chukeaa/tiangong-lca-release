@@ -40,6 +40,16 @@ related:
 - 生成有界 candidate report；
 - 在用户已授权发布后继续同一 run 的 readback。
 
+## 当前本地 Package 契约
+
+- `package build` 只接受完整 LifecycleModel materialization、与其 hash/identity 精确匹配的本地 intake，以及 `standalone-lifecyclemodel-result-full-closure.v1`。
+- Result Materialization 的 Index 只描述新生成数据集；Release 从 intake `source_closure` 加入 Unit Process 和支持数据集，生成供 `tidas-tools` 使用的完整 Index。
+- source closure artifact hash、record count、每条 document canonical hash，以及 materialized dataset bytes 必须在调用外部工具前重新验证。
+- Package Plan 不记录机器绝对路径；它只绑定 manifest/index/bundle hashes 和 canonical input summary，保证换目录重放不改变计划语义。
+- 引用闭合、TIDAS/eILCD validation、conversion、round-trip 和四包构建必须委托 `tidas-tools release build-packages`，不得在本 Workflow 重写。
+- Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告，并显式记录 `publicationAuthorized=false`。
+- 输出目录不可覆盖；失败只能留下可清理的临时 workspace，不得形成可见 Candidate。
+
 ## 必须明确确认的动作
 
 - 选择最终发布内容和 package recipe；

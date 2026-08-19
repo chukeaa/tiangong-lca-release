@@ -89,6 +89,52 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
 
 Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 
+## 当前可执行入口
+
+首个本地 Package route 已实现为 Workflow-local 薄 CLI：
+
+```bash
+cd workflows/release
+npm install
+
+node cli.mjs package build \
+  --materialization /path/to/materialized-lifecycle-model \
+  --intake /path/to/verified-intake \
+  --profile standalone-lifecyclemodel-result-full-closure.v1 \
+  --out-dir /path/to/release-candidate \
+  --tidas-bin /path/to/tidas \
+  --json
+```
+
+`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令只构建本地 Candidate，不上传、不批准、也不发布。
+
+执行过程：
+
+```text
+验证 Materialization Manifest + canonical-dataset-index
+  -> 验证精确 intake identity/hash
+  -> 从本地 source_closure 组装 Unit Process 与支持数据集
+  -> 生成完整 canonical-dataset-index
+  -> 冻结 Package Plan
+  -> 调用 tidas release build-packages
+  -> 保存四个确定性 ZIP + tidas report
+  -> 冻结 publicationAuthorized=false 的 Release Candidate
+```
+
+Release 不在 Node 实现中复制引用遍历、TIDAS/eILCD validation、schema-ordered conversion 或 semantic round-trip；这些由 `tidas-tools` 权威实现。Node 层只验证交接证据、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
+
+当前只支持 `standalone-lifecyclemodel-result-full-closure.v1`。Result Process-only materialization 会以 `package_profile_unsupported` 停止；只有未来 `tidas-tools` 增加并验证对应 profile 后才扩展。
+
+Candidate 目录包含：
+
+```text
+package-plan.json
+canonical-dataset-index.json
+tidas-release-report.json
+release-candidate.json
+packages/                              # exactly four deterministic ZIPs
+```
+
 ## 人工审批
 
 审批必须绑定：
@@ -118,9 +164,8 @@ Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 - 把派生数据写回 authoring tables；
 - 使用 service-role 或直接 SQL 发布。
 
-## 待确认点
+## 后续待确认点
 
 1. 首版正式 Release 是否必须同时生成 TIDAS 和 ILCD？
-2. 首版是否保留“固定四包”作为一个 recipe，还是立即支持上述五类独立 recipe？
-3. Subset package 是否只允许本地下载，禁止成为全局公共 release？
-4. Release 是否只接受完整通过的 materialization，还是允许把部分 candidate 保留为永不发布的本地预览？
+2. Subset package 是否只允许本地下载，禁止成为全局公共 release？
+3. Release 是否只接受完整通过的 materialization，还是允许把部分 candidate 保留为永不发布的本地预览？
