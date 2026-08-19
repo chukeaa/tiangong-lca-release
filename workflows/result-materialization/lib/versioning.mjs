@@ -71,8 +71,16 @@ export function indexPrevious(previousManifest, datasetTypes) {
 }
 
 export function indexPreviousResultVariants(previousManifest) {
+  return indexPreviousExactSourceVariants(previousManifest, "process");
+}
+
+export function indexPreviousModelVariants(previousManifest) {
+  return indexPreviousExactSourceVariants(previousManifest, "lifecyclemodel");
+}
+
+function indexPreviousExactSourceVariants(previousManifest, datasetType) {
   const datasets = previousDatasets(previousManifest).filter(
-    (dataset) => dataset.datasetType === "process",
+    (dataset) => dataset.datasetType === datasetType,
   );
   const bySource = new Map();
   const byLineage = new Map();
@@ -87,10 +95,10 @@ export function indexPreviousResultVariants(previousManifest) {
     ) {
       fail(
         "previous_manifest_invalid",
-        `Previous Result Process is missing sourceProcess: ${dataset.uuid}@${dataset.version}`,
+        `Previous ${datasetType} is missing sourceProcess: ${dataset.uuid}@${dataset.version}`,
       );
     }
-    const lineageKey = `process:${dataset.uuid.toLowerCase()}`;
+    const lineageKey = `${datasetType}:${dataset.uuid.toLowerCase()}`;
     const sourceKey = `${lineageKey}:${source.id.toLowerCase()}@${source.version}`;
     if (bySource.has(sourceKey)) {
       fail(
@@ -103,13 +111,72 @@ export function indexPreviousResultVariants(previousManifest) {
     if (variants.some((variant) => variant.version === dataset.version)) {
       fail(
         "previous_dataset_version_duplicate",
-        `Duplicate previous Result version in lineage: ${lineageKey}@${dataset.version}`,
+        `Duplicate previous dataset version in lineage: ${lineageKey}@${dataset.version}`,
       );
     }
     variants.push(dataset);
     byLineage.set(lineageKey, variants);
   }
   return { bySource, byLineage };
+}
+
+export function resolveExactSourceVariantVersions(
+  drafts,
+  previous,
+  { datasetType, duplicateCode },
+) {
+  const grouped = new Map();
+  for (const draft of drafts) {
+    const lineageKey = `${datasetType}:${draft.provisional.uuid}`;
+    const variants = grouped.get(lineageKey) ?? [];
+    variants.push(draft);
+    grouped.set(lineageKey, variants);
+  }
+  const result = new Map();
+  for (const [lineageKey, variants] of grouped) {
+    variants.sort(
+      (left, right) =>
+        compareSourceIdentity(
+          left.provisional.sourceProcess,
+          right.provisional.sourceProcess,
+        ) || left.axis.processIndex - right.axis.processIndex,
+    );
+    const occupied = new Map(
+      (previous.byLineage.get(lineageKey) ?? []).map((dataset) => [
+        dataset.version,
+        exactSourceVariantKey(lineageKey, dataset.sourceProcess),
+      ]),
+    );
+    const currentSources = new Set();
+    for (const draft of variants) {
+      const sourceKey = exactSourceVariantKey(
+        lineageKey,
+        draft.provisional.sourceProcess,
+      );
+      if (currentSources.has(sourceKey)) {
+        fail(
+          duplicateCode,
+          `Calculation contains the same exact ${datasetType} source variant more than once: ${sourceKey}`,
+        );
+      }
+      currentSources.add(sourceKey);
+      const historical = previous.bySource.get(sourceKey);
+      let resolution = resolveVersion(
+        { uuid: draft.provisional.uuid, ...draft.hashes },
+        historical,
+      );
+      const owner = occupied.get(resolution.version);
+      if (owner && owner !== sourceKey) {
+        resolution = {
+          version: nextFreeMajorVersion(occupied, resolution.version),
+          change: historical ? "major" : "initial",
+        };
+      }
+      occupied.set(resolution.version, sourceKey);
+      result.set(draft.axis.processIndex, { ...resolution, historical });
+    }
+  }
+  return result;
 }
 
 export function assertNoContentCollision(descriptor, previous) {
@@ -186,4 +253,27 @@ function bump(value, part) {
   if (major > 99 || minor > 99)
     fail("dataset_version_overflow", `Cannot bump dataset version: ${value}`);
   return `${String(major).padStart(2, "0")}.${String(minor).padStart(2, "0")}.000`;
+}
+
+function exactSourceVariantKey(lineageKey, sourceProcess) {
+  return `${lineageKey}:${sourceProcess.id.toLowerCase()}@${sourceProcess.version}`;
+}
+
+function nextFreeMajorVersion(occupied, proposed) {
+  let major = Number(String(proposed).slice(0, 2));
+  while (major <= 99) {
+    const candidate = `${String(major).padStart(2, "0")}.00.000`;
+    if (!occupied.has(candidate)) return candidate;
+    major += 1;
+  }
+  fail(
+    "dataset_version_overflow",
+    `Cannot allocate another exact source variant after ${proposed}`,
+  );
+}
+
+function compareSourceIdentity(left, right) {
+  return (
+    left.id.localeCompare(right.id) || left.version.localeCompare(right.version)
+  );
 }

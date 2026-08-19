@@ -18,7 +18,7 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 3fb3106e0338e66701474b9d57df8cf4c620be73
+lastReviewedCommit: 30d15cbc0e59a8160162100bb6c7ae879ee78030
 lastReviewedNote: "Reviewed the local canonical-dataset handoff from Result Materialization into Release package assembly."
 related:
   - ../AGENTS.md

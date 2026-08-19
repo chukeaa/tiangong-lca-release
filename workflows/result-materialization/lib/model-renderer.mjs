@@ -4,6 +4,7 @@ import { sourceKey } from "./context.mjs";
 import { modelIdentity, MODEL_PROFILE } from "./identity.mjs";
 import { globalReference, suffixName } from "./references.mjs";
 import { validateOneHopReconstruction } from "./reconstruction.mjs";
+import { normalizeCompatibleProcessDocument } from "./process-compat.mjs";
 
 export function renderLifecycleModel(context, axis, resultCatalog, version) {
   const source = context.sources.get(
@@ -15,7 +16,8 @@ export function renderLifecycleModel(context, axis, resultCatalog, version) {
       `Exact source Unit Process is missing: ${axis.rootProcess.id}@${axis.rootProcess.version}`,
     );
   }
-  const sourceValidation = ProcessSchema.safeParse(source.document);
+  const sourceDocument = normalizeCompatibleProcessDocument(source.document);
+  const sourceValidation = ProcessSchema.safeParse(sourceDocument);
   if (!sourceValidation.success) {
     fail(
       "source_tidas_validation_failed",
@@ -38,7 +40,7 @@ export function renderLifecycleModel(context, axis, resultCatalog, version) {
     axis.rootProcess.id,
     axis.quantitativeReference.flow.id,
   );
-  const sourceData = source.document.processDataSet;
+  const sourceData = sourceDocument.processDataSet;
   const directEdges = context.technosphereEdges
     .filter((edge) => edge.dependentProcessIndex === axis.processIndex)
     .sort(compareEdges);

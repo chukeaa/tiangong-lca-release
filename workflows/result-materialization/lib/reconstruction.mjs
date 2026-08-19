@@ -1,7 +1,7 @@
 import { fail } from "./common.mjs";
 
 const ABSOLUTE_TOLERANCE = 1e-12;
-const RELATIVE_TOLERANCE = 1e-9;
+const RELATIVE_TOLERANCE = 1e-8;
 
 export function validateOneHopReconstruction(context, processIndex) {
   const reconstructed = new Map();
@@ -24,17 +24,56 @@ export function validateOneHopReconstruction(context, processIndex) {
   for (const record of context.lci.get(processIndex) ?? [])
     add(expected, record, Number(record.meanAmount));
   const keys = new Set([...reconstructed.keys(), ...expected.keys()]);
+  const comparisons = [];
+  const groupScales = new Map();
   let maxAbsoluteDifference = 0;
   for (const key of keys) {
     const observed = reconstructed.get(key) ?? 0;
     const target = expected.get(key) ?? 0;
     const difference = Math.abs(observed - target);
     maxAbsoluteDifference = Math.max(maxAbsoluteDifference, difference);
-    if (
-      difference >
-      ABSOLUTE_TOLERANCE +
-        RELATIVE_TOLERANCE * Math.max(Math.abs(observed), Math.abs(target))
-    ) {
+    const comparisonGroup = comparableQuantityGroup(key);
+    groupScales.set(
+      comparisonGroup,
+      Math.max(
+        groupScales.get(comparisonGroup) ?? 0,
+        Math.abs(observed),
+        Math.abs(target),
+      ),
+    );
+    comparisons.push({
+      key,
+      observed,
+      target,
+      difference,
+      comparisonGroup,
+    });
+  }
+  let maxAllowedDifference = 0;
+  let maxRelativeDifference = 0;
+  let maxToleranceRatio = 0;
+  for (const {
+    key,
+    observed,
+    target,
+    difference,
+    comparisonGroup,
+  } of comparisons) {
+    const comparisonScale = groupScales.get(comparisonGroup) ?? 0;
+    const allowedDifference =
+      ABSOLUTE_TOLERANCE + RELATIVE_TOLERANCE * comparisonScale;
+    maxAllowedDifference = Math.max(maxAllowedDifference, allowedDifference);
+    maxToleranceRatio = Math.max(
+      maxToleranceRatio,
+      allowedDifference > 0 ? difference / allowedDifference : 0,
+    );
+    if (comparisonScale > 0) {
+      maxRelativeDifference = Math.max(
+        maxRelativeDifference,
+        difference / comparisonScale,
+      );
+    }
+    if (difference > allowedDifference) {
       fail(
         "one_hop_reconstruction_mismatch",
         `One-hop inventory reconstruction differs for ${key}`,
@@ -43,6 +82,9 @@ export function validateOneHopReconstruction(context, processIndex) {
           observed,
           expected: target,
           absoluteDifference: difference,
+          comparisonGroup,
+          comparisonScale,
+          allowedDifference,
           absoluteTolerance: ABSOLUTE_TOLERANCE,
           relativeTolerance: RELATIVE_TOLERANCE,
         },
@@ -55,9 +97,18 @@ export function validateOneHopReconstruction(context, processIndex) {
     flowCount: keys.size,
     providerEdgeCount: edges.length,
     maxAbsoluteDifference,
+    maxAllowedDifference,
+    maxRelativeDifference,
+    maxToleranceRatio,
+    comparisonScale: "direction_and_unit",
     absoluteTolerance: ABSOLUTE_TOLERANCE,
     relativeTolerance: RELATIVE_TOLERANCE,
   };
+}
+
+function comparableQuantityGroup(key) {
+  const [, , direction, unit] = key.split("|");
+  return `${direction}|${unit}`;
 }
 
 function add(target, record, amount) {

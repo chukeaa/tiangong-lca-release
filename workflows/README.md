@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 7374d29d422e49c24df450d89c96f7435d93cf72
+lastReviewedCommit: 30d15cbc0e59a8160162100bb6c7ae879ee78030
 lastReviewedNote: "Established four-workflow navigation with Result Materialization as the canonical dataset assembly boundary."
 related:
   - ../README.md
