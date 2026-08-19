@@ -20,7 +20,7 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
+lastReviewedCommit: b20ff41073d09a1fa914eb88bf600d7cf277ab2e
 lastReviewedNote: "Reviewed repository workflow boundaries while reframing Result Materialization around its domain model."
 related:
   - AGENTS.md
