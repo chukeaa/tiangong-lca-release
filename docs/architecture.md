@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 9303b482d43015558704ee4a150b26483f72c87c
-lastReviewedNote: "Defined provider-compatible adapters and Release-owned references for workflow-local ResultSet operations."
+lastReviewedCommit: 3fb3106e0338e66701474b9d57df8cf4c620be73
+lastReviewedNote: "Reviewed the local canonical-dataset handoff from Result Materialization into Release package assembly."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -87,6 +87,12 @@ Dataset Transformation Manifest ----------+--> Result Materialization
                                        Canonical Dataset Collection
                                                    |
                                                    v
+                                      Canonical Dataset Index
+                                                   |
+                                                   v
+                                      Local TIDAS Package Build
+                                                   |
+                                                   v
                                            Release Candidate
 ```
 
@@ -136,3 +142,5 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 四个根 Workflow 的拆分已经得到用户确认。每个可执行入口由所属 Workflow 本地拥有，不建立仓库级聚合 CLI。
 
 Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get、Closure/Calculation 提交、数据库优先的任务状态查询，以及数据库/S3 Calculation Bundle 数据面。Bundle list/get 直接执行参数化只读 SQL；download 通过精确 Package metadata 从 S3 有界并发下载并校验 manifest/artifacts，不调用重量级 Edge 签名路径，也不把 credential、object locator 或 signed URL 放入输出。外部 payload 统一经 provider compatibility adapter 转为 Release-owned 最小引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。
+
+Result Materialization 当前在每次成功执行后生成内容寻址的 canonical dataset index，并由 materialization manifest 绑定该索引。Release 的本地 package build 校验冻结的 materialization 与 intake，合并生成数据集和完整 source closure，形成 canonical TIDAS 输入，再委托 `tidas-tools` 完成精确引用闭包、TIDAS/eILCD 验证、转换、语义回读和四类 ZIP 生成。该动作只产生 `publicationAuthorized=false` 的 Release Candidate；审批、上传、发布和独立远端回读仍是后续独立动作。

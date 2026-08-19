@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { appendFile, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -22,6 +28,7 @@ import {
   resolveResultVariantVersions,
 } from "../lib/materialize-results.mjs";
 import {
+  hashJson,
   indexPreviousResultVariants,
   resolveVersion,
 } from "../lib/versioning.mjs";
@@ -461,6 +468,21 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     resultingDatasetCount: 1,
   });
   assert.equal(modelDelivery.manifest.datasets.length, 3);
+  const canonicalIndex = JSON.parse(
+    await readFile(
+      path.join(modelDelivery.path, "canonical-dataset-index.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    canonicalIndex.schemaVersion,
+    "tiangong.release.canonical-dataset-index.v1",
+  );
+  assert.equal(canonicalIndex.datasetCount, 3);
+  assert.equal(
+    modelDelivery.manifest.inputs.canonicalDatasetIndexSha256,
+    hashJson(canonicalIndex),
+  );
 
   const backgroundRoot = path.join(temp, "background-artifacts");
   const background = await startMaterializationJob({

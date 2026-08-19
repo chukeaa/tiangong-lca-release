@@ -127,4 +127,4 @@ Agent 提议不能替代用户对模型结构、重要 metadata 和首次 lineag
 
 ## 完成条件
 
-完成的 materialization 必须产生冻结的 selection、Result Catalog、canonical dataset collection、dataset index、materialization manifest 和验证报告。每个输出都能追溯到精确输入、recipe、direct edge、identity/version 决策和 validator evidence；每个 one-hop Model 必须在冻结容差内重构对应 Result Process。
+完成的 materialization 必须产生冻结的 selection、Result Catalog、canonical dataset collection、独立 `canonical-dataset-index.v1`、materialization manifest 和验证报告；Manifest 必须绑定 Index hash。每个输出都能追溯到精确输入、recipe、direct edge、identity/version 决策和 validator evidence；每个 one-hop Model 必须在冻结容差内重构对应 Result Process。

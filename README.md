@@ -122,6 +122,7 @@ workflows/
 - LifecycleModel 路线在同一个 staging collection 内完成 Result/Model 组装，验证后只进行一次原子提交；
 - 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
+- Release Workflow 已可从完整 LifecycleModel materialization 和匹配 intake 组装本地支持闭合，调用 `tidas-tools` 生成四个确定性 TIDAS/eILCD ZIP，并冻结未授权发布的 Release Candidate。
 
 LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。LifecycleModel 本身不保存 LCI/LCIA 数值，只引用本次生成的精确 Result Process。
 

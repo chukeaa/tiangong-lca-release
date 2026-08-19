@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-19
-lastReviewedCommit: 9303b482d43015558704ee4a150b26483f72c87c
-lastReviewedNote: "Reviewed the repository contract while reframing Result Materialization documentation around its current domain model."
+lastReviewedCommit: 3fb3106e0338e66701474b9d57df8cf4c620be73
+lastReviewedNote: "Reviewed the repository contract for the local Release package-build route and its canonical artifact handoff."
 related:
   - README.md
   - .docpact/config.yaml
@@ -105,8 +105,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`codex/feature-issue-21-background-materialization`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#21`
+- 当前工作分支：`codex/feature-issue-23-tidas-package-build`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#23`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
@@ -127,4 +127,6 @@ related:
 - Docpact 能覆盖和路由 `workflows/**`；
 - Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
 - Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和 Result Process 内容层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
+- Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release 可据此与 frozen intake 的完整 source closure 组装本地 TIDAS 输入，委托 `tidas-tools` 验证、转换并生成四个 ZIP；
+- Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
 - 当前变更通过仓库门禁并形成独立 Git commit。
