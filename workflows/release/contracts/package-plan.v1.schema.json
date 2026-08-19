@@ -27,8 +27,14 @@
     "intake": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["manifestSha256", "calculationId", "bundleContentHash"],
+      "required": [
+        "releaseIntakeManifestSha256",
+        "manifestSha256",
+        "calculationId",
+        "bundleContentHash"
+      ],
       "properties": {
+        "releaseIntakeManifestSha256": { "$ref": "#/$defs/hash" },
         "manifestSha256": { "$ref": "#/$defs/hash" },
         "calculationId": { "type": "string", "format": "uuid" },
         "bundleContentHash": { "$ref": "#/$defs/hash" }

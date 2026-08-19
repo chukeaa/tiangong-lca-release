@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong.earth/schemas/dependency-expansion-report.v1.schema.json",
+  "title": "Tiangong Release Dependency Expansion Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "policy",
+    "lciaMethodCount",
+    "referenceOccurrenceCount",
+    "uniqueReferenceCount",
+    "alreadyPresentCount",
+    "addedExactFlowCount",
+    "elementaryFlowCacheRecordCount",
+    "elementaryFlowCacheManifestSha256",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.dependency-expansion-report.v1"
+    },
+    "policy": { "const": "lcia-method-characterisation-flow-exact.v1" },
+    "lciaMethodCount": { "type": "integer", "minimum": 0 },
+    "referenceOccurrenceCount": { "type": "integer", "minimum": 0 },
+    "uniqueReferenceCount": { "type": "integer", "minimum": 0 },
+    "alreadyPresentCount": { "type": "integer", "minimum": 0 },
+    "addedExactFlowCount": { "type": "integer", "minimum": 0 },
+    "elementaryFlowCacheRecordCount": { "type": "integer", "minimum": 0 },
+    "elementaryFlowCacheManifestSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "outcome": { "const": "complete" }
+  }
+}

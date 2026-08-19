@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong.earth/schemas/release-intake.v1.schema.json",
+  "title": "Tiangong Release Intake v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profile",
+    "source",
+    "dependencyExpansion",
+    "verification"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.intake.v1" },
+    "profile": {
+      "const": "standalone-lifecyclemodel-result-full-closure.v1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materializationManifestSha256",
+        "materializedDatasetIndexSha256",
+        "sourceIntakeManifestSha256",
+        "calculationId",
+        "bundleContentHash"
+      ],
+      "properties": {
+        "materializationManifestSha256": { "$ref": "#/$defs/sha256" },
+        "materializedDatasetIndexSha256": { "$ref": "#/$defs/sha256" },
+        "sourceIntakeManifestSha256": { "$ref": "#/$defs/sha256" },
+        "calculationId": { "type": "string", "format": "uuid" },
+        "bundleContentHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "dependencyExpansion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "reportSha256", "artifact"],
+      "properties": {
+        "policy": { "const": "lcia-method-characterisation-flow-exact.v1" },
+        "reportSha256": { "$ref": "#/$defs/sha256" },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "recordCount"],
+          "properties": {
+            "path": {
+              "const": "dependencies/lcia-method-flows.ndjson"
+            },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "recordCount": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "verification": {
+      "const": { "upstream": "verified", "dependencies": "verified" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

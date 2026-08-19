@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { canonicalJson, fail, hashJson, sha256Bytes } from "./common.mjs";
 import { readNdjson } from "./records.mjs";
+import { loadReleaseIntake } from "./release-intake.mjs";
 
 export const PACKAGE_PROFILE =
   "standalone-lifecyclemodel-result-full-closure.v1";
@@ -33,8 +34,7 @@ const DISTRIBUTION_PACKAGES = [
 ];
 
 export async function buildPackageCandidate({
-  materializationDir,
-  intakeDir,
+  releaseIntakeDir,
   outDir,
   releaseVersion,
   tidasBin = process.env.TIDAS_BIN ?? "tidas",
@@ -42,8 +42,11 @@ export async function buildPackageCandidate({
   verifyTool = verifyBuiltPackages,
 }) {
   validateReleaseVersion(releaseVersion);
-  const materializationRoot = path.resolve(materializationDir);
-  const intakeRoot = path.resolve(intakeDir);
+  const releaseIntake = await loadReleaseIntake(releaseIntakeDir);
+  const materializationRoot = path.resolve(
+    releaseIntake.locators.materializationDir,
+  );
+  const intakeRoot = path.resolve(releaseIntake.locators.sourceIntakeDir);
   const target = path.resolve(outDir);
   await mkdir(path.dirname(target), { recursive: true });
   await assertTargetAbsent(target);
@@ -63,6 +66,12 @@ export async function buildPackageCandidate({
       "intake_manifest_missing",
     );
     validateInputs(manifest, materializedIndex, intake);
+    validateReleaseIntakeBindings(
+      releaseIntake.manifest,
+      manifest,
+      materializedIndex,
+      intake,
+    );
     const canonicalRoot = path.join(workspace, "canonical");
     await mkdir(canonicalRoot, { recursive: true });
     const entries = await assembleCanonicalCollection({
@@ -70,6 +79,7 @@ export async function buildPackageCandidate({
       materializedIndex,
       intakeRoot,
       intake,
+      dependencyArtifacts: [releaseIntake.dependencyArtifact],
       canonicalRoot,
     });
     const assembledIndex = buildIndex(entries);
@@ -84,6 +94,7 @@ export async function buildPackageCandidate({
         canonicalDatasetIndexSha256: hashJson(materializedIndex),
       },
       intake: {
+        releaseIntakeManifestSha256: hashJson(releaseIntake.manifest),
         manifestSha256: hashJson(intake),
         calculationId: intake.source.calculationId,
         bundleContentHash: intake.source.bundleContentHash,
@@ -289,6 +300,7 @@ async function assembleCanonicalCollection({
   materializedIndex,
   intakeRoot,
   intake,
+  dependencyArtifacts = [],
   canonicalRoot,
 }) {
   const entries = [];
@@ -373,7 +385,62 @@ async function assembleCanonicalCollection({
         `Record count drift: ${artifact.path}`,
       );
   }
+  for (const artifactPath of dependencyArtifacts) {
+    for await (const record of readNdjson(artifactPath)) {
+      const relativePath = safeRelative(record.path);
+      const contentHash = hashJson(record.document);
+      if (contentHash !== record.sha256)
+        fail(
+          "release_intake_dependency_document_hash_mismatch",
+          `Dependency content hash mismatch: ${relativePath}`,
+        );
+      const content = canonicalJson(record.document);
+      const entry = {
+        datasetType: record.datasetType,
+        role: record.role ?? "support",
+        uuid: String(record.uuid).toLowerCase(),
+        version: record.version,
+        path: relativePath,
+        sha256: sha256Bytes(Buffer.from(content)),
+        byteSize: Buffer.byteLength(content),
+        canonicalContentHash: contentHash,
+      };
+      const key = identityKey(entry);
+      const existing = identities.get(key);
+      if (existing) {
+        if (existing.canonicalContentHash !== entry.canonicalContentHash)
+          fail(
+            "canonical_identity_collision",
+            `Conflicting dataset identity: ${key}`,
+          );
+        continue;
+      }
+      const destination = resolveContained(canonicalRoot, relativePath);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, content, { flag: "wx" });
+      addEntry(entries, identities, paths, entry);
+    }
+  }
   return entries;
+}
+
+function validateReleaseIntakeBindings(
+  releaseIntake,
+  materializationManifest,
+  materializedIndex,
+  sourceIntake,
+) {
+  const expected = releaseIntake.source;
+  if (
+    expected.materializationManifestSha256 !==
+      hashJson(materializationManifest) ||
+    expected.materializedDatasetIndexSha256 !== hashJson(materializedIndex) ||
+    expected.sourceIntakeManifestSha256 !== hashJson(sourceIntake)
+  )
+    fail(
+      "release_intake_upstream_hash_mismatch",
+      "Release Intake no longer matches its frozen upstream inputs",
+    );
 }
 
 function addEntry(entries, identities, paths, entry) {

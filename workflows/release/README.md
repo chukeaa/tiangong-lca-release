@@ -38,7 +38,7 @@ related:
 
 ## 输入契约
 
-Release 必须消费冻结的 materialization 输出，而不是在 Package build 中临时生成或修改数据集。
+Release 先从冻结的 Materialization Intake 和 materialization 输出准备独立的 Release Intake，再由 Package build 只消费这个 Release Intake。两个 Intake 语义不同：前者证明结果生成时使用的输入，后者补齐独立分发所需的依赖；任何阶段都不得原地修改已冻结 manifest。
 
 输入至少包括：
 
@@ -91,15 +91,25 @@ Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 
 ## 当前可执行入口
 
-首个本地 Package route 已实现为 Workflow-local 薄 CLI：
+首个本地 Release Intake 与 Package route 已实现为 Workflow-local 薄 CLI：
 
 ```bash
 cd workflows/release
 npm install
 
-node cli.mjs package build \
+node cli.mjs cache status --json
+
+# 仅在状态为 missing/stale/invalid 且用户确认后显式刷新
+node cli.mjs cache refresh --json
+
+node cli.mjs intake prepare \
   --materialization /path/to/materialized-lifecycle-model \
-  --intake /path/to/verified-intake \
+  --source-intake /path/to/verified-materialization-intake \
+  --out-dir /path/to/release-intake \
+  --json
+
+node cli.mjs package build \
+  --release-intake /path/to/release-intake \
   --profile standalone-lifecyclemodel-result-full-closure.v1 \
   --release-version 2026.08.0 \
   --out-dir /path/to/release-candidate \
@@ -121,12 +131,21 @@ CLI 同时面向人和 Agent：默认输出简洁的 `Summary / Next / Reply usi
 
 Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板中的“成功”只表示本地候选构建完成，永远不表示已经批准、上传或发布。
 
+`cache refresh` 是独立且需要显式执行的维护动作：通过 `CONN` 建立只读 repeatable-read snapshot，以单 SQL cursor 顺序下载全部已发布 Flow，在 Node 本地识别 Elementary Flow，并流式写入项目级共享缓存。缓存 manifest 记录内容 SHA-256、记录数以及数据库 watermark（已发布 Flow 数量与 `MAX(modified_at)`）。`cache status` 用一次轻量查询比较 watermark，并验证本地 artifact；因此能够区分 `fresh`、`missing`、`stale` 与 `invalid`。
+
+`intake prepare` 不再隐式执行长时数据库下载。它只接受 fresh 缓存，扫描 source closure 中 LCIA Method 的 `characterisationFactors`，提取带精确 UUID/version 的 `referenceToFlowDataSet`，并从缓存匹配缺失的精确版本后冻结 dependency supplement。缓存缺失或过期会 fail closed，同时输出显式刷新命令。该过程不修改 Materialization Intake，也不把新增 Flow 误记为参与了原始计算。Release Intake manifest 只记录内容 hash；本地绝对路径单独保存在权限受限的 runtime locator 中，不进入可移植计划语义。
+
+CLI 会自动加载 Release 仓根目录 ignored `.env` 中已有的 `CONN`。如尚未同步，先使用 Calculation Workflow 的 `environment sync` 将 workspace 根 `.env` 中允许的数据面变量补入 Release `.env`；Release Intake 不直接读取 workspace 根配置，也不会在输出中披露连接串。
+
 执行过程：
 
 ```text
 验证 Materialization Manifest + canonical-dataset-index
-  -> 验证精确 intake identity/hash
-  -> 从本地 source_closure 组装 Unit Process 与支持数据集
+  -> 验证精确 Materialization Intake identity/hash
+  -> 准备 Release Intake 并补齐 LCIA Method -> exact Flow
+  -> 冻结 dependency expansion report
+  -> Package build 重新验证 Release Intake 及两个上游 hash
+  -> 从 source_closure + dependency supplement 组装数据集
   -> 生成完整 canonical-dataset-index
   -> 冻结 Package Plan
   -> 调用 tidas release build-packages
@@ -136,7 +155,7 @@ Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板�
   -> 冻结 publicationAuthorized=false 的 Release Candidate
 ```
 
-Release 不在 Node 实现中复制引用遍历、TIDAS/eILCD validation、schema-ordered conversion 或 semantic round-trip；这些由 `tidas-tools` 权威实现。Node 层只验证交接证据、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
+Release 只实现当前产品契约明确要求的 LCIA Method characterisation Flow 扩展，不复制通用闭包遍历。完整引用闭合、TIDAS/eILCD validation、schema-ordered conversion 和 semantic round-trip 仍由 `tidas-tools` 权威实现。Node 层验证交接证据、准备 Release Intake、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
 
 当前只支持 `standalone-lifecyclemodel-result-full-closure.v1`。Result Process-only materialization 会以 `package_profile_unsupported` 停止；只有未来 `tidas-tools` 增加并验证对应 profile 后才扩展。
 

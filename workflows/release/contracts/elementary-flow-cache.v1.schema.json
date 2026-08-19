@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong.earth/schemas/elementary-flow-cache.v1.schema.json",
+  "title": "Tiangong Release Elementary Flow Cache v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "databaseWatermark", "artifact", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.elementary-flow-cache.v1" },
+    "databaseWatermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publishedCount", "maxModifiedAt"],
+      "properties": {
+        "publishedCount": { "type": "integer", "minimum": 0 },
+        "maxModifiedAt": { "type": ["string", "null"] }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "recordCount"],
+      "properties": {
+        "path": { "const": "elementary-flows.ndjson" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "recordCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}
