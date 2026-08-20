@@ -59,7 +59,7 @@ package build options:
   --profile <id>            ${PACKAGE_PROFILE}
   --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
-  --tidas-bin <path>        tidas executable; defaults to TIDAS_BIN or PATH lookup
+  --tidas-bin <path>        exact tidas v0.2.0 executable; defaults to TIDAS_BIN or PATH lookup
 
 Common:
   --json                    Emit one bounded JSON result on stdout

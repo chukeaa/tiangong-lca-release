@@ -49,6 +49,7 @@ related:
 - source closure artifact hash、record count、每条 document canonical hash，以及 materialized dataset bytes 必须在调用外部工具前重新验证。
 - Package Plan 不记录机器绝对路径；它只绑定 manifest/index/bundle hashes 和 canonical input summary，保证换目录重放不改变计划语义。
 - Release 只遍历当前契约明确声明的 LCIA Method -> Flow 依赖；通用引用闭合、TIDAS/eILCD validation、conversion、round-trip 和四包构建必须委托 `tidas-tools release build-packages`，不得在本 Workflow 重写。
+- 委托前必须对所选 `TIDAS_BIN` 执行 `version` 与 `validate --describe` 握手，并精确要求已治理的 `tidas v0.2.0` 与 `document-validation-batch.v1`；不得用 PATH 中的旧二进制静默降级。
 - Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告，并显式记录 `publicationAuthorized=false`。
 - 四个分发包必须使用显式 release version 和产品级数据库名称；内部 profile ID 只保留在机器证据中。每个最终 ZIP 必须在候选冻结前重新列举、隔离解压，并分别通过 TIDAS 或 eILCD validation。
 - 用户未提供 release version 时，Agent 必须使用 CLI 返回的推荐版本和专用回复模板请求确认；确认前不得启动构建。不得把年月推荐值或 mutable `latest` 当作用户已确认。

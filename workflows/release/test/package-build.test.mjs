@@ -17,7 +17,9 @@ import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
 import { inspectFlowCache } from "../lib/flow-cache.mjs";
 import {
   buildPackageCandidate,
+  EXPECTED_TIDAS_VERSION,
   PACKAGE_PROFILE,
+  verifyTidasRuntime,
   verifyBuiltPackages,
 } from "../lib/package-build.mjs";
 import { prepareReleaseIntake } from "../lib/release-intake.mjs";
@@ -35,6 +37,76 @@ const METHOD_ID = "66666666-6666-4666-8666-666666666666";
 const VERSION = "01.00.000";
 const REPOSITORY_ROOT = new URL("../../../", import.meta.url).pathname;
 const RELEASE_VERSION = "2026.08.0";
+
+test("release package adapter requires exact tidas v0.2.0 contract", async () => {
+  const calls = [];
+  const result = await verifyTidasRuntime({
+    tidasBin: "/tools/tidas",
+    spawnCommand: async (command, args) => {
+      calls.push([command, ...args]);
+      if (args[0] === "version")
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            schema_version: "tidas.operation-report.v1",
+            status: "succeeded",
+            exit_class: "success",
+            completeness: "complete",
+            summary: {
+              binary_version: EXPECTED_TIDAS_VERSION,
+              operation_report_schema: "tidas.operation-report.v1",
+            },
+          }),
+          stderr: "",
+        };
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          schema_version: "tidas.operation-report.v1",
+          status: "succeeded",
+          exit_class: "success",
+          completeness: "complete",
+          summary: {
+            validation_describe: {
+              schema_version: "tidas.validation-describe.v1",
+              package: { name: "tidas", version: EXPECTED_TIDAS_VERSION },
+              protocols: ["document-validation-batch.v1"],
+              asset_fingerprint: "fixture-fingerprint",
+            },
+          },
+        }),
+        stderr: "",
+      };
+    },
+  });
+  assert.equal(result.binaryVersion, "0.2.0");
+  assert.equal(result.assetFingerprint, "fixture-fingerprint");
+  assert.deepEqual(
+    calls.map(([, action]) => action),
+    ["version", "validate"],
+  );
+
+  await assert.rejects(
+    verifyTidasRuntime({
+      tidasBin: "/tools/tidas",
+      spawnCommand: async () => ({
+        code: 0,
+        stdout: JSON.stringify({
+          schema_version: "tidas.operation-report.v1",
+          status: "succeeded",
+          exit_class: "success",
+          completeness: "complete",
+          summary: {
+            binary_version: "0.1.4",
+            operation_report_schema: "tidas.operation-report.v1",
+          },
+        }),
+        stderr: "",
+      }),
+    }),
+    (error) => error.code === "tidas_version_incompatible",
+  );
+});
 
 test("shared Elementary Flow cache distinguishes fresh and stale watermarks", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "release-flow-cache-"));
@@ -270,6 +342,14 @@ test("CLI returns retained packages and failure manifest after package build fai
   await writeFile(
     fakeTidas,
     `#!/bin/sh
+if [ "$1" = "version" ]; then
+  printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"succeeded","exit_class":"success","completeness":"complete","summary":{"binary_version":"${EXPECTED_TIDAS_VERSION}","operation_report_schema":"tidas.operation-report.v1"}}'
+  exit 0
+fi
+if [ "$1" = "validate" ] && [ "$2" = "--describe" ]; then
+  printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"succeeded","exit_class":"success","completeness":"complete","summary":{"validation_describe":{"schema_version":"tidas.validation-describe.v1","package":{"name":"tidas","version":"${EXPECTED_TIDAS_VERSION}"},"protocols":["document-validation-batch.v1"],"asset_fingerprint":"fixture-fingerprint"}}}'
+  exit 0
+fi
 output_dir=""
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--output-dir" ]; then

@@ -117,7 +117,7 @@ node cli.mjs package build \
   --json
 ```
 
-`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令先生成本地 package build，再用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
+`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。开始组装前会执行 `version` 与 `validate --describe` 握手，并要求精确的 `tidas v0.2.0` 与既定 validation protocol；旧版本会在产生 staging 输出前以可操作错误停止。命令随后生成本地 package build，并用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
 
 如果省略 `--release-version`，命令不会开始构建，而是以 `release_version_confirmation_required` 返回按 Asia/Shanghai 当前年月生成的推荐版本（例如 `2026.08.0`）、四个预期文件名和专用回复模板。Agent 必须先请用户确认或替换版本号，再使用返回的 argv 带上 `--release-version` 重跑；显式传入版本号即表示该前置确认已经完成。
 
