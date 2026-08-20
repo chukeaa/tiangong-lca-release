@@ -22,7 +22,7 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-20
-lastReviewedCommit: d9f2088e7945660dc98f53a8f63af200d8e24d90
+lastReviewedCommit: befebe0230257cec198123f184cc6fae60c693de
 lastReviewedNote: "Reviewed the repository contract for the local Release package-build route and its canonical artifact handoff."
 related:
   - README.md
@@ -105,8 +105,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`codex/feature-issue-31-release-intake`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#31`
+- 当前工作分支：`feature/issue-41`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#41`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

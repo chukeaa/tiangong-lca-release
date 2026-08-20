@@ -27,6 +27,7 @@ import {
   materializeResults,
   resolveResultVariantVersions,
 } from "../lib/materialize-results.mjs";
+import { validateGeneratedProcessReferences } from "../lib/result-renderer.mjs";
 import {
   hashJson,
   indexPreviousResultVariants,
@@ -309,6 +310,14 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     await mkdir(path.join(bundle, directory), { recursive: true });
   }
   const process = validUnitProcess(PROCESS_ID, FLOW_ID, "Fixture Unit Process");
+  const sourceReferenceExchange = process.processDataSet.exchanges.exchange[0];
+  sourceReferenceExchange.allocations = {
+    allocation: {
+      "@allocatedFraction": "100",
+      "@internalReferenceToCoProduct": "7",
+    },
+  };
+  sourceReferenceExchange.referenceToVariable = "source-only-variable";
   const provider = validUnitProcess(
     PROVIDER_ID,
     PROVIDER_FLOW_ID,
@@ -433,6 +442,36 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   assert.equal(
     results.catalog.datasets[0].uuid,
     "e69b636c-c09d-5584-a00e-5ae3380594de",
+  );
+  const primaryResult = results.catalog.datasets.find(
+    (item) => item.sourceProcess.id === PROCESS_ID,
+  );
+  const primaryDocument = JSON.parse(
+    await readFile(path.join(results.path, primaryResult.path), "utf8"),
+  );
+  const generatedReferenceExchange =
+    primaryDocument.processDataSet.exchanges.exchange[0];
+  assert.equal(generatedReferenceExchange.allocations, undefined);
+  assert.equal(generatedReferenceExchange.referenceToVariable, undefined);
+  assert.doesNotThrow(() =>
+    validateGeneratedProcessReferences(primaryDocument),
+  );
+  generatedReferenceExchange.allocations = {
+    allocation: { "@internalReferenceToCoProduct": "missing" },
+  };
+  assert.throws(
+    () => validateGeneratedProcessReferences(primaryDocument),
+    (error) =>
+      error.code === "generated_process_internal_reference_invalid" &&
+      error.details.kind === "allocation_coproduct",
+  );
+  delete generatedReferenceExchange.allocations;
+  generatedReferenceExchange.referenceToVariable = "missing-variable";
+  assert.throws(
+    () => validateGeneratedProcessReferences(primaryDocument),
+    (error) =>
+      error.code === "generated_process_internal_reference_invalid" &&
+      error.details.kind === "variable_parameter",
   );
   const models = await materializeModels({
     intakeDir: intakePath,

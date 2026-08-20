@@ -251,6 +251,8 @@ async function retainFailedBuild({
     fileName: error.details?.fileName,
     diagnostics: {
       stderr: error.details?.stderr,
+      operationReport: error.details?.operationReport,
+      stdoutTail: error.details?.stdoutTail,
     },
   };
   const artifacts = {
@@ -728,8 +730,14 @@ function validateInputs(manifest, index, intake) {
   }
 }
 
-async function runTidas({ tidasBin, canonicalRoot, indexPath, packagesDir }) {
-  await verifyTidasRuntime({ tidasBin });
+export async function runTidas({
+  tidasBin,
+  canonicalRoot,
+  indexPath,
+  packagesDir,
+  spawnCommand = spawnBounded,
+}) {
+  await verifyTidasRuntime({ tidasBin, spawnCommand });
   await mkdir(path.dirname(packagesDir), { recursive: true });
   const args = [
     "release",
@@ -743,13 +751,15 @@ async function runTidas({ tidasBin, canonicalRoot, indexPath, packagesDir }) {
     "--format",
     "json",
   ];
-  const result = await spawnBounded(tidasBin, args);
+  const result = await spawnCommand(tidasBin, args);
   if (result.code !== 0) {
+    const structuredDiagnostics = parseFailedTidasOutput(result.stdout);
     fail(
       "tidas_package_build_failed",
       `tidas-tools exited with code ${result.code}`,
       {
         stderr: result.stderr.slice(-4000),
+        ...structuredDiagnostics,
       },
     );
   }
@@ -757,6 +767,14 @@ async function runTidas({ tidasBin, canonicalRoot, indexPath, packagesDir }) {
     return JSON.parse(result.stdout);
   } catch {
     fail("tidas_output_invalid", "tidas-tools did not return one JSON result");
+  }
+}
+
+function parseFailedTidasOutput(stdout) {
+  try {
+    return { operationReport: JSON.parse(stdout) };
+  } catch {
+    return stdout ? { stdoutTail: stdout.slice(-4000) } : {};
   }
 }
 

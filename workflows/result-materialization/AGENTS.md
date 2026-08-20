@@ -109,6 +109,8 @@ related:
 - 新 Calculation Bundle 必须从 process-axis v2 读取 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient，并与 exact source closure 交叉验证。
 - 旧 Bundle 只允许从 intake 已校验的 exact source-closure Process 回推 pivot；不得查询数据库、mutable latest 或相似版本，并必须在 descriptor 中记录 legacy fallback evidence。
 - `R(P)` reference exchange 保留 raw direction、使用 normalized amount；`M(P)` 根 `U(P)` instance 使用 normalization scale。
+- `R(P)` reference exchange 必须从已验证的源 reference exchange 做显式字段投影，只保留 Flow reference、可选 location、direction、normalized amount 和生成状态；不得复制依赖源 Process 其他 exchange 或 variable definitions 的 allocation、`referenceToVariable`、formula 或 uncertainty。
+- 写出前必须对 generated Process 执行聚焦的内部引用检查：quantitative reference、exchange ID、allocation co-product 和 variable reference 必须在生成文档内闭合。该检查只保护 renderer 自己建立的引用，不复制或替代 Release 的完整 TIDAS/eILCD 语义门禁。
 
 ## 可由 Agent 提出的内容
 
