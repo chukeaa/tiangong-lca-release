@@ -12,8 +12,8 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: 9c99249520d5228088d2845b42b78605bf06a524
 lastReviewedNote: "Reviewed batch materialization resource observability, bounded concurrency, shared context, and single-staging execution."
 related:
   - README.md
@@ -39,6 +39,8 @@ related:
 - 保存 dataset collection、manifest、报告和血缘。
 - 只把通过验证的 canonical dataset collection 交给 Release Workflow。
 - Worker Calculation Bundle v2 的 content hash 必须在原始 canonical manifest bytes 上移除顶层 `bundleContentHash` 后验证；不得先把任意 JSON number 转成 JavaScript `number` 再重序列化，因为超出安全整数范围时会改变证据字节。
+- 正常运行必须使用 `design/local-artifact-path-convention.md` 定义的内容寻址默认路径；路径只用于导航，`materialization-key.json`、manifest、精确 identity/version 和 SHA-256 才是权威证据。
+- canonical 路径已存在时必须先验证完整产物：完全一致返回 `reused_existing`，残缺或漂移返回 `artifact_path_conflict`；不得提供静默覆盖 canonical artifact 的 `--force`。
 
 ## 本地后台 Job
 

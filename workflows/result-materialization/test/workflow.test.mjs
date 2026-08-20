@@ -507,6 +507,67 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
     hashJson(canonicalIndex),
   );
 
+  const canonicalRoot = path.join(temp, "canonical-artifacts");
+  const canonicalIntake = await createIntake({
+    bundle,
+    artifactRoot: canonicalRoot,
+  });
+  assert.equal(canonicalIntake.disposition, "created");
+  assert.equal(
+    canonicalIntake.path,
+    path.join(
+      canonicalRoot,
+      "result-materialization",
+      "intakes",
+      canonicalIntake.intake.source.calculationId,
+      canonicalIntake.intake.source.bundleContentHash,
+    ),
+  );
+  const reusedIntake = await createIntake({
+    bundle,
+    artifactRoot: canonicalRoot,
+  });
+  assert.equal(reusedIntake.disposition, "reused_existing");
+  assert.equal(reusedIntake.path, canonicalIntake.path);
+
+  const canonicalRequest = {
+    intakeDir: canonicalIntake.path,
+    artifactRoot: canonicalRoot,
+    processUuids: [`${PROCESS_ID}@01.00.000`],
+    outputType: "result-process",
+    resultProcessLayer: "lci-lcia",
+    firstGeneration: true,
+  };
+  const canonicalDelivery = await materialize(canonicalRequest);
+  assert.equal(canonicalDelivery.disposition, "created");
+  assert.equal(canonicalDelivery.pathPolicy, "canonical-content-addressed.v1");
+  assert.match(
+    canonicalDelivery.path,
+    new RegExp(
+      `result-materialization/materializations/${canonicalIntake.intake.source.calculationId}/${canonicalIntake.intake.source.bundleContentHash}/[0-9a-f]{64}$`,
+    ),
+  );
+  const reusedDelivery = await materialize(canonicalRequest);
+  assert.equal(reusedDelivery.disposition, "reused_existing");
+  assert.equal(reusedDelivery.path, canonicalDelivery.path);
+  assert.equal(
+    reusedDelivery.artifactIdentity.materializationKeySha256,
+    canonicalDelivery.artifactIdentity.materializationKeySha256,
+  );
+
+  const alternateLayer = await materialize({
+    ...canonicalRequest,
+    resultProcessLayer: "lci",
+  });
+  assert.notEqual(alternateLayer.path, canonicalDelivery.path);
+  await writeFile(
+    path.join(canonicalDelivery.path, "materialization-key.json"),
+    canonicalJson({ invalid: true }),
+  );
+  await assert.rejects(materialize(canonicalRequest), {
+    code: "artifact_path_conflict",
+  });
+
   const backgroundRoot = path.join(temp, "background-artifacts");
   const background = await startMaterializationJob({
     artifactRoot: backgroundRoot,

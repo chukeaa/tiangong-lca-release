@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { canonicalJson, fail } from "./common.mjs";
+import { prepareMaterialization } from "./materialize.mjs";
 
 const JOB_SCHEMA = "tiangong.release.materialization-job.v1";
 const STATUS_SCHEMA = "tiangong.release.materialization-job-status.v1";
@@ -26,6 +27,7 @@ export function jobsRoot(value) {
 }
 
 export async function startMaterializationJob({ artifactRoot: root, request }) {
+  const plan = request.outDir ? null : await prepareMaterialization(request);
   const jobId = randomUUID();
   const rootPath = jobsRoot(root);
   const jobDir = path.join(rootPath, jobId);
@@ -37,7 +39,7 @@ export async function startMaterializationJob({ artifactRoot: root, request }) {
     jobId,
     createdAt,
     request,
-    outputPath: path.resolve(request.outDir),
+    outputPath: plan?.target ?? path.resolve(request.outDir),
     paths: {
       job: path.join(jobDir, "job.json"),
       status: path.join(jobDir, "status.json"),

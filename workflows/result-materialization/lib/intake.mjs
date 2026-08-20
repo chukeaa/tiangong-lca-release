@@ -17,12 +17,25 @@ import { pipeline } from "node:stream/promises";
 import { Transform, Writable } from "node:stream";
 import { canonicalJson, fail, sha256Bytes, sha256File } from "./common.mjs";
 import { extractZip } from "./zip.mjs";
+import {
+  artifactPathConflict,
+  canonicalIntakePath,
+  resolveArtifactRoot,
+} from "./artifact-paths.mjs";
 
-export async function createIntake({ bundle, outDir }) {
+export async function createIntake({ bundle, outDir, artifactRoot }) {
   const source = path.resolve(bundle);
-  const target = path.resolve(outDir);
-  await mkdir(path.dirname(target), { recursive: true });
-  const staging = await mkdtemp(`${target}.tmp-`);
+  if (outDir && artifactRoot)
+    fail(
+      "invalid_arguments",
+      "Choose either --out-dir or --artifact-root, not both",
+    );
+  const root = resolveArtifactRoot(artifactRoot);
+  const stagingRoot = outDir
+    ? path.dirname(path.resolve(outDir))
+    : path.join(root, "result-materialization", "intakes");
+  await mkdir(stagingRoot, { recursive: true });
+  const staging = await mkdtemp(path.join(stagingRoot, ".intake.tmp-"));
   const bundleDir = path.join(staging, "calculation-bundle");
   try {
     const sourceStat = await stat(source);
@@ -94,6 +107,9 @@ export async function createIntake({ bundle, outDir }) {
       artifacts,
       verification: { manifest: "verified", artifacts: "verified" },
     };
+    const target = outDir
+      ? path.resolve(outDir)
+      : canonicalIntakePath(root, intake.source);
     await writeFile(
       path.join(staging, "intake-manifest.json"),
       canonicalJson(intake),
@@ -113,6 +129,23 @@ export async function createIntake({ bundle, outDir }) {
       await rename(staging, target);
     } catch (error) {
       if (error.code === "EEXIST" || error.code === "ENOTEMPTY") {
+        if (!outDir) {
+          const existing = await verifyExistingIntake(target, intake);
+          if (existing) {
+            await rm(staging, { recursive: true, force: true });
+            return {
+              intake: existing,
+              path: target,
+              artifactRoot: root,
+              artifactPath: target,
+              pathPolicy: "canonical-content-addressed.v1",
+              disposition: "reused_existing",
+              artifactIdentity: intake.source,
+              recommendedCanonicalPath: target,
+            };
+          }
+          artifactPathConflict(target);
+        }
         fail(
           "intake_exists",
           `Refusing to overwrite existing intake: ${target}`,
@@ -120,10 +153,39 @@ export async function createIntake({ bundle, outDir }) {
       }
       throw error;
     }
-    return { intake, path: target };
+    return {
+      intake,
+      path: target,
+      artifactRoot: root,
+      artifactPath: target,
+      pathPolicy: outDir
+        ? "explicit-output.v1"
+        : "canonical-content-addressed.v1",
+      disposition: "created",
+      artifactIdentity: intake.source,
+      recommendedCanonicalPath: outDir
+        ? canonicalIntakePath(root, intake.source)
+        : target,
+    };
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
     throw error;
+  }
+}
+
+async function verifyExistingIntake(target, expected) {
+  try {
+    const existing = JSON.parse(
+      await readFile(path.join(target, "intake-manifest.json"), "utf8"),
+    );
+    if (canonicalJson(existing) !== canonicalJson(expected)) return null;
+    for (const artifact of existing.artifacts) {
+      const file = path.join(target, "calculation-bundle", artifact.path);
+      if ((await sha256File(file)) !== artifact.sha256) return null;
+    }
+    return existing;
+  } catch {
+    return null;
   }
 }
 

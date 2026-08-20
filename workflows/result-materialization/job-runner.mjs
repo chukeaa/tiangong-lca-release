@@ -142,6 +142,7 @@ try {
   const result = await materialize({
     intakeDir: request.intakeDir,
     outDir: request.outDir,
+    artifactRoot: request.artifactRoot,
     processUuids: request.processUuids,
     outputType: request.outputType,
     resultProcessLayer: request.resultProcessLayer,
@@ -160,6 +161,9 @@ try {
     manifest: path.join(result.path, "materialization-manifest.json"),
     request: result.request,
     summary: result.summary,
+    disposition: result.disposition,
+    pathPolicy: result.pathPolicy,
+    artifactIdentity: result.artifactIdentity,
     completedAt,
   };
   await writeFile(job.paths.result, canonicalJson(payload), { flag: "wx" });

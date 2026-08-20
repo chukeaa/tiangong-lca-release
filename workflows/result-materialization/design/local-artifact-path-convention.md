@@ -2,8 +2,8 @@
 title: Result Materialization 本地产物默认路径设计
 docType: design
 scope: workflow
-status: proposed
-authoritative: false
+status: active
+authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
@@ -16,9 +16,9 @@ whenToUpdate:
 checkPaths:
   - workflows/calculation/**
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: b20ff41073d09a1fa914eb88bf600d7cf277ab2e
-lastReviewedNote: "Proposed deterministic default paths and verified reuse semantics for local Result Materialization artifacts."
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: 9c99249520d5228088d2845b42b78605bf06a524
+lastReviewedNote: "Promoted deterministic default paths, frozen materialization keys, and verified reuse semantics to the active workflow contract."
 related:
   - ../README.md
   - ../AGENTS.md
@@ -157,7 +157,7 @@ JSON 输出至少披露：
 {
   "artifactRoot": "<absolute-path>",
   "artifactPath": "<absolute-path>",
-  "pathPolicy": "canonical-default.v1",
+  "pathPolicy": "canonical-content-addressed.v1",
   "artifactIdentity": {
     "calculationId": "<uuid>",
     "bundleContentHash": "<sha256>",
@@ -198,7 +198,7 @@ Agent 不需要从路径反向解析身份；输出和 manifest 必须显式提�
 
 `--out-dir` 可以保留为高级能力，用于测试、隔离实验或向外部介质导出，但应满足：
 
-- 与 `--artifact-root` 互斥；
+- intake 和前台 materialize 中与 `--artifact-root` 互斥；后台 `materialize start` 可同时使用两者，此时 `--out-dir` 只指定输出，`--artifact-root` 只定位 Job 记录；
 - 仍然不可覆盖已有目录；
 - 不改变 materialization key、dataset identity 或 version；
 - JSON 输出设置 `pathPolicy: explicit-output.v1`；
@@ -220,9 +220,9 @@ canonical 路径不使用：
 
 这些信息可以出现在人类摘要或未来的非权威索引中，但不能代替内容寻址路径。
 
-## 从 proposed 提升为正式契约的条件
+## 契约验证要求
 
-实现以下行为并通过测试后，本设计才提升为 active/authoritative：
+实现必须持续通过以下行为测试：
 
 - intake 和 materialize 在省略 `--out-dir` 时生成上述默认路径；
 - Calculation 的 next action 不再输出 `<path>` 占位符；
