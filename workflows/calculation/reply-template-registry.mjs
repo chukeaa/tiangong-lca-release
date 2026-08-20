@@ -9,12 +9,19 @@ const templates = Object.freeze({
   "result-set.get": [
     "result-set-ready",
     "result-set-ready.md",
-    ["data.id", "data.name", "contextPath", "nextActions"],
+    ["data.id", "data.name", "contextPath", "nextDecision", "nextActions"],
   ],
   "result-set.create": [
     "result-set-ready",
     "result-set-ready.md",
-    ["data.id", "data.name", "contextPath", "warnings", "nextActions"],
+    [
+      "data.id",
+      "data.name",
+      "contextPath",
+      "warnings",
+      "nextDecision",
+      "nextActions",
+    ],
   ],
   "closure.start": [
     "closure-submitted",

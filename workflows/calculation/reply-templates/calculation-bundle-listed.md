@@ -13,7 +13,7 @@
 
 [若存在 warnings] 注意：`{{warnings}}`
 
-下一步：
+下一步请选择一个精确 `packageId`，不会自动采用列表第一项：
 
 `{{nextActions.0}}`
 

@@ -8,6 +8,11 @@ import {
   startMaterializationJob,
 } from "./lib/background-job.mjs";
 import { materialize } from "./lib/materialize.mjs";
+import {
+  MATERIALIZATION_COMMAND,
+  RELEASE_COMMAND,
+  shellQuote,
+} from "./runtime/cli-command.mjs";
 
 const HELP = `release-result-materialization <command> [options]
 
@@ -91,7 +96,9 @@ async function main() {
       calculationId: result.intake.source.calculationId,
       bundleContentHash: result.intake.source.bundleContentHash,
       nextAction: {
-        command: `node cli.mjs materialize start --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --first-generation --json`,
+        kind: "confirm_materialization_recipe",
+        requiresConfirmation: true,
+        command: `${MATERIALIZATION_COMMAND} materialize start --intake ${shellQuote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --first-generation --json`,
         description:
           "Choose scope, final dataset type, and the Result Process content layer, then start an observable background run. Omit 'start' for a foreground run. LifecycleModel itself does not contain LCI/LCIA results.",
       },
@@ -109,7 +116,11 @@ async function main() {
       command: "materialize start",
       outcome: "started",
       nextAction: {
-        description: result.nextActions.join("; "),
+        kind: "inspect_materialization_job",
+        command: result.nextActions[0],
+        alternatives: result.nextActions.slice(1),
+        description:
+          "Read the bounded local job status first; inspect logs only when diagnostics are needed.",
       },
     });
     return;
@@ -134,8 +145,10 @@ async function main() {
       ...result.summary,
       manifest: `${result.path}/materialization-manifest.json`,
       nextAction: {
+        kind: "prepare_release_intake",
+        command: releaseIntakeCommand(result, options.intake),
         description:
-          "Hand materialization-manifest.json and canonical datasets to Release Workflow.",
+          "Prepare an immutable Release Intake from this verified materialization and its frozen source intake.",
       },
     });
     return;
@@ -150,7 +163,20 @@ async function main() {
       ...result,
       command: "job get",
       outcome: result.state,
-      nextAction: { description: result.nextActions.join("; ") },
+      nextAction: {
+        kind:
+          result.state === "succeeded"
+            ? "prepare_release_intake"
+            : result.state === "running" || result.state === "queued"
+              ? "inspect_materialization_job"
+              : "inspect_materialization_logs",
+        command: result.nextActions[0],
+        alternatives: result.nextActions.slice(1),
+        description:
+          result.state === "succeeded"
+            ? "Prepare Release Intake from the completed materialization."
+            : "Continue from the same exact local job without starting a duplicate run.",
+      },
     });
     return;
   }
@@ -167,7 +193,9 @@ async function main() {
       command: "job logs",
       outcome: "read",
       nextAction: {
-        description: `node cli.mjs job get --job-id ${result.jobId} --artifact-root ${quote(result.artifactRoot)} --json`,
+        kind: "inspect_materialization_job",
+        command: `${MATERIALIZATION_COMMAND} job get --job-id ${result.jobId} --artifact-root ${shellQuote(result.artifactRoot)} --json`,
+        description: "Return to the bounded status projection for this job.",
       },
     });
     return;
@@ -183,7 +211,9 @@ async function main() {
       command: "job cancel",
       outcome: result.state,
       nextAction: {
-        description: `node cli.mjs job get --job-id ${result.jobId} --artifact-root ${quote(result.artifactRoot)} --json`,
+        kind: "inspect_materialization_job",
+        command: `${MATERIALIZATION_COMMAND} job get --job-id ${result.jobId} --artifact-root ${shellQuote(result.artifactRoot)} --json`,
+        description: "Read the resulting state for this exact job.",
       },
     });
     return;
@@ -340,21 +370,41 @@ function respond(options, value) {
     if (value.logPath) process.stdout.write(`Log: ${value.logPath}\n`);
     if (value.lines) process.stdout.write(`${value.lines.join("\n")}\n`);
     process.stdout.write(`Next: ${value.nextAction.description}\n`);
+    if (value.nextAction.command)
+      process.stdout.write(`${value.nextAction.command}\n`);
   }
 }
 
-function quote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
+function releaseIntakeCommand(result, sourceIntake) {
+  const releaseIntake = path.join(
+    result.artifactRoot,
+    "release",
+    "intakes",
+    result.artifactIdentity.materializationKeySha256,
+  );
+  return `${RELEASE_COMMAND} intake prepare --materialization ${shellQuote(result.path)} --source-intake ${shellQuote(path.resolve(sourceIntake))} --out-dir ${shellQuote(releaseIntake)} --json`;
 }
 
 main().catch((error) => {
+  const [command, action] = process.argv.slice(2);
+  const route = [command, action]
+    .filter((value) => value && !value.startsWith("--"))
+    .join(" ");
   const payload = {
     ok: false,
+    command: route || "unknown",
+    outcome: "command_failed",
     error: {
       code: error.code ?? "unexpected_error",
       message: error.message,
       details: error.details ?? {},
     },
+    nextActions: [
+      {
+        kind: "inspect_usage",
+        command: `${MATERIALIZATION_COMMAND}${route ? ` ${route}` : ""} --help`,
+      },
+    ],
   };
   process.stderr.write(`${JSON.stringify(payload)}\n`);
   process.exitCode = 1;

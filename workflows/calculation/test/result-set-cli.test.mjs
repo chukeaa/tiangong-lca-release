@@ -202,6 +202,40 @@ test("create persists the exact remote identity and returns its path", async (t)
   assert.equal(result.data.schemaVersion, undefined);
   assert.match(result.contextPath, /\.json$/);
   assert.equal(result.warnings[0].code, "create_not_idempotent");
+  assert.equal(result.nextDecision.kind, "confirm_closure_start");
+  assert.equal(result.nextDecision.requiresConfirmation, true);
+  assert.deepEqual(result.nextDecision.defaults, {
+    coverageMode: "global_eligible",
+    lciaMethodCount: 25,
+  });
+  assert.match(result.nextActions[0], /closure start/);
+  assert.match(
+    result.nextActions[0],
+    new RegExp(externalResultSet.resultSetId),
+  );
+  assert.match(result.nextActions[0], /--confirm-start/);
+});
+
+test("confirmation failures recover the command that actually requested confirmation", async () => {
+  const stdout = outputBuffer();
+  const exitCode = await runCli(
+    [
+      "closure",
+      "start",
+      "--result-set-id",
+      externalResultSet.resultSetId,
+      "--idempotency-token",
+      "closure-token",
+      "--format",
+      "json",
+    ],
+    { stdout: stdout.stream, env: {} },
+  );
+  const result = JSON.parse(stdout.value());
+  assert.equal(exitCode, 3);
+  assert.match(result.nextActions[0], /closure.*start/);
+  assert.match(result.nextActions[0], /--confirm-start/);
+  assert.doesNotMatch(result.nextActions[0], /--confirm-create/);
 });
 
 test("invalid exact-ID input is rejected before configuration or network access", async () => {

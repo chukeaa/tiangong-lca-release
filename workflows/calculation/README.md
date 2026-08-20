@@ -86,6 +86,10 @@ node workflows/calculation/cli.mjs worker logs --job-id <uuid>
 回复模板是 F2 回复草稿，不是远程事实或固定渲染 schema。模板提供固定段落与状态 emoji，并
 控制如何区分提交与完成、下一步如何表达；CLI 结果继续作为事实来源。
 
+ResultSet 创建或读取成功后，CLI 同时返回 `nextDecision` 和绑定精确 `resultSetId` 的 Closure
+命令。回复必须先询问用户是否采用 `global_eligible + 25 个 reviewed LCIA 方法`；只有用户确认后
+才执行该命令。需要确认的节点以决定提示导航，可执行节点以精确命令导航，两者不能互相替代。
+
 外部 ResultSet payload 先由 adapter 转换为 Calculation 自有的最小引用：
 
 ```json
@@ -145,8 +149,8 @@ JSON 结果的 `effectiveInput.defaultedInputs` 会明确列出采用默认值�
 `requestedScopeHash` 和 `policyFingerprint`，并且只有在 `passed + complete + valid` 且两个绑定值
 齐全时才标记 `calculationReady=true`。provider 当前不在该查询中返回完整 method/process identity，
 所以 CLI 会明确披露 `scopeIdentityReturned=false`；继续计算必须沿用创建该 Closure 时相同的显式
-scope，不能从 `latest` 猜测，也不能假设当前默认 profile 与旧 Closure 相同。CLI 返回的计算命令
-会保留不可直接执行的 scope 占位符，要求 Agent 先恢复原始 selection。
+scope，不能从 `latest` 猜测，也不能假设当前默认 profile 与旧 Closure 相同。无法恢复原始 selection
+时，CLI 明确返回人工恢复提示而不是生成看似可执行但不完整的 scope 命令。
 
 Worker 主机、SSH 和 journal 由根 workspace 的 `workspace_ops` 拥有。`worker logs` 不读取日志，
 而是输出应从 `lca-workspace` 根目录执行的精确委托命令：
@@ -163,7 +167,8 @@ Calculation 状态观察使用 `calculation get --job-id <uuid>`。该命令先�
 task feed，并只接受精确 Worker Job ID；输出 `workerStatus`、domain status/validity、phase、progress、
 ResultSet/Closure/Result Package identity 和投影更新时间。queued/running 状态的下一步仍是数据库状态
 查询；只有 failed/blocked/stale，或 Worker completed 但 domain 未通过/无效时，才优先建议
-`workspace_ops worker job` 日志诊断。日志不覆盖数据库任务投影的产品状态权威性。
+`workspace_ops worker job` 日志诊断。Calculation 成功且 `resultPackageId` 已出现时，下一步进入精确
+Bundle metadata 查询；不会退回 ResultSet。日志不覆盖数据库任务投影的产品状态权威性。
 
 Calculation Bundle 使用本地数据面，不再让 Edge 为大量 artifact 串行生成 signed URL：
 
@@ -171,7 +176,7 @@ Calculation Bundle 使用本地数据面，不再让 Edge 为大量 artifact 串
   `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`
   复制到 Release ignored `.env`；已有值不覆盖，变量值不进入 stdout；
 - `calculation-bundle list` 对 `private.lcia_result_packages` 执行参数化、read-only、有界 SQL，默认 20、
-  最大 200，只输出 Package/Bundle identity 和数量摘要；
+  最大 200，只输出 Package/Bundle identity 和数量摘要，并要求选择精确 `packageId`，不自动采用第一项；
 - `calculation-bundle get --package-id` 用精确 UUID 读取一个 Bundle 的稳定 metadata，不输出数据库连接、
   S3 locator 或 signed URL；
 - `calculation-bundle download --package-id` 读取内部 manifest locator，通过配置的 S3 bucket 直接下载

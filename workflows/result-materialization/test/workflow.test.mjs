@@ -161,6 +161,21 @@ test("every Result Materialization action exposes local help without executing",
   }
 });
 
+test("Result Materialization recovery commands are cwd-independent and actionable", async () => {
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "materialization-cwd-"));
+  const failed = spawnSync(
+    process.execPath,
+    [cli.pathname, "materialize", "--json"],
+    { cwd, encoding: "utf8" },
+  );
+  assert.equal(failed.status, 1);
+  const payload = JSON.parse(failed.stderr);
+  assert.equal(payload.outcome, "command_failed");
+  assert.match(payload.nextActions[0].command, new RegExp(cli.pathname));
+  assert.match(payload.nextActions[0].command, /materialize --help/);
+});
+
 test("nohup jobs expose bounded status, logs, and terminal cancellation", async () => {
   const cli = new URL("../cli.mjs", import.meta.url);
   const temp = await mkdtemp(path.join(os.tmpdir(), "release-job-"));
@@ -196,6 +211,8 @@ test("nohup jobs expose bounded status, logs, and terminal cancellation", async 
   assert.ok(
     startResult.nextActions.every((item) => item.includes(artifactRoot)),
   );
+  assert.equal(startResult.nextAction.command, startResult.nextActions[0]);
+  assert.match(startResult.nextAction.command, new RegExp(cli.pathname));
   let observed;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const status = spawnSync(
@@ -596,6 +613,11 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   assert.ok(completedJob.resources.rssBytes > 0);
   assert.ok(completedJob.resources.heapLimitBytes > 0);
   assert.ok(completedJob.resources.elapsedSeconds >= 0);
+  assert.match(completedJob.nextActions[0], /release\/cli\.mjs/);
+  assert.match(completedJob.nextActions[0], /intake prepare/);
+  assert.match(completedJob.nextActions[0], /--materialization/);
+  assert.match(completedJob.nextActions[0], /--source-intake/);
+  assert.doesNotMatch(completedJob.nextActions[0], /<[^>]+>/);
   const backgroundLogs = await readMaterializationJobLogs({
     artifactRoot: backgroundRoot,
     jobId: background.jobId,

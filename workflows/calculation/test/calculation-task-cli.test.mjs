@@ -85,7 +85,7 @@ test("closure submission requires confirmation before configuration or network",
   assert.equal(calls, 0);
 });
 
-test("closure submission projects identities and returns workspace_ops log command", async () => {
+test("closure submission prioritizes exact Closure status before Worker diagnostics", async () => {
   const stdout = buffer();
   const code = await runCli(
     [
@@ -142,7 +142,9 @@ test("closure submission projects identities and returns workspace_ops log comma
       defaultedInputs: [],
     },
   });
-  assert.match(result.nextActions[0], /workspace_ops/);
+  assert.match(result.nextActions[0], /closure get/);
+  assert.match(result.nextActions[0], new RegExp(uuid));
+  assert.match(result.nextActions[1], /workspace_ops/);
   assert.equal(result.replyTemplate.id, "closure-submitted");
 });
 
@@ -249,8 +251,11 @@ test("closure get returns exact calculation bindings only when evidence is ready
   assert.match(result.nextActions[0], /calculation start/);
   assert.match(result.nextActions[0], /--requested-scope-hash scope-hash/);
   assert.match(result.nextActions[0], /--policy-fingerprint policy-hash/);
-  assert.match(result.nextActions[0], /REUSE_ORIGINAL_COVERAGE_MODE/);
-  assert.match(result.nextActions[0], /REUSE_ORIGINAL_METHOD_ID@VERSION/);
+  assert.match(
+    result.nextActions[0],
+    /reuse the exact coverage\/process\/method/,
+  );
+  assert.doesNotMatch(result.nextActions[0], /REUSE_ORIGINAL_/);
   assert.equal(result.replyTemplate.id, "closure-inspected");
   assert.equal("providerExtra" in result.data, false);
 });
@@ -351,6 +356,8 @@ test("calculation get uses the database task projection and skips healthy Worker
   assert.equal(result.completeness.status, "terminal_observed");
   assert.equal(result.completeness.lookup.complete, true);
   assert.doesNotMatch(result.nextActions.join("\n"), /workspace_ops/);
+  assert.match(result.nextActions[0], /calculation-bundle get/);
+  assert.match(result.nextActions[0], new RegExp(uuid));
   assert.equal("rawPayload" in result.data, false);
   assert.equal(result.replyTemplate.id, "calculation-inspected");
 });
@@ -488,6 +495,8 @@ test("calculation-bundle list uses the direct database store and exposes no loca
   assert.equal(result.data.items[0].packageId, uuid);
   assert.equal(result.data.items[0].bundle.artifactCount, 140);
   assert.equal(result.completeness.status, "complete");
+  assert.match(result.nextActions[0], /<SELECT_PACKAGE_ID>/);
+  assert.doesNotMatch(result.nextActions[0], new RegExp(uuid));
   assert.equal(result.replyTemplate.id, "calculation-bundle-listed");
   assert.doesNotMatch(stdout.value(), /artifactUrl|signedDownloadUrl|CONN/);
 });
@@ -627,7 +636,11 @@ test("calculation submission binds the selected closure evidence", async () => {
     },
   );
   assert.equal(code, 0);
-  assert.equal(JSON.parse(stdout.value()).data.kind, "calculation");
+  const result = JSON.parse(stdout.value());
+  assert.equal(result.data.kind, "calculation");
+  assert.match(result.nextActions[0], /calculation get/);
+  assert.match(result.nextActions[0], new RegExp(jobId));
+  assert.match(result.nextActions[1], /workspace_ops/);
 });
 
 test("calculation default profile sends all reviewed methods and a separate display default", async () => {

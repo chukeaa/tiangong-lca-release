@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { canonicalJson, fail } from "./common.mjs";
 import { prepareMaterialization } from "./materialize.mjs";
+import {
+  MATERIALIZATION_COMMAND,
+  RELEASE_COMMAND,
+  shellQuote,
+} from "../runtime/cli-command.mjs";
 
 const JOB_SCHEMA = "tiangong.release.materialization-job.v1";
 const STATUS_SCHEMA = "tiangong.release.materialization-job-status.v1";
@@ -151,7 +156,7 @@ export async function getMaterializationJob({ artifactRoot: root, jobId }) {
     jobDir,
     logPath: job.paths.log,
     resultPath: job.paths.result,
-    nextActions: nextActions(jobId, state, rootPath),
+    nextActions: nextActions(job, state, rootPath),
   };
 }
 
@@ -296,19 +301,27 @@ async function writeStatus(jobDir, value) {
   await rename(temporary, target);
 }
 
-function nextActions(jobId, state, rootPath) {
+function nextActions(job, state, rootPath) {
+  const { jobId } = job;
   const rootOption = ` --artifact-root ${shellQuote(rootPath)}`;
   if (state === "running" || state === "queued" || state === "cancelling") {
     return [
-      `node cli.mjs job get --job-id ${jobId}${rootOption} --json`,
-      `node cli.mjs job logs --job-id ${jobId}${rootOption} --tail 100 --json`,
+      `${MATERIALIZATION_COMMAND} job get --job-id ${jobId}${rootOption} --json`,
+      `${MATERIALIZATION_COMMAND} job logs --job-id ${jobId}${rootOption} --tail 100 --json`,
+    ];
+  }
+  if (state === "succeeded") {
+    const releaseIntake = path.join(
+      rootPath,
+      "release",
+      "intakes",
+      path.basename(job.outputPath),
+    );
+    return [
+      `${RELEASE_COMMAND} intake prepare --materialization ${shellQuote(job.outputPath)} --source-intake ${shellQuote(job.request.intakeDir)} --out-dir ${shellQuote(releaseIntake)} --json`,
     ];
   }
   return [
-    `node cli.mjs job logs --job-id ${jobId}${rootOption} --tail 100 --json`,
+    `${MATERIALIZATION_COMMAND} job logs --job-id ${jobId}${rootOption} --tail 100 --json`,
   ];
-}
-
-function shellQuote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
 }

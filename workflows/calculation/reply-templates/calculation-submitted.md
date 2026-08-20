@@ -12,7 +12,11 @@
 - 计算范围：`{{data.effectiveInput.coverageMode}}`
 - LCIA 方法：`{{data.effectiveInput.lciaMethods.0.id}}@{{data.effectiveInput.lciaMethods.0.version}}`
 
-🔎 下一步可以观察任务状态，或从 workspace 根目录查询 Worker 日志：
+🔎 下一步先从数据库任务投影读取状态：
 
 `{{nextActions.0}}`
+
+仅在失败、阻塞、陈旧或状态不一致时，再查询 Worker 日志：
+
+`{{nextActions.1}}`
 ```

@@ -7,6 +7,6 @@
 
 下一步：
 
-{{nextActions}}
+`{{nextActions.0.command}}`
 
 > 常规 Release Intake 只读取有效缓存；缓存缺失或过期时不会隐式下载，刷新必须由用户明确触发。

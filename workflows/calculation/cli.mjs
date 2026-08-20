@@ -210,14 +210,36 @@ function shellCommand(executable, script) {
   return `${shellQuote(executable)} ${shellQuote(script)}`;
 }
 
+function shellCommandFromArgs(args) {
+  return [COMMAND, ...args.map((value) => shellQuote(value))].join(" ");
+}
+
+function closureStartCommand(resultSetId) {
+  return `${COMMAND} closure start --result-set-id ${resultSetId} --idempotency-token "$(uuidgen | tr '[:upper:]' '[:lower:]')" --confirm-start`;
+}
+
 function success(command, result) {
   const nextActions = [];
+  let nextDecision;
   if (command === "result-set.list") {
     nextActions.push(`${COMMAND} result-set get --result-set-id <uuid>`);
+    nextDecision = {
+      kind: "select_result_set",
+      requiresConfirmation: true,
+      prompt: "请选择一个精确 ResultSet ID；不会根据名称自动选择。",
+    };
   } else {
-    nextActions.push(
-      "Continue Calculation with the exact resultSetId after scope and LCIA methods are confirmed",
-    );
+    nextActions.push(closureStartCommand(result.data.id));
+    nextDecision = {
+      kind: "confirm_closure_start",
+      requiresConfirmation: true,
+      prompt:
+        "是否使用 global_eligible 范围和完整的 25 个 reviewed LCIA 方法启动完整性校验？",
+      defaults: {
+        coverageMode: DEFAULT_CALCULATION_PROFILE.coverageMode,
+        lciaMethodCount: DEFAULT_CALCULATION_PROFILE.lciaMethods.length,
+      },
+    };
   }
   const output = {
     schemaVersion: CLI_SCHEMA,
@@ -225,11 +247,12 @@ function success(command, result) {
     command,
     ...result,
     nextActions,
+    nextDecision,
   };
   return { ...output, replyTemplate: replyTemplateFor(command, { ok: true }) };
 }
 
-function failure(command, error) {
+function failure(command, error, argv = []) {
   const code = error?.code ?? "capability_unavailable";
   const nextActions =
     code === "result_set_name_confirmation_required"
@@ -237,9 +260,9 @@ function failure(command, error) {
           `${COMMAND} result-set create --name ${error.details.recommendedName} --confirm-create`,
         ]
       : code === "confirmation_required"
-        ? [
-            `Repeat the create command with --confirm-create after reviewing the exact name`,
-          ]
+        ? command === "result-set.create"
+          ? [shellCommandFromArgs([...argv, "--confirm-create"])]
+          : [shellCommandFromArgs([...argv, "--confirm-start"])]
         : code === "remote_outcome_unknown"
           ? [`${COMMAND} result-set list --format json`]
           : code === "data_plane_configuration_required"
@@ -251,6 +274,11 @@ function failure(command, error) {
                     `${COMMAND} calculation-bundle get --package-id ${error.details.packageId}`,
                   ]
                 : [];
+  if (
+    nextActions.length === 0 &&
+    ["invalid_request", "capability_unavailable"].includes(code)
+  )
+    nextActions.push(`${COMMAND} --help`);
   const output = {
     schemaVersion: CLI_SCHEMA,
     ok: false,
@@ -360,7 +388,11 @@ export async function runCli(
           status: data.missingSourceKeys.length ? "partial" : "complete",
           valuesExposed: false,
         },
-        nextActions: [`${COMMAND} calculation-bundle list --limit 20`],
+        nextActions: data.missingSourceKeys.length
+          ? [
+              `Add the missing keys to the workspace .env, then rerun: ${COMMAND} environment sync --confirm-sync`,
+            ]
+          : [`${COMMAND} calculation-bundle list --limit 20`],
       };
       result.replyTemplate = replyTemplateFor(command, { ok: true });
       stdout.write(
@@ -417,7 +449,7 @@ export async function runCli(
       const inspectAgain = `${COMMAND} closure get --closure-check-id ${closure.closureCheckId}`;
       const nextActions = closure.calculationReady
         ? [
-            `${COMMAND} calculation start --name "RESULT_SET_NAME" --closure-check-id ${closure.closureCheckId} --requested-scope-hash ${closure.binding.requestedScopeHash} --policy-fingerprint ${closure.binding.policyFingerprint} --coverage-mode "REUSE_ORIGINAL_COVERAGE_MODE" --method "REUSE_ORIGINAL_METHOD_ID@VERSION" --idempotency-key "NEW_IDEMPOTENCY_KEY" --confirm-start`,
+            `Confirm the calculation name and reuse the exact coverage/process/method selections submitted for Closure ${closure.closureCheckId}; then run ${COMMAND} calculation start with --closure-check-id ${closure.closureCheckId} --requested-scope-hash ${closure.binding.requestedScopeHash} --policy-fingerprint ${closure.binding.policyFingerprint} and a new --idempotency-key. The provider projection cannot safely reconstruct the original scope arguments.`,
           ]
         : [inspectAgain];
       const result = {
@@ -522,7 +554,7 @@ export async function runCli(
             signedUrlsCreated: false,
           },
           nextActions: [
-            `${MATERIALIZATION_COMMAND} intake --bundle ${shellQuote(downloaded.bundleDirectory)} --out-dir <path> --json`,
+            `${MATERIALIZATION_COMMAND} intake --bundle ${shellQuote(downloaded.bundleDirectory)} --json`,
           ],
         };
         result.replyTemplate = replyTemplateFor(command, { ok: true });
@@ -552,11 +584,18 @@ export async function runCli(
                 source: "direct_read_only_database",
               },
         warnings: [],
-        nextActions: items.length
-          ? [
-              `${COMMAND} calculation-bundle download --package-id ${items[0].packageId}`,
-            ]
-          : ["Inspect recent Calculation tasks or start a new Calculation"],
+        nextActions:
+          action === "get"
+            ? [
+                `${COMMAND} calculation-bundle download --package-id ${items[0].packageId}`,
+              ]
+            : items.length
+              ? [
+                  `${COMMAND} calculation-bundle get --package-id <SELECT_PACKAGE_ID>`,
+                ]
+              : [
+                  `${COMMAND} calculation get --job-id <RECENT_CALCULATION_JOB_ID>`,
+                ],
       };
       result.replyTemplate = replyTemplateFor(command, { ok: true });
       stdout.write(
@@ -593,9 +632,11 @@ export async function runCli(
       const nextActions = task.diagnosticsRecommended
         ? [logs, inspectAgain]
         : task.terminal
-          ? task.resultSetId
-            ? [`${COMMAND} result-set get --result-set-id ${task.resultSetId}`]
-            : []
+          ? task.resultPackageId
+            ? [
+                `${COMMAND} calculation-bundle get --package-id ${task.resultPackageId}`,
+              ]
+            : [inspectAgain]
           : [inspectAgain];
       const result = {
         schemaVersion: CLI_SCHEMA,
@@ -722,13 +763,19 @@ export async function runCli(
           },
         },
         completeness: { status: "submitted", terminalStateObserved: false },
-        nextActions: [logs],
+        nextActions:
+          family === "closure"
+            ? [
+                `${COMMAND} closure get --closure-check-id ${task.resourceId}`,
+                logs,
+              ]
+            : [`${COMMAND} calculation get --job-id ${task.jobId}`, logs],
       };
       result.replyTemplate = replyTemplateFor(command, { ok: true });
       stdout.write(
         format === "json"
           ? `${JSON.stringify(result)}\n`
-          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId ?? "pending"}\n- Identity: ${task.identityCompleteness}\n- Status: ${task.status}\n\nNext (run from lca-workspace root):\n- ${logs}\n- Reply using template: ${result.replyTemplate.path}\n`,
+          : `${family === "closure" ? "Closure Check" : "Calculation"} submitted\n\nSummary:\n- Job: ${task.jobId}\n- Resource: ${task.resourceId ?? "pending"}\n- Identity: ${task.identityCompleteness}\n- Status: ${task.status}\n\nNext:\n${result.nextActions.map((entry) => `- ${entry}`).join("\n")}\n- Reply using template: ${result.replyTemplate.path}\n`,
       );
       return 0;
     }
@@ -820,7 +867,7 @@ export async function runCli(
         { cause: error instanceof Error ? error.name : "unknown" },
       );
     }
-    const result = failure(command, normalized);
+    const result = failure(command, normalized, argv);
     const rendered =
       format === "json" ? `${JSON.stringify(result)}\n` : humanFailure(result);
     (format === "json" ? stdout : stderr).write(rendered);

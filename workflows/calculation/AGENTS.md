@@ -55,6 +55,7 @@ related:
 - 用户未提供名称时，推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并返回确认命令；不得静默采用推荐值或在推荐阶段访问远程能力。
 - JSON stdout 必须保持 `tiangong.calculation-cli-result.v1` 可解析；诊断不得混入 stdout。
 - 每个 CLI 结果必须返回 `replyTemplate` 的稳定 ID、路径、Markdown 格式、占位符语法和 required facts。Agent 应从可复制正文模板开始，用真实结果替换全部占位符、删除不适用条件行，不让模板覆盖 CLI/远程事实。
+- `nextActions` 必须按当前状态指向正确的后继节点：需要人工决定时同时返回明确确认提示；可继续执行时使用精确 identity 和 cwd-independent 命令；不得用泛化说明代替导航，也不得从列表中静默选择第一项。
 - provider payload 只在 adapter 中解析；外部新增字段或非破坏性版本变化不得使 Workflow 失败。
 - Workflow、CLI 和恢复文件只使用 `id`、`name`、nullable `createdAt` 和来源元数据组成的内部 ResultSet 引用。
 - 外部 `schemaVersion` 只作为可选观察信息，不得成为 Workflow 分支条件。
@@ -66,7 +67,9 @@ related:
 - 未显式选择时使用当前 Calculation profile：`global_eligible`、完整的 25 个 reviewed LCIA `{id, version}` identities，以及独立的 Climate change/GWP 默认展示类别 `6209b35f-9447-40b5-b68c-a1099e3674a0`；Closure 与 Calculation 必须使用同一完整方法集。输出必须披露 defaulted inputs，显式参数优先。
 - Worker job 日志必须委托给根 workspace 的 `python -m workspace_ops.cli worker job`；本 Workflow 只输出精确命令，不复制服务器配置、SSH 或 journal 逻辑。
 - Calculation 日常状态观察必须先使用精确 Job ID 的 actor-scoped 数据库 task feed；queued/running 继续轮询该投影，只有 failed/blocked/stale 或 Worker/domain 终态不一致时才把 `workspace_ops` 日志列为优先诊断动作。日志不得覆盖数据库投影的产品状态权威性。
+- Closure/Calculation 提交后的首要后继分别是精确 `closure get` 和 `calculation get`；Worker 日志只作为第二诊断动作。Calculation 成功终态且已有 `resultPackageId` 时必须前进到精确 Calculation Bundle，不得退回 ResultSet。
 - Calculation Bundle list/get 使用 `CONN` 的参数化 read-only SQL；list 必须有 1–200 的显式边界，get 必须使用精确 Package UUID。不得调用会下载 manifest 并逐 artifact 签名的 Edge Bundle read，也不得把连接串、artifact locator 或 credential 投影到 CLI。
+- Calculation Bundle list 只负责展示候选并要求用户选择精确 `packageId`；即使列表非空也不得默认下载第一项。
 - Bundle download 使用数据库中的精确 manifest/download metadata 和 allowlisted `S3_*` 配置直接访问单一配置 bucket；先校验 manifest size/hash/schema/content hash/artifact count，再以 1–32 的有界并发下载并校验每个 artifact。已存在文件只有完整性一致时才可复用，不一致时不得覆盖。
 - workspace → Release 环境同步只复制缺失的 `CONN`/`S3_*` 白名单，必须显式 `--confirm-sync`，不得打印值或覆盖 Release `.env` 中已有的非空值。
 - `workspace_ops qualification` 只用于生产等价发布资格门禁，不得当作线上 Closure Check 提交能力。
