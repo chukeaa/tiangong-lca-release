@@ -17,6 +17,7 @@ import { loadReleaseIntake } from "./release-intake.mjs";
 
 export const PACKAGE_PROFILE =
   "standalone-lifecyclemodel-result-full-closure.v1";
+export const EXPECTED_TIDAS_VERSION = "0.2.0";
 
 const DISTRIBUTION_PACKAGES = [
   ["unit-process-full-closure.v1.tidas.zip", "UnitProcessDatabase", "tidas"],
@@ -728,6 +729,7 @@ function validateInputs(manifest, index, intake) {
 }
 
 async function runTidas({ tidasBin, canonicalRoot, indexPath, packagesDir }) {
+  await verifyTidasRuntime({ tidasBin });
   await mkdir(path.dirname(packagesDir), { recursive: true });
   const args = [
     "release",
@@ -755,6 +757,83 @@ async function runTidas({ tidasBin, canonicalRoot, indexPath, packagesDir }) {
     return JSON.parse(result.stdout);
   } catch {
     fail("tidas_output_invalid", "tidas-tools did not return one JSON result");
+  }
+}
+
+export async function verifyTidasRuntime({
+  tidasBin,
+  spawnCommand = spawnBounded,
+}) {
+  const version = await runTidasPreflight({
+    tidasBin,
+    args: ["version", "--format", "json", "--progress", "never"],
+    spawnCommand,
+  });
+  if (
+    version.schema_version !== "tidas.operation-report.v1" ||
+    version.status !== "succeeded" ||
+    version.exit_class !== "success" ||
+    version.completeness !== "complete" ||
+    version.summary?.binary_version !== EXPECTED_TIDAS_VERSION ||
+    version.summary?.operation_report_schema !== "tidas.operation-report.v1"
+  )
+    fail(
+      "tidas_version_incompatible",
+      `Release package construction requires exact tidas ${EXPECTED_TIDAS_VERSION}`,
+      { actualVersion: version.summary?.binary_version ?? null },
+    );
+
+  const validation = await runTidasPreflight({
+    tidasBin,
+    args: ["validate", "--describe", "--format", "json", "--progress", "never"],
+    spawnCommand,
+  });
+  const describe = validation.summary?.validation_describe;
+  if (
+    validation.schema_version !== "tidas.operation-report.v1" ||
+    validation.status !== "succeeded" ||
+    validation.exit_class !== "success" ||
+    validation.completeness !== "complete" ||
+    describe?.schema_version !== "tidas.validation-describe.v1" ||
+    describe?.package?.version !== EXPECTED_TIDAS_VERSION ||
+    !describe?.protocols?.includes("document-validation-batch.v1")
+  )
+    fail(
+      "tidas_validation_contract_incompatible",
+      `tidas ${EXPECTED_TIDAS_VERSION} does not advertise the required validation contract`,
+      { validationDescribe: describe ?? null },
+    );
+
+  return {
+    binaryVersion: EXPECTED_TIDAS_VERSION,
+    assetFingerprint: describe.asset_fingerprint,
+  };
+}
+
+async function runTidasPreflight({ tidasBin, args, spawnCommand }) {
+  const result = await spawnCommand(tidasBin, args);
+  if (result.code !== 0)
+    fail(
+      "tidas_preflight_failed",
+      `tidas preflight exited with code ${result.code}`,
+      {
+        argv: args,
+        stdout: result.stdout.slice(-4000),
+        stderr: result.stderr.slice(-4000),
+      },
+    );
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    fail(
+      "tidas_preflight_output_invalid",
+      "tidas preflight did not return one JSON result",
+      {
+        argv: args,
+        stdout: result.stdout.slice(-4000),
+        stderr: result.stderr.slice(-4000),
+      },
+    );
   }
 }
 
