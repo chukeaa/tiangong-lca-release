@@ -117,7 +117,7 @@ node cli.mjs package build \
   --json
 ```
 
-`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令只构建本地 Candidate，不上传、不批准、也不发布。
+`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。命令先生成本地 package build，再用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
 
 如果省略 `--release-version`，命令不会开始构建，而是以 `release_version_confirmation_required` 返回按 Asia/Shanghai 当前年月生成的推荐版本（例如 `2026.08.0`）、四个预期文件名和专用回复模板。Agent 必须先请用户确认或替换版本号，再使用返回的 argv 带上 `--release-version` 重跑；显式传入版本号即表示该前置确认已经完成。
 
@@ -130,6 +130,7 @@ CLI 返回的自身命令以及返回 Result Materialization 的命令均使用�
 回复模板位于 `reply-templates/`，目前覆盖：
 
 - ✅ 本地 Candidate 已构建并验证；
+- ⚠️ ZIP 已生成但 qualification 未通过，失败构建已保留用于诊断；
 - ⚠️ frozen input 与当前字节发生漂移；
 - ❌ 参数、依赖、profile 或工具执行失败。
 
@@ -156,7 +157,8 @@ CLI 会自动加载 Release 仓根目录 ignored `.env` 中已有的 `CONN`。�
   -> 以正式数据库发行名称保存四个确定性 ZIP
   -> 逐包重新读取 ZIP member、隔离解压并执行 TIDAS/eILCD validation
   -> 保存 tidas report + package-verification-report
-  -> 冻结 publicationAuthorized=false 的 Release Candidate
+  -> 全部通过：冻结 publicationAuthorized=false 的 Release Candidate
+  -> 任一失败：保留 failed build，不创建 Candidate
 ```
 
 Release 只实现当前产品契约明确要求的 LCIA Method characterisation Flow 扩展，不复制通用闭包遍历。完整引用闭合、TIDAS/eILCD validation、schema-ordered conversion 和 semantic round-trip 仍由 `tidas-tools` 权威实现。Node 层验证交接证据、准备 Release Intake、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
@@ -165,7 +167,9 @@ Release 只实现当前产品契约明确要求的 LCIA Method characterisation 
 
 内部 profile ID 用于闭包求解和机器验证，不作为独立分发文件名。外部产品名称按 LCA 数据库内容区分：`UnitProcessDatabase` 表示可继续建模的单元过程数据库，`ResultDatabase` 表示包含 LifecycleModel、LCI/LCIA Result Process 及其自包含依赖的结果数据库。显式 `--release-version` 同时进入 Package Plan、Candidate 和四个文件名，禁止 mutable `latest`。
 
-打包完成后的验证以最终 ZIP 字节为输入，而不是复用 staging 结论。Workflow 先读取完整 member catalog 并拒绝空包、绝对路径和 `..` 路径，再隔离解压；两个 `.tidas.zip` 分别调用 `tidas release validate-tidas`，两个 `.ilcd.zip` 分别调用 `tidas release validate-ilcd`。任一归档无法读取、解压或验证时都不会冻结 Candidate。
+打包完成后的验证以最终 ZIP 字节为输入，而不是复用 staging 结论。Workflow 先读取完整 member catalog 并拒绝空包、绝对路径和 `..` 路径，再隔离解压；两个 `.tidas.zip` 分别调用 `tidas release validate-tidas`，两个 `.ilcd.zip` 分别调用 `tidas release validate-ilcd`。任一归档无法读取、解压或验证时都不会冻结 Candidate，但已经生成的包和诊断证据不会删除。
+
+Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只说明构建产物存在；TIDAS/eILCD 回读全部通过后，它们才具备成为 Candidate 的资格。失败时，用户请求的 Candidate 目录保持不存在，Workflow 将 staging 原子保留到同级唯一目录 `<candidate>.failed-<run-suffix>/`。该目录包含 `failed-package-build.json`、已有的四个 ZIP、`package-verification-report.json`（若已进入逐包验证）以及 `validation-readback/`。CLI 返回这些精确路径和查看命令，便于定位 schema、转换或数据字段问题；失败构建始终记录 `candidateCreated=false` 和 `publicationAuthorized=false`。
 
 Candidate 目录包含：
 
@@ -197,6 +201,7 @@ packages/                              # exactly four deterministic ZIPs
 ## 失败与恢复
 
 - 本地验证失败返回到拥有错误输入或 recipe 的最早节点。
+- 包已生成但 TIDAS/eILCD qualification 失败时，先检查 CLI 返回的 `failed-package-build.json` 和保留包，不要盲目重跑；修正数据后使用新的 Candidate 输出路径重新构建。
 - 上传或发布失败只在同一不可变 candidate 和幂等 identity 上恢复。
 - 发布成功但 readback 失败时，状态不能标记为完成。
 - 远程 metadata、package bytes 或 target 漂移时 fail closed。

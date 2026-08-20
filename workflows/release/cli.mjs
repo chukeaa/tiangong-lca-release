@@ -406,6 +406,26 @@ function shellQuote(value) {
 }
 
 function failureNextActions(error) {
+  if (error.details?.retainedBuild) {
+    const retained = error.details.retainedBuild;
+    const actions = [];
+    if (retained.manifest)
+      actions.push({
+        kind: "inspect_failed_build",
+        description:
+          "Inspect the preserved failure manifest before changing source data or retrying the build.",
+        command: `jq . ${shellQuote(retained.manifest)}`,
+        argv: ["jq", ".", retained.manifest],
+      });
+    actions.push({
+      kind: "inspect_retained_artifacts",
+      description:
+        "List the exact packages, reports, and readback evidence retained from this failed run.",
+      command: `find ${shellQuote(retained.path)} -maxdepth 3 -type f -print`,
+      argv: ["find", retained.path, "-maxdepth", "3", "-type", "f", "-print"],
+    });
+    return actions;
+  }
   if (String(error.code).startsWith("elementary_flow_cache_"))
     return [
       {
@@ -461,20 +481,39 @@ if (existsSync(REPOSITORY_ENV)) loadEnvFile(REPOSITORY_ENV);
 
 main().catch((error) => {
   const command = process.argv.slice(2, 4).join(" ") || COMMAND;
+  const retainedBuild = error.details?.retainedBuild;
   const payload = {
     ok: false,
     command,
-    outcome: "command_failed",
-    completeness: "not_completed",
+    outcome:
+      retainedBuild?.status === "qualification_failed"
+        ? "packages_built_qualification_failed"
+        : retainedBuild
+          ? "package_build_failed_artifacts_retained"
+          : "command_failed",
+    completeness: retainedBuild
+      ? "diagnostic_artifacts_retained"
+      : "not_completed",
+    publicationAuthorized: false,
     error: {
       code: error.code ?? "unexpected_error",
       message: error.message,
       details: error.details ?? {},
     },
+    artifacts: retainedBuild
+      ? {
+          failedBuild: retainedBuild.path,
+          failureManifest: retainedBuild.manifest,
+          packagesDirectory: retainedBuild.packagesDirectory,
+          validationReadbackDirectory:
+            retainedBuild.validationReadbackDirectory,
+        }
+      : undefined,
     nextActions: failureNextActions(error),
     replyTemplate: replyTemplateFor(command, {
       ok: false,
       errorCode: error.code,
+      retainedBuild: Boolean(retainedBuild),
     }),
   };
   if (process.argv.includes("--json"))
@@ -483,8 +522,18 @@ main().catch((error) => {
     process.stderr.write(`Release command failed\n\nSummary:\n`);
     process.stderr.write(`- Command: ${payload.command}\n`);
     process.stderr.write(`- Error: ${payload.error.code}\n`);
-    process.stderr.write(`- Reason: ${payload.error.message}\n\nNext:\n`);
-    process.stderr.write(`- ${payload.nextActions[0].command}\n\n`);
+    process.stderr.write(`- Reason: ${payload.error.message}\n`);
+    if (retainedBuild) {
+      process.stderr.write(
+        `- Generated packages retained: ${retainedBuild.packageCount}\n`,
+      );
+      process.stderr.write(`- Failed build: ${retainedBuild.path}\n`);
+      process.stderr.write(`- Publication authorized: no\n`);
+    }
+    process.stderr.write(`\nNext:\n`);
+    for (const action of payload.nextActions)
+      process.stderr.write(`- ${action.command}\n`);
+    process.stderr.write(`\n`);
     process.stderr.write(`Reply using template:\n`);
     process.stderr.write(`- ${payload.replyTemplate.path}\n`);
   }
