@@ -24,12 +24,12 @@ related:
 
 本目录是 Release 项目的主要入口，不是脚本集合。
 
-| Workflow                                                   | 解决的问题                                          | 主要输出                                                   |
-| ---------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载 | Closure evidence、Calculation Bundle                       |
-| [Dataset Transformation](dataset-transformation/README.md) | 从已有数据或结果产生可追溯的派生数据                | Frozen transformation spec、派生数据集/结果                |
-| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel         | Canonical datasets、identity/version plan、manifest        |
-| [Release](release/README.md)                               | 验证、打包并正式发布 canonical dataset collection   | Package、Release Candidate、Publication、Readback evidence |
+| Workflow                                                   | 解决的问题                                          | 主要输出                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载 | Closure evidence、Calculation Bundle                      |
+| [Dataset Transformation](dataset-transformation/README.md) | 从已有数据或结果产生可追溯的派生数据                | Frozen transformation spec、派生数据集/结果               |
+| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel         | Canonical datasets、identity/version plan、manifest       |
+| [Release](release/README.md)                               | 准备独立 Release Intake，验证、打包并正式发布数据集 | Release Intake、Package、Candidate、Publication、Readback |
 
 Agent 进入具体 Workflow 前，先读取：
 

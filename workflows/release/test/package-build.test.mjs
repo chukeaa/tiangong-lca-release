@@ -13,11 +13,13 @@ import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
+import { inspectFlowCache } from "../lib/flow-cache.mjs";
 import {
   buildPackageCandidate,
   PACKAGE_PROFILE,
   verifyBuiltPackages,
 } from "../lib/package-build.mjs";
+import { prepareReleaseIntake } from "../lib/release-intake.mjs";
 import {
   REPLY_TEMPLATE_COMMANDS,
   replyTemplateFor,
@@ -28,16 +30,64 @@ const MODEL_ID = "22222222-2222-4222-8222-222222222222";
 const RESULT_ID = "33333333-3333-4333-8333-333333333333";
 const UNIT_ID = "44444444-4444-4444-8444-444444444444";
 const FLOW_ID = "55555555-5555-4555-8555-555555555555";
+const METHOD_ID = "66666666-6666-4666-8666-666666666666";
 const VERSION = "01.00.000";
 const REPOSITORY_ROOT = new URL("../../../", import.meta.url).pathname;
 const RELEASE_VERSION = "2026.08.0";
+
+test("shared Elementary Flow cache distinguishes fresh and stale watermarks", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "release-flow-cache-"));
+  const artifactText = `${JSON.stringify({ datasetType: "flow", uuid: FLOW_ID, version: VERSION, document: {} })}\n`;
+  await writeFile(path.join(root, "elementary-flows.ndjson"), artifactText);
+  await writeFile(
+    path.join(root, "cache-manifest.json"),
+    canonicalJson({
+      schemaVersion: "tiangong.release.elementary-flow-cache.v1",
+      databaseWatermark: {
+        publishedCount: 1,
+        maxModifiedAt: "2026-08-19 00:00:00+00",
+      },
+      artifact: {
+        path: "elementary-flows.ndjson",
+        sha256: sha256Bytes(Buffer.from(artifactText)),
+        recordCount: 1,
+      },
+      createdAt: "2026-08-19T00:00:00.000Z",
+    }),
+  );
+  const poolFactory = (maxModifiedAt) => () => ({
+    async query() {
+      return {
+        rows: [{ published_count: "1", max_modified_at: maxModifiedAt }],
+      };
+    },
+    async end() {},
+  });
+  assert.equal(
+    (
+      await inspectFlowCache({
+        cacheDir: root,
+        poolFactory: poolFactory("2026-08-19 00:00:00+00"),
+      })
+    ).status,
+    "fresh",
+  );
+  assert.equal(
+    (
+      await inspectFlowCache({
+        cacheDir: root,
+        poolFactory: poolFactory("2026-08-19 00:00:01+00"),
+      })
+    ).status,
+    "stale",
+  );
+});
 
 test("package build assembles local closure and delegates four-package build", async () => {
   const fixture = await createFixture();
   let observed;
   const result = await buildPackageCandidate({
-    materializationDir: fixture.materialization,
-    intakeDir: fixture.intake,
+    releaseIntakeDir: fixture.releaseIntake,
     outDir: fixture.output,
     releaseVersion: RELEASE_VERSION,
     runTool: async (request) => {
@@ -118,8 +168,7 @@ test("package build fails before tidas-tools when materialized bytes drift", asy
   let invoked = false;
   await assert.rejects(
     buildPackageCandidate({
-      materializationDir: fixture.materialization,
-      intakeDir: fixture.intake,
+      releaseIntakeDir: fixture.releaseIntake,
       outDir: fixture.output,
       releaseVersion: RELEASE_VERSION,
       runTool: async () => {
@@ -131,11 +180,115 @@ test("package build fails before tidas-tools when materialized bytes drift", asy
   assert.equal(invoked, false);
 });
 
+test("Release Intake expands exact LCIA Method Flow dependencies without mutating source intake", async () => {
+  const fixture = await createFixture();
+  const method = sourceRecord("lciamethod", "support", METHOD_ID, {
+    LCIAMethodDataSet: {
+      characterisationFactors: {
+        factor: [
+          {
+            referenceToFlowDataSet: {
+              "@type": "flow data set",
+              "@refObjectId": FLOW_ID,
+              "@version": VERSION,
+            },
+          },
+        ],
+      },
+    },
+  });
+  const sourceRecords = [
+    sourceRecord("process", "unit_process", UNIT_ID, {
+      processDataSet: { id: UNIT_ID },
+    }),
+    method,
+  ];
+  const sourceBytes = gzipSync(
+    `${sourceRecords.map((record) => JSON.stringify(record)).join("\n")}\n`,
+  );
+  const sourcePath = path.join(
+    fixture.intake,
+    "calculation-bundle",
+    "source",
+    "closure.ndjson.gz",
+  );
+  await writeFile(sourcePath, sourceBytes);
+  const intakeManifestPath = path.join(fixture.intake, "intake-manifest.json");
+  const intakeManifest = JSON.parse(await readFile(intakeManifestPath, "utf8"));
+  intakeManifest.artifacts[0].sha256 = sha256Bytes(sourceBytes);
+  intakeManifest.artifacts[0].recordCount = sourceRecords.length;
+  await writeFile(intakeManifestPath, canonicalJson(intakeManifest));
+  const materializationManifestPath = path.join(
+    fixture.materialization,
+    "materialization-manifest.json",
+  );
+  const materializationManifest = JSON.parse(
+    await readFile(materializationManifestPath, "utf8"),
+  );
+  materializationManifest.inputs.intakeManifestSha256 =
+    hashJson(intakeManifest);
+  await writeFile(
+    materializationManifestPath,
+    canonicalJson(materializationManifest),
+  );
+  const target = path.join(
+    fixture.root,
+    "new-release-intakes",
+    "release-intake-expanded",
+  );
+  const cacheArtifact = path.join(fixture.root, "elementary-flows.ndjson");
+  await writeFile(
+    cacheArtifact,
+    `${JSON.stringify(sourceRecord("flow", "support", FLOW_ID, { flowDataSet: { id: FLOW_ID } }))}\n`,
+  );
+  const result = await prepareReleaseIntake({
+    materializationDir: fixture.materialization,
+    sourceIntakeDir: fixture.intake,
+    outDir: target,
+    cacheLoader: async () => ({
+      artifact: cacheArtifact,
+      manifest: { artifact: { recordCount: 93_996 } },
+    }),
+  });
+  assert.equal(result.report.addedExactFlowCount, 1);
+  assert.equal(result.report.uniqueReferenceCount, 1);
+  const dependencyText = await readFile(
+    path.join(target, "dependencies", "lcia-method-flows.ndjson"),
+    "utf8",
+  );
+  assert.match(dependencyText, new RegExp(FLOW_ID, "u"));
+  assert.equal(
+    JSON.parse(await readFile(intakeManifestPath, "utf8")).artifacts[0]
+      .recordCount,
+    2,
+  );
+});
+
+test("Release Intake fails closed when an exact LCIA Method Flow is unavailable", async () => {
+  const fixture = await createFixture();
+  await configureMissingMethodFlow(fixture);
+  await assert.rejects(
+    prepareReleaseIntake({
+      materializationDir: fixture.materialization,
+      sourceIntakeDir: fixture.intake,
+      outDir: path.join(fixture.root, "release-intake-missing-flow"),
+      cacheLoader: async () => {
+        const artifact = path.join(fixture.root, "empty-cache.ndjson");
+        await writeFile(artifact, "");
+        return { artifact, manifest: { artifact: { recordCount: 0 } } };
+      },
+    }),
+    (error) =>
+      error.code === "release_intake_exact_flow_missing" &&
+      error.details.uuid === FLOW_ID &&
+      error.details.version === VERSION,
+  );
+});
+
 test("release version is filename-safe before any input is read", async () => {
   await assert.rejects(
     buildPackageCandidate({
-      materializationDir: "/missing/materialization",
-      intakeDir: "/missing/intake",
+      releaseIntakeDir: "/missing/release-intake",
       outDir: "/missing/output",
       releaseVersion: "../latest",
     }),
@@ -194,7 +347,7 @@ test("CLI exposes one bounded local package build route", () => {
   assert.equal(help.status, 0);
   assert.match(help.stdout, /package build/);
   assert.match(help.stdout, /does not authorize/);
-  assert.match(help.stdout, /Example:/);
+  assert.match(help.stdout, /Examples:/);
   assert.match(help.stdout, /replyTemplate/);
   const unsupported = spawnSync(
     process.execPath,
@@ -202,10 +355,8 @@ test("CLI exposes one bounded local package build route", () => {
       cli.pathname,
       "package",
       "build",
-      "--materialization",
-      "/tmp/materialization",
-      "--intake",
-      "/tmp/intake",
+      "--release-intake",
+      "/tmp/release-intake",
       "--profile",
       "result-process-only.v1",
       "--release-version",
@@ -231,10 +382,8 @@ test("CLI exposes one bounded local package build route", () => {
       cli.pathname,
       "package",
       "build",
-      "--materialization",
-      "/tmp/materialization",
-      "--intake",
-      "/tmp/intake",
+      "--release-intake",
+      "/tmp/release-intake",
       "--profile",
       PACKAGE_PROFILE,
       "--out-dir",
@@ -298,8 +447,14 @@ test("CLI renders human failures separately from JSON mode", () => {
 });
 
 test("every Release CLI outcome maps to an existing bounded reply template", async () => {
-  assert.deepEqual(REPLY_TEMPLATE_COMMANDS, ["package build"]);
+  assert.deepEqual(REPLY_TEMPLATE_COMMANDS, [
+    "cache status",
+    "cache refresh",
+    "intake prepare",
+    "package build",
+  ]);
   for (const template of [
+    replyTemplateFor("intake prepare", { ok: true }),
     replyTemplateFor("package build", { ok: true }),
     replyTemplateFor("package build", {
       ok: false,
@@ -321,6 +476,7 @@ async function createFixture() {
   const materialization = path.join(root, "materialization");
   const intake = path.join(root, "intake");
   const output = path.join(root, "candidate");
+  const releaseIntake = path.join(root, "release-intake");
   await mkdir(path.join(materialization, "canonical-datasets", "processes"), {
     recursive: true,
   });
@@ -408,7 +564,59 @@ async function createFixture() {
     path.join(materialization, "materialization-manifest.json"),
     canonicalJson(manifest),
   );
-  return { root, materialization, intake, output };
+  await prepareReleaseIntake({
+    materializationDir: materialization,
+    sourceIntakeDir: intake,
+    outDir: releaseIntake,
+  });
+  return { root, materialization, intake, releaseIntake, output };
+}
+
+async function configureMissingMethodFlow(fixture) {
+  const sourceRecords = [
+    sourceRecord("process", "unit_process", UNIT_ID, {
+      processDataSet: { id: UNIT_ID },
+    }),
+    sourceRecord("lciamethod", "support", METHOD_ID, {
+      LCIAMethodDataSet: {
+        characterisationFactors: {
+          factor: [
+            {
+              referenceToFlowDataSet: {
+                "@type": "flow data set",
+                "@refObjectId": FLOW_ID,
+                "@version": VERSION,
+              },
+            },
+          ],
+        },
+      },
+    }),
+  ];
+  const sourceBytes = gzipSync(
+    `${sourceRecords.map((record) => JSON.stringify(record)).join("\n")}\n`,
+  );
+  await writeFile(
+    path.join(
+      fixture.intake,
+      "calculation-bundle",
+      "source",
+      "closure.ndjson.gz",
+    ),
+    sourceBytes,
+  );
+  const intakePath = path.join(fixture.intake, "intake-manifest.json");
+  const intake = JSON.parse(await readFile(intakePath, "utf8"));
+  intake.artifacts[0].sha256 = sha256Bytes(sourceBytes);
+  intake.artifacts[0].recordCount = sourceRecords.length;
+  await writeFile(intakePath, canonicalJson(intake));
+  const manifestPath = path.join(
+    fixture.materialization,
+    "materialization-manifest.json",
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.inputs.intakeManifestSha256 = hashJson(intake);
+  await writeFile(manifestPath, canonicalJson(manifest));
 }
 
 async function generatedEntry(

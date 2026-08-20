@@ -14,7 +14,9 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "canonicalize": "4.0.0"
+    "canonicalize": "4.0.0",
+    "pg": "^8.23.0",
+    "pg-query-stream": "^4.17.0"
   },
   "devDependencies": {
     "prettier": "3.6.2"

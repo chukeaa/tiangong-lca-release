@@ -1,30 +1,55 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { loadEnvFile } from "node:process";
+import { fileURLToPath } from "node:url";
 import {
   buildPackageCandidate,
   PACKAGE_PROFILE,
 } from "./lib/package-build.mjs";
+import {
+  DEFAULT_FLOW_CACHE,
+  inspectFlowCache,
+  refreshFlowCache,
+} from "./lib/flow-cache.mjs";
+import { prepareReleaseIntake } from "./lib/release-intake.mjs";
 import { replyTemplateFor } from "./reply-template-registry.mjs";
 
 const COMMAND = "package build";
+const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const DEFAULT_FLOW_CACHE_DIR = path.join(REPOSITORY_ROOT, DEFAULT_FLOW_CACHE);
 const VALUE_OPTIONS = new Set([
   "materialization",
-  "intake",
+  "source-intake",
+  "release-intake",
   "profile",
   "release-version",
   "out-dir",
   "tidas-bin",
+  "flow-cache",
 ]);
 const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
 const HELP = `release-package <command> [options]
 
 Commands:
-  package build       Build one local, unapproved Release Candidate from a frozen LifecycleModel materialization
+  cache status        Check whether the shared Elementary Flow cache is usable
+  cache refresh       Explicitly replace the shared cache from a read-only database snapshot
+  intake prepare      Expand exact LCIA Method Flow dependencies into an immutable Release Intake
+  package build       Build one local, unapproved Release Candidate from a frozen Release Intake
+
+intake prepare options:
+  --materialization <path>  Completed Result Materialization directory
+  --source-intake <path>    Frozen Materialization Intake containing source_closure
+  --out-dir <path>          New immutable Release Intake directory
+  --flow-cache <path>       Shared Elementary Flow cache; defaults to ${DEFAULT_FLOW_CACHE}
+
+cache options:
+  --flow-cache <path>       Shared cache directory; defaults to ${DEFAULT_FLOW_CACHE}
 
 package build options:
-  --materialization <path>  Completed Result Materialization directory
-  --intake <path>           Verified local intake containing source_closure
+  --release-intake <path>   Prepared immutable Release Intake directory
   --profile <id>            ${PACKAGE_PROFILE}
   --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
@@ -37,9 +62,15 @@ Common:
 The command performs no upload or publication and does not authorize either action. It delegates closure validation,
 TIDAS/eILCD validation, semantic round-trip, and deterministic ZIP creation to tidas-tools.
 
-Example:
-  release-package package build --materialization .release/materialization/lifecycle-model \\
-    --intake .release/materialization/intakes/<bundle-hash> \\
+Examples:
+  release-package cache status --json
+  release-package cache refresh --json
+
+  release-package intake prepare --materialization .release/materialization/lifecycle-model \\
+    --source-intake .release/materialization/intakes/<bundle-hash> \\
+    --out-dir .release/release/intakes/<release-intake-name> --json
+
+  release-package package build --release-intake .release/release/intakes/<release-intake-name> \\
     --profile ${PACKAGE_PROFILE} --release-version 2026.08.0 \
     --out-dir .release/candidates/<candidate-name> --json
 
@@ -52,7 +83,11 @@ async function main() {
     process.stdout.write(HELP);
     return;
   }
-  if (command !== "package" || action !== "build") {
+  if (!(
+    (command === "cache" && ["status", "refresh"].includes(action)) ||
+    (command === "intake" && action === "prepare") ||
+    (command === "package" && action === "build")
+  )) {
     throw Object.assign(
       new Error(
         `Unknown command: ${[command, action].filter(Boolean).join(" ")}`,
@@ -67,7 +102,29 @@ async function main() {
     process.stdout.write(HELP);
     return;
   }
-  requireOptions(options, ["materialization", "intake", "profile", "out-dir"]);
+  const flowCacheDir = path.resolve(
+    options["flow-cache"] ?? DEFAULT_FLOW_CACHE_DIR,
+  );
+  if (command === "cache") {
+    const result =
+      action === "refresh"
+        ? await refreshFlowCache({ cacheDir: flowCacheDir })
+        : await inspectFlowCache({ cacheDir: flowCacheDir });
+    respondCache(options, action, result, flowCacheDir);
+    return;
+  }
+  if (command === "intake") {
+    requireOptions(options, ["materialization", "source-intake", "out-dir"]);
+    const result = await prepareReleaseIntake({
+      materializationDir: path.resolve(options.materialization),
+      sourceIntakeDir: path.resolve(options["source-intake"]),
+      outDir: path.resolve(options["out-dir"]),
+      flowCacheDir,
+    });
+    respondIntake(options, result);
+    return;
+  }
+  requireOptions(options, ["release-intake", "profile", "out-dir"]);
   if (options.profile !== PACKAGE_PROFILE) {
     throw Object.assign(
       new Error(
@@ -81,8 +138,7 @@ async function main() {
     return;
   }
   const result = await buildPackageCandidate({
-    materializationDir: path.resolve(options.materialization),
-    intakeDir: path.resolve(options.intake),
+    releaseIntakeDir: path.resolve(options["release-intake"]),
     outDir: path.resolve(options["out-dir"]),
     tidasBin: options["tidas-bin"],
     releaseVersion: options["release-version"],
@@ -126,6 +182,47 @@ async function main() {
   });
 }
 
+function respondCache(options, action, result, cacheDir) {
+  const status = action === "refresh" ? "fresh" : result.status;
+  const needsRefresh = status !== "fresh";
+  const payload = {
+    ok: true,
+    command: `cache ${action}`,
+    outcome:
+      action === "refresh"
+        ? "elementary_flow_cache_refreshed"
+        : `elementary_flow_cache_${status}`,
+    completeness: needsRefresh ? "refresh_required" : "ready",
+    cache: cacheDir,
+    status,
+    recordCount: result.manifest?.artifact?.recordCount ?? 0,
+    databaseWatermark: result.database ?? result.manifest?.databaseWatermark,
+    nextActions: needsRefresh
+      ? [
+          {
+            kind: "refresh_cache",
+            description:
+              "Refresh the shared cache explicitly before preparing Release Intake.",
+            command: `node workflows/release/cli.mjs cache refresh --flow-cache ${shellQuote(cacheDir)} --json`,
+          },
+        ]
+      : [
+          {
+            kind: "prepare_release_intake",
+            description:
+              "Prepare Release Intake using this fresh shared cache.",
+            command: "node workflows/release/cli.mjs intake prepare --help",
+          },
+        ],
+    replyTemplate: replyTemplateFor(`cache ${action}`, { ok: true }),
+  };
+  if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+  else
+    process.stdout.write(
+      `Elementary Flow cache: ${status}\n- Path: ${cacheDir}\n- Records: ${payload.recordCount}\n\nNext:\n- ${payload.nextActions[0].command}\n`,
+    );
+}
+
 function respondVersionConfirmation(options) {
   const recommendedVersion = recommendedReleaseVersion();
   const fileNames = [
@@ -139,10 +236,8 @@ function respondVersionConfirmation(options) {
     "workflows/release/cli.mjs",
     "package",
     "build",
-    "--materialization",
-    path.resolve(options.materialization),
-    "--intake",
-    path.resolve(options.intake),
+    "--release-intake",
+    path.resolve(options["release-intake"]),
     "--profile",
     options.profile,
     "--release-version",
@@ -185,6 +280,42 @@ function respondVersionConfirmation(options) {
       `Reply using template:\n- ${payload.replyTemplate.path}\n`,
     );
   }
+}
+
+function respondIntake(options, result) {
+  const manifest = path.join(result.path, "release-intake-manifest.json");
+  const payload = {
+    ok: true,
+    command: "intake prepare",
+    outcome: "release_intake_prepared",
+    completeness: "exact-lcia-method-flow-dependencies-expanded",
+    releaseIntake: result.path,
+    addedExactFlowCount: result.report.addedExactFlowCount,
+    uniqueReferenceCount: result.report.uniqueReferenceCount,
+    elementaryFlowCacheRecordCount:
+      result.report.elementaryFlowCacheRecordCount,
+    artifacts: {
+      releaseIntakeManifest: manifest,
+      dependencyExpansionReport: path.join(
+        result.path,
+        "dependency-expansion-report.json",
+      ),
+    },
+    nextActions: [
+      {
+        kind: "build_candidate",
+        description:
+          "Use this frozen Release Intake to confirm a version and build the candidate.",
+        command: `node workflows/release/cli.mjs package build --release-intake ${shellQuote(result.path)} --profile ${PACKAGE_PROFILE} --out-dir <CANDIDATE_DIR> --json`,
+      },
+    ],
+    replyTemplate: replyTemplateFor("intake prepare", { ok: true }),
+  };
+  if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+  else
+    process.stdout.write(
+      `Release Intake prepared\n\nSummary:\n- Path: ${result.path}\n- Added exact Flows: ${result.report.addedExactFlowCount}\n\nNext:\n- ${payload.nextActions[0].command}\n\nReply using template:\n- ${payload.replyTemplate.path}\n`,
+    );
 }
 
 function recommendedReleaseVersion(now = new Date()) {
@@ -263,6 +394,24 @@ function shellQuote(value) {
 }
 
 function failureNextActions(error) {
+  if (String(error.code).startsWith("elementary_flow_cache_"))
+    return [
+      {
+        kind: "refresh_cache",
+        description:
+          "Inspect and explicitly refresh the shared Elementary Flow cache before retrying.",
+        command: `node workflows/release/cli.mjs cache refresh --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
+      },
+    ];
+  if (String(error.code).startsWith("release_intake_"))
+    return [
+      {
+        kind: "inspect_release_intake",
+        description:
+          "Inspect the exact dependency failure and rerun Release Intake preparation.",
+        command: "node workflows/release/cli.mjs intake prepare --help",
+      },
+    ];
   if (error.code === "tidas_executable_missing")
     return [
       {
@@ -292,6 +441,8 @@ function failureNextActions(error) {
     },
   ];
 }
+
+if (existsSync(REPOSITORY_ENV)) loadEnvFile(REPOSITORY_ENV);
 
 main().catch((error) => {
   const command = process.argv.slice(2, 4).join(" ") || COMMAND;

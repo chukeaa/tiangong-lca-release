@@ -1,6 +1,28 @@
 const ROOT = "workflows/release/reply-templates";
 
 const templates = Object.freeze({
+  "cache status": [
+    "elementary-flow-cache",
+    "elementary-flow-cache.md",
+    ["cache", "status", "recordCount", "databaseWatermark", "nextActions"],
+  ],
+  "cache refresh": [
+    "elementary-flow-cache",
+    "elementary-flow-cache.md",
+    ["cache", "status", "recordCount", "databaseWatermark", "nextActions"],
+  ],
+  "intake prepare": [
+    "release-intake-prepared",
+    "release-intake-prepared.md",
+    [
+      "releaseIntake",
+      "addedExactFlowCount",
+      "uniqueReferenceCount",
+      "elementaryFlowCacheRecordCount",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
   "package build": [
     "release-candidate-built",
     "release-candidate-built.md",
