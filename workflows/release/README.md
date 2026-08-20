@@ -123,6 +123,10 @@ node cli.mjs package build \
 
 CLI 同时面向人和 Agent：默认输出简洁的 `Summary / Next / Reply using template`；`--json` 输出一个有界对象，包含 `outcome`、`completeness`、精确 artifact 路径、结构化 `nextActions[]` 和 workflow-local `replyTemplate`。未知或重复参数会被拒绝，失败时使用非零退出码，并提供错误代码、恢复动作和对应回复模板。
 
+CLI 返回的自身命令以及返回 Result Materialization 的命令均使用绝对脚本入口，可从任意工作目录
+执行。Release Intake 准备成功后会给出确定的本地 Candidate 目录；随后省略版本号的 `package build`
+只触发版本确认，不开始构建。缓存模板直接引用 `nextActions.0.command`，不会把结构化对象原样展示给用户。
+
 回复模板位于 `reply-templates/`，目前覆盖：
 
 - ✅ 本地 Candidate 已构建并验证；

@@ -38,6 +38,8 @@ test("every successful Calculation command maps to an existing bounded template"
     assert.match(body, /```markdown/);
     assert.match(body, /{{[^}]+}}/);
     assert.match(body, /[✅🚀🔎⚠️❌]/u);
+    if (template.requiredFacts.includes("nextActions"))
+      assert.match(body, /\{\{nextActions(?:\.|\})/u, template.path);
   }
 });
 

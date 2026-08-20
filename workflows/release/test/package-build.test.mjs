@@ -374,6 +374,10 @@ test("CLI exposes one bounded local package build route", () => {
   assert.equal(unsupportedPayload.outcome, "command_failed");
   assert.equal(unsupportedPayload.completeness, "not_completed");
   assert.equal(unsupportedPayload.nextActions[0].kind, "inspect_usage");
+  assert.match(
+    unsupportedPayload.nextActions[0].command,
+    new RegExp(cli.pathname),
+  );
   assert.equal(unsupportedPayload.replyTemplate.id, "release-command-failed");
 
   const confirmation = spawnSync(
@@ -407,6 +411,11 @@ test("CLI exposes one bounded local package build route", () => {
   );
   assert.ok(
     confirmationPayload.nextActions[0].argv.includes("--release-version"),
+  );
+  assert.equal(confirmationPayload.nextActions[0].argv[1], cli.pathname);
+  assert.doesNotMatch(
+    confirmationPayload.nextActions[0].command,
+    /node workflows\//,
   );
 });
 
@@ -469,6 +478,16 @@ test("every Release CLI outcome maps to an existing bounded reply template", asy
     assert.ok(template.requiredFacts.length > 0);
     await access(path.resolve(REPOSITORY_ROOT, template.path));
   }
+});
+
+test("Release cache reply template renders the exact next command field", async () => {
+  const template = replyTemplateFor("cache status", { ok: true });
+  const body = await readFile(
+    path.resolve(REPOSITORY_ROOT, template.path),
+    "utf8",
+  );
+  assert.match(body, /\{\{nextActions\.0\.command\}\}/u);
+  assert.doesNotMatch(body, /\{\{nextActions\}\}/u);
 });
 
 async function createFixture() {

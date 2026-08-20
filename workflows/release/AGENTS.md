@@ -54,6 +54,7 @@ related:
 - 用户未提供 release version 时，Agent 必须使用 CLI 返回的推荐版本和专用回复模板请求确认；确认前不得启动构建。不得把年月推荐值或 mutable `latest` 当作用户已确认。
 - 输出目录不可覆盖；失败只能留下可清理的临时 workspace，不得形成可见 Candidate。
 - CLI 的人类输出必须包含有界 `Summary / Next / Reply using template`；JSON 输出必须保持单对象、可解析，并携带 `outcome`、`completeness`、artifact 引用、`nextActions[]` 和 `replyTemplate`。
+- CLI 返回的自身命令和跨 Result Materialization 命令必须使用由 `import.meta.url` 生成的绝对入口，确保从任意 cwd 可复制执行。Release Intake 准备成功后应返回确定的 Candidate 输出目录，不把 `<CANDIDATE_DIR>` 留给 Agent 猜测。
 - CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
 - Agent 回复必须读取 CLI 指定的 workflow-local 模板，以真实字段替换占位符；不得把 Candidate build 回复成批准、上传或发布完成。
 

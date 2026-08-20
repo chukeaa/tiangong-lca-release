@@ -168,6 +168,11 @@ node cli.mjs job cancel --job-id <UUID> --json
 `job logs --help` 和 `job cancel --help`。帮助请求退出码为 0，不要求业务参数，
 也不会启动或读取任务。
 
+CLI 在 JSON 中返回结构化 `nextAction`（`kind`、`description`、可执行时的 `command` 和可选
+alternatives），所有命令使用当前机器上的绝对 `cli.mjs` 入口，不依赖调用者 cwd。Intake 完成后先让
+用户选择范围、最终对象和 Result Process 内容层；后台任务运行时优先读取同一 Job 状态，日志只作为
+诊断；成功终态直接给出绑定当前 Materialization 与原始 Intake 的 Release Intake 准备命令。
+
 生成阶段默认使用 2 个有界 render/write worker，可以用 `--concurrency 1..16` 调整。并发只控制已经冻结版本后的逐条渲染和写入，不改变 selection、identity/version 规划顺序，也不会启动无界任务集合。增加并发前应先观察相同样本的 RSS、heap、吞吐和磁盘余量。
 
 默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，默认 intake 和 materialization 则分别位于 `intakes/<calculation-id>/<bundle-content-hash>/` 与 `materializations/<calculation-id>/<bundle-content-hash>/<materialization-key-sha256>/`。`--artifact-root` 可以整体迁移这个本地 workspace。高级场景仍可显式提供 `--out-dir`，但不会覆盖已有目录。
@@ -190,7 +195,8 @@ Runner 在 phase/progress 更新以及每 5 秒记录结构化资源采样。`jo
 
 Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。领域原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。整个过程不会上传或发布。
 
-CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和下一条可复制命令；大数据集始终写入文件。
+CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和状态感知的下一条可复制命令；错误也返回
+当前动作的绝对 help 恢复命令。大数据集始终写入文件。
 
 ## 需要用户决定的内容
 

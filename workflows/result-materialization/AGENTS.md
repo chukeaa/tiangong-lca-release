@@ -46,9 +46,11 @@ related:
 
 - `materialize start` 只用 `nohup` 启动现有 materialization engine，不拥有独立 recipe、队列、daemon 或自动重试语义。
 - 顶层命令及 `intake`、`materialize`、`materialize start`、`job get`、`job logs`、`job cancel` 都必须支持无副作用的 `--help`，以退出码 0 返回当前动作所需参数。
+- CLI 返回的帮助、状态、日志、错误恢复和跨 Workflow 命令必须由 `import.meta.url` 生成绝对入口，能够从任意 cwd 复制执行。`nextAction` 必须包含当前状态对应的 `kind`、`description` 和可执行时的 `command`，不能把多个动作压成一段无结构文本。
 - 每次后台尝试使用随机 `jobId`；它只标识执行尝试，不进入 Result/Model identity、version 或 canonical 输出路径。
 - `job.json` 和 request 创建后不可改写；`job.log` 只追加；`status.json` 使用临时 sibling + rename 原子更新；终态写入 `exit-code` 和 `result.json`。
 - `start` 成功只表示请求已持久化且 runner 已启动，不表示 Materialization 成功。
+- `materialize start` 和运行中 `job get` 的首要动作是读取同一个 Job 的有界状态，日志是可选诊断动作；`job get` 观察到 `succeeded` 后必须直接提供绑定输出和原始 Intake 的 Release Intake 准备命令。
 - `job get` 必须同时核对 PID 存活和 command line 中的 runner/job directory，不能只用 `kill(pid, 0)` 判断或操作进程。
 - `job logs` 必须限制 tail 为 1–500，并限制单行长度；不得把数据集内容、secret 或无界错误详情写入 stdout。
 - `job cancel` 只向精确匹配的 runner 发送 `SIGTERM`；终态 Job 的 cancel 是无副作用的幂等读取。

@@ -16,6 +16,12 @@ import { prepareReleaseIntake } from "./lib/release-intake.mjs";
 import { replyTemplateFor } from "./reply-template-registry.mjs";
 
 const COMMAND = "package build";
+const RELEASE_CLI_PATH = fileURLToPath(new URL("./cli.mjs", import.meta.url));
+const RELEASE_COMMAND = `node ${shellQuote(RELEASE_CLI_PATH)}`;
+const MATERIALIZATION_CLI_PATH = fileURLToPath(
+  new URL("../result-materialization/cli.mjs", import.meta.url),
+);
+const MATERIALIZATION_COMMAND = `node ${shellQuote(MATERIALIZATION_CLI_PATH)}`;
 const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const DEFAULT_FLOW_CACHE_DIR = path.join(REPOSITORY_ROOT, DEFAULT_FLOW_CACHE);
@@ -203,7 +209,7 @@ function respondCache(options, action, result, cacheDir) {
             kind: "refresh_cache",
             description:
               "Refresh the shared cache explicitly before preparing Release Intake.",
-            command: `node workflows/release/cli.mjs cache refresh --flow-cache ${shellQuote(cacheDir)} --json`,
+            command: `${RELEASE_COMMAND} cache refresh --flow-cache ${shellQuote(cacheDir)} --json`,
           },
         ]
       : [
@@ -211,7 +217,7 @@ function respondCache(options, action, result, cacheDir) {
             kind: "prepare_release_intake",
             description:
               "Prepare Release Intake using this fresh shared cache.",
-            command: "node workflows/release/cli.mjs intake prepare --help",
+            command: `${RELEASE_COMMAND} intake prepare --help`,
           },
         ],
     replyTemplate: replyTemplateFor(`cache ${action}`, { ok: true }),
@@ -219,7 +225,7 @@ function respondCache(options, action, result, cacheDir) {
   if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
   else
     process.stdout.write(
-      `Elementary Flow cache: ${status}\n- Path: ${cacheDir}\n- Records: ${payload.recordCount}\n\nNext:\n- ${payload.nextActions[0].command}\n`,
+      `Elementary Flow cache: ${status}\n- Path: ${cacheDir}\n- Records: ${payload.recordCount}\n\nNext:\n- ${payload.nextActions[0].command}\n\nReply using template:\n- ${payload.replyTemplate.path}\n`,
     );
 }
 
@@ -233,7 +239,7 @@ function respondVersionConfirmation(options) {
   ].map((suffix) => `TiangongLCA-${recommendedVersion}-${suffix}`);
   const argv = [
     "node",
-    "workflows/release/cli.mjs",
+    RELEASE_CLI_PATH,
     "package",
     "build",
     "--release-intake",
@@ -284,6 +290,12 @@ function respondVersionConfirmation(options) {
 
 function respondIntake(options, result) {
   const manifest = path.join(result.path, "release-intake-manifest.json");
+  const candidateDir = path.join(
+    REPOSITORY_ROOT,
+    ".release",
+    "candidates",
+    path.basename(result.path),
+  );
   const payload = {
     ok: true,
     command: "intake prepare",
@@ -306,7 +318,7 @@ function respondIntake(options, result) {
         kind: "build_candidate",
         description:
           "Use this frozen Release Intake to confirm a version and build the candidate.",
-        command: `node workflows/release/cli.mjs package build --release-intake ${shellQuote(result.path)} --profile ${PACKAGE_PROFILE} --out-dir <CANDIDATE_DIR> --json`,
+        command: `${RELEASE_COMMAND} package build --release-intake ${shellQuote(result.path)} --profile ${PACKAGE_PROFILE} --out-dir ${shellQuote(candidateDir)} --json`,
       },
     ],
     replyTemplate: replyTemplateFor("intake prepare", { ok: true }),
@@ -400,7 +412,7 @@ function failureNextActions(error) {
         kind: "refresh_cache",
         description:
           "Inspect and explicitly refresh the shared Elementary Flow cache before retrying.",
-        command: `node workflows/release/cli.mjs cache refresh --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
+        command: `${RELEASE_COMMAND} cache refresh --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
       },
     ];
   if (String(error.code).startsWith("release_intake_"))
@@ -409,7 +421,7 @@ function failureNextActions(error) {
         kind: "inspect_release_intake",
         description:
           "Inspect the exact dependency failure and rerun Release Intake preparation.",
-        command: "node workflows/release/cli.mjs intake prepare --help",
+        command: `${RELEASE_COMMAND} intake prepare --help`,
       },
     ];
   if (error.code === "tidas_executable_missing")
@@ -429,15 +441,18 @@ function failureNextActions(error) {
         kind: "return_to_materialization",
         description:
           "Inspect the frozen materialization evidence and regenerate it if the source bytes intentionally changed.",
-        command:
-          "node workflows/result-materialization/cli.mjs materialize --help",
+        command: `${MATERIALIZATION_COMMAND} materialize --help`,
       },
     ];
   return [
     {
       kind: "inspect_usage",
       description: "Inspect supported inputs and retry with corrected options.",
-      command: "node workflows/release/cli.mjs package build --help",
+      command: `${RELEASE_COMMAND} ${
+        error.code === "tidas_package_build_failed"
+          ? "package build --help"
+          : "--help"
+      }`,
     },
   ];
 }
