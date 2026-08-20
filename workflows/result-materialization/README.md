@@ -195,6 +195,8 @@ Runner 在 phase/progress 更新以及每 5 秒记录结构化资源采样。`jo
 
 Quantitative reference 不假设为 Output。新 process-axis v2 直接提供 raw direction/amount、signed coefficient、normalization scale 和 normalized coefficient；`R(P)` 保留原始方向并使用 normalized amount，`M(P)` 的根 `U(P)` instance 使用 normalization scale。旧 Bundle 只从 intake 内已经 hash 校验的 exact source closure 回推这些字段并记录 legacy fallback evidence，不访问数据库或 mutable latest。领域原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。整个过程不会上传或发布。
 
+`R(P)` 的 reference exchange 不是源 Unit Process exchange 的整体副本。Renderer 只投影已验证的 Flow reference、可选 location、raw direction、normalized amount 和生成状态；allocation、`referenceToVariable`、formula、uncertainty 等依赖源文档其他节点的字段不会跨文档继承。写出前还会检查 generated Process 内 quantitative reference、exchange ID、allocation co-product 和 variable reference 的局部闭合；完整 TIDAS/eILCD 语义校验仍由 Release 阶段执行。
+
 CLI 的 `--json` 输出保持有界，包含 completeness、产物路径和状态感知的下一条可复制命令；错误也返回
 当前动作的绝对 help 恢复命令。大数据集始终写入文件。
 
@@ -235,6 +237,7 @@ Materialization Manifest 至少绑定：
 
 - TIDAS schema 和 canonical JSON；
 - quantitative reference 唯一且完整；
+- generated Process 的 exchange ID、allocation co-product 和 variable reference 在文档内闭合；
 - source Process、LifecycleModel、Result Process identity/version 一致；
 - LifecycleModel resulting Process 引用闭合；
 - 每条有效 direct provider edge 与 LifecycleModel provider instance 一一对应；

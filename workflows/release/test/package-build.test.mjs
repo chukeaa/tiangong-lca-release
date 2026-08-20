@@ -19,6 +19,7 @@ import {
   buildPackageCandidate,
   EXPECTED_TIDAS_VERSION,
   PACKAGE_PROFILE,
+  runTidas,
   verifyTidasRuntime,
   verifyBuiltPackages,
 } from "../lib/package-build.mjs";
@@ -105,6 +106,84 @@ test("release package adapter requires exact tidas v0.2.0 contract", async () =>
       }),
     }),
     (error) => error.code === "tidas_version_incompatible",
+  );
+});
+
+test("failed package construction retains the structured tidas operation report", async () => {
+  const fixture = await createFixture();
+  const operationReport = {
+    schema_version: "tidas.operation-report.v1",
+    status: "failed",
+    exit_class: "validation_failed",
+    completeness: "complete",
+    summary: { error_count: 2 },
+    issues: [
+      { code: "allocation_coproduct_reference_missing", count: 1 },
+      { code: "variable_parameter_reference_missing", count: 1 },
+    ],
+  };
+  const spawnCommand = async (_command, args) => {
+    if (args[0] === "version")
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          schema_version: "tidas.operation-report.v1",
+          status: "succeeded",
+          exit_class: "success",
+          completeness: "complete",
+          summary: {
+            binary_version: EXPECTED_TIDAS_VERSION,
+            operation_report_schema: "tidas.operation-report.v1",
+          },
+        }),
+        stderr: "",
+      };
+    if (args[0] === "validate")
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          schema_version: "tidas.operation-report.v1",
+          status: "succeeded",
+          exit_class: "success",
+          completeness: "complete",
+          summary: {
+            validation_describe: {
+              schema_version: "tidas.validation-describe.v1",
+              package: { name: "tidas", version: EXPECTED_TIDAS_VERSION },
+              protocols: ["document-validation-batch.v1"],
+              asset_fingerprint: "fixture-fingerprint",
+            },
+          },
+        }),
+        stderr: "",
+      };
+    return {
+      code: 2,
+      stdout: JSON.stringify(operationReport),
+      stderr: "package construction failed",
+    };
+  };
+
+  let observedError;
+  try {
+    await buildPackageCandidate({
+      releaseIntakeDir: fixture.releaseIntake,
+      outDir: fixture.output,
+      releaseVersion: RELEASE_VERSION,
+      runTool: (request) => runTidas({ ...request, spawnCommand }),
+    });
+  } catch (error) {
+    observedError = error;
+  }
+  assert.equal(observedError.code, "tidas_package_build_failed");
+  assert.deepEqual(observedError.details.operationReport, operationReport);
+  const failureManifest = JSON.parse(
+    await readFile(observedError.details.retainedBuild.manifest, "utf8"),
+  );
+  assert.equal(failureManifest.status, "package_build_failed");
+  assert.deepEqual(
+    failureManifest.failure.diagnostics.operationReport,
+    operationReport,
   );
 });
 

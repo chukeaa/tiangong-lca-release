@@ -171,6 +171,8 @@ Release 只实现当前产品契约明确要求的 LCIA Method characterisation 
 
 Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只说明构建产物存在；TIDAS/eILCD 回读全部通过后，它们才具备成为 Candidate 的资格。失败时，用户请求的 Candidate 目录保持不存在，Workflow 将 staging 原子保留到同级唯一目录 `<candidate>.failed-<run-suffix>/`。该目录包含 `failed-package-build.json`、已有的四个 ZIP、`package-verification-report.json`（若已进入逐包验证）以及 `validation-readback/`。CLI 返回这些精确路径和查看命令，便于定位 schema、转换或数据字段问题；失败构建始终记录 `candidateCreated=false` 和 `publicationAuthorized=false`。
 
+如果 `tidas release build-packages --format json` 在构建阶段非零退出，Workflow 会把有界 stdout 解析为结构化 operation report 并保存在 `failed-package-build.json` 的 `failure.diagnostics.operationReport`；stdout 不是有效 JSON 时才保存有界 `stdoutTail`。这样字段级 validation issues 不会因 stderr 为空或只含摘要而丢失。
+
 Candidate 目录包含：
 
 ```text

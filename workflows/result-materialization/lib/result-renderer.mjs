@@ -37,7 +37,7 @@ export function renderResultProcess(
       },
     );
   }
-  const referenceExchange = validateReference(sourceDocument, axis);
+  const referenceExchange = projectReferenceExchange(sourceDocument, axis);
   const identity = resultIdentity(
     axis.rootProcess.id,
     axis.quantitativeReference.flow.id,
@@ -65,14 +65,6 @@ export function renderResultProcess(
     `https://lcdn.tiangong.earth/datasetdetail/process.xhtml?uuid=${identity.uuid}&version=${version}`;
   publication["common:workflowAndPublicationStatus"] = "Working draft";
 
-  referenceExchange["@dataSetInternalID"] = "0";
-  referenceExchange.exchangeDirection = axis.referencePivot.rawDirection;
-  referenceExchange.meanAmount = finiteString(
-    axis.referencePivot.normalizedMeanAmount,
-    "quantitativeReference.normalizedMeanAmount",
-  );
-  referenceExchange.resultingAmount = referenceExchange.meanAmount;
-  referenceExchange.dataDerivationTypeStatus = "Calculated";
   data.processInformation.quantitativeReference.referenceToReferenceFlow = "0";
   const lci = [...(context.lci.get(axis.processIndex) ?? [])].sort(
     compareInventory,
@@ -114,6 +106,7 @@ export function renderResultProcess(
     };
   } else delete data.LCIAResults;
 
+  validateGeneratedProcessReferences(result);
   const validation = ProcessSchema.safeParse(result);
   if (!validation.success) {
     fail(
@@ -139,7 +132,7 @@ export function renderResultProcess(
   };
 }
 
-function validateReference(unitProcess, axis) {
+function projectReferenceExchange(unitProcess, axis) {
   const data = unitProcess.processDataSet;
   const internalId = String(
     data.processInformation.quantitativeReference.referenceToReferenceFlow,
@@ -173,7 +166,93 @@ function validateReference(unitProcess, axis) {
       "Source reference exchange does not match the Calculation Bundle axis",
     );
   }
-  return structuredClone(exchange);
+  const meanAmount = finiteString(
+    axis.referencePivot.normalizedMeanAmount,
+    "quantitativeReference.normalizedMeanAmount",
+  );
+  return {
+    "@dataSetInternalID": "0",
+    referenceToFlowDataSet: structuredClone(flow),
+    ...(exchange.location
+      ? { location: structuredClone(exchange.location) }
+      : {}),
+    exchangeDirection: axis.referencePivot.rawDirection,
+    meanAmount,
+    resultingAmount: meanAmount,
+    dataDerivationTypeStatus: "Calculated",
+  };
+}
+
+export function validateGeneratedProcessReferences(document) {
+  const data = document?.processDataSet;
+  const exchanges = asArray(data?.exchanges?.exchange);
+  const ids = new Set();
+  for (const exchange of exchanges) {
+    const id = String(exchange?.["@dataSetInternalID"] ?? "");
+    if (!id || ids.has(id))
+      fail(
+        "generated_process_internal_reference_invalid",
+        "Generated Result Process exchange IDs must be present and unique",
+        { kind: "exchange_id", internalId: id || null },
+      );
+    ids.add(id);
+  }
+
+  const quantitativeReference = String(
+    data?.processInformation?.quantitativeReference?.referenceToReferenceFlow ??
+      "",
+  );
+  if (!quantitativeReference || !ids.has(quantitativeReference))
+    fail(
+      "generated_process_internal_reference_invalid",
+      "Generated Result Process quantitative reference does not resolve",
+      {
+        kind: "quantitative_reference",
+        internalReference: quantitativeReference || null,
+      },
+    );
+
+  const variableNames = new Set(
+    asArray(data?.processInformation?.mathematicalRelations?.variableParameter)
+      .map((parameter) => parameter?.["@name"])
+      .filter((name) => typeof name === "string" && name.length > 0),
+  );
+  for (const exchange of exchanges) {
+    const exchangeId = String(exchange["@dataSetInternalID"]);
+    for (const allocation of asArray(exchange.allocations?.allocation)) {
+      const coProduct = String(
+        allocation?.["@internalReferenceToCoProduct"] ?? "",
+      );
+      if (!coProduct || !ids.has(coProduct))
+        fail(
+          "generated_process_internal_reference_invalid",
+          "Generated Result Process allocation references a missing co-product exchange",
+          {
+            kind: "allocation_coproduct",
+            exchangeInternalId: exchangeId,
+            internalReference: coProduct || null,
+          },
+        );
+    }
+    for (const variableReference of asArray(exchange.referenceToVariable)) {
+      const variableName = String(variableReference ?? "");
+      if (!variableName || !variableNames.has(variableName))
+        fail(
+          "generated_process_internal_reference_invalid",
+          "Generated Result Process exchange references a missing variable parameter",
+          {
+            kind: "variable_parameter",
+            exchangeInternalId: exchangeId,
+            variableReference: variableName || null,
+          },
+        );
+    }
+  }
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 function supportReference(context, datasetType, identity) {

@@ -20,7 +20,7 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-20
-lastReviewedCommit: d9f2088e7945660dc98f53a8f63af200d8e24d90
+lastReviewedCommit: befebe0230257cec198123f184cc6fae60c693de
 lastReviewedNote: "Reviewed Result Materialization batch execution boundaries, bounded concurrency, resource observability, and atomic local output."
 related:
   - AGENTS.md
