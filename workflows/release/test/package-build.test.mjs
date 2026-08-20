@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   access,
+  chmod,
   mkdtemp,
   mkdir,
   readFile,
@@ -178,6 +179,150 @@ test("package build fails before tidas-tools when materialized bytes drift", asy
     (error) => error.code === "materialized_dataset_hash_mismatch",
   );
   assert.equal(invoked, false);
+});
+
+test("failed TIDAS and eILCD qualification retain distinct diagnostic builds", async () => {
+  const fixture = await createFixture();
+  for (const failedFormat of ["tidas", "ilcd"]) {
+    let observedError;
+    try {
+      await buildPackageCandidate({
+        releaseIntakeDir: fixture.releaseIntake,
+        outDir: fixture.output,
+        releaseVersion: RELEASE_VERSION,
+        runTool: writeFixturePackages,
+        verifyTool: (request) =>
+          verifyBuiltPackages({
+            ...request,
+            spawnCommand: async (command, args) => {
+              if (command === "unzip" && args[0] === "-Z1")
+                return {
+                  code: 0,
+                  stdout: "data/example.json\n",
+                  stderr: "",
+                };
+              if (command === "unzip")
+                return { code: 0, stdout: "", stderr: "" };
+              const format = args[1] === "validate-tidas" ? "tidas" : "ilcd";
+              return format === failedFormat
+                ? {
+                    code: 2,
+                    stdout: "",
+                    stderr: `${failedFormat} schema mismatch`,
+                  }
+                : {
+                    code: 0,
+                    stdout: JSON.stringify({ ok: true }),
+                    stderr: "",
+                  };
+            },
+          }),
+      });
+    } catch (error) {
+      observedError = error;
+    }
+    assert.equal(
+      observedError.code,
+      `${failedFormat}_package_validation_failed`,
+    );
+    assert.equal(observedError.details.format, failedFormat);
+    assert.equal(observedError.details.retainedBuild.packageCount, 4);
+    assert.equal(
+      observedError.details.retainedBuild.publicationAuthorized,
+      false,
+    );
+    const retained = observedError.details.retainedBuild.path;
+    const failureManifest = JSON.parse(
+      await readFile(path.join(retained, "failed-package-build.json"), "utf8"),
+    );
+    assert.equal(failureManifest.status, "qualification_failed");
+    assert.equal(failureManifest.candidateCreated, false);
+    assert.equal(failureManifest.failure.format, failedFormat);
+    assert.match(
+      failureManifest.failure.diagnostics.stderr,
+      new RegExp(`${failedFormat} schema mismatch`, "u"),
+    );
+    assert.equal(failureManifest.packages.length, 4);
+    const verification = JSON.parse(
+      await readFile(
+        path.join(retained, "package-verification-report.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(verification.outcome, "failed");
+    assert.equal(verification.failure.format, failedFormat);
+    await access(path.join(retained, "validation-readback"));
+  }
+  await assert.rejects(
+    access(fixture.output),
+    (error) => error.code === "ENOENT",
+  );
+  const retainedNames = (await readdir(fixture.root)).filter((name) =>
+    name.startsWith("candidate.failed-"),
+  );
+  assert.equal(retainedNames.length, 2);
+  assert.equal(new Set(retainedNames).size, 2);
+});
+
+test("CLI returns retained packages and failure manifest after package build failure", async () => {
+  const fixture = await createFixture();
+  const fakeTidas = path.join(fixture.root, "fake-tidas.sh");
+  await writeFile(
+    fakeTidas,
+    `#!/bin/sh
+output_dir=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output-dir" ]; then
+    shift
+    output_dir="$1"
+  fi
+  shift
+done
+mkdir -p "$output_dir"
+for name in unit-process-full-closure.v1.tidas.zip unit-process-full-closure.v1.ilcd.zip standalone-lifecyclemodel-result-full-closure.v1.tidas.zip standalone-lifecyclemodel-result-full-closure.v1.ilcd.zip; do
+  printf '%s' "$name" > "$output_dir/$name"
+done
+printf '%s' '{"ok":true,"release":{"outcome":"built","packageCount":4}}'
+exit 0
+`,
+  );
+  await chmod(fakeTidas, 0o755);
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const result = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "package",
+      "build",
+      "--release-intake",
+      fixture.releaseIntake,
+      "--profile",
+      PACKAGE_PROFILE,
+      "--release-version",
+      RELEASE_VERSION,
+      "--out-dir",
+      fixture.output,
+      "--tidas-bin",
+      fakeTidas,
+      "--json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stderr);
+  assert.equal(payload.outcome, "packages_built_qualification_failed");
+  assert.equal(payload.completeness, "diagnostic_artifacts_retained");
+  assert.equal(payload.publicationAuthorized, false);
+  await access(payload.artifacts.failedBuild);
+  await access(payload.artifacts.failureManifest);
+  assert.equal(payload.nextActions[0].kind, "inspect_failed_build");
+  assert.match(payload.nextActions[0].command, /failed-package-build\.json/u);
+  assert.equal(payload.nextActions[1].kind, "inspect_retained_artifacts");
+  assert.equal(payload.replyTemplate.id, "release-package-validation-failed");
+  await assert.rejects(
+    access(fixture.output),
+    (error) => error.code === "ENOENT",
+  );
 });
 
 test("Release Intake expands exact LCIA Method Flow dependencies without mutating source intake", async () => {
@@ -473,6 +618,11 @@ test("every Release CLI outcome maps to an existing bounded reply template", asy
       ok: false,
       errorCode: "unsupported_package_profile",
     }),
+    replyTemplateFor("package build", {
+      ok: false,
+      errorCode: "ilcd_package_validation_failed",
+      retainedBuild: true,
+    }),
   ]) {
     assert.ok(template.id);
     assert.ok(template.requiredFacts.length > 0);
@@ -489,6 +639,18 @@ test("Release cache reply template renders the exact next command field", async 
   assert.match(body, /\{\{nextActions\.0\.command\}\}/u);
   assert.doesNotMatch(body, /\{\{nextActions\}\}/u);
 });
+
+async function writeFixturePackages({ packagesDir }) {
+  await mkdir(packagesDir, { recursive: true });
+  for (const name of [
+    "unit-process-full-closure.v1.tidas.zip",
+    "unit-process-full-closure.v1.ilcd.zip",
+    "standalone-lifecyclemodel-result-full-closure.v1.tidas.zip",
+    "standalone-lifecyclemodel-result-full-closure.v1.ilcd.zip",
+  ])
+    await writeFile(path.join(packagesDir, name), `fixture:${name}`);
+  return { ok: true, release: { outcome: "built", packageCount: 4 } };
+}
 
 async function createFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "release-package-"));

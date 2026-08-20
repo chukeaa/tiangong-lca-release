@@ -52,6 +52,11 @@ export async function buildPackageCandidate({
   await assertTargetAbsent(target);
   const workspace = await mkdtemp(`${target}.work-`);
   const candidateStaging = await mkdtemp(`${target}.tmp-`);
+  const failedBuildTarget = failedBuildPath(target, candidateStaging);
+  let packageBuildStarted = false;
+  let qualificationStarted = false;
+  let cleanupCandidateStaging = true;
+  let plan;
   try {
     const manifest = await readJson(
       path.join(materializationRoot, "materialization-manifest.json"),
@@ -85,7 +90,7 @@ export async function buildPackageCandidate({
     const assembledIndex = buildIndex(entries);
     const indexPath = path.join(workspace, "canonical-dataset-index.json");
     await writeFile(indexPath, canonicalJson(assembledIndex), { flag: "wx" });
-    const plan = {
+    plan = {
       schemaVersion: "tiangong.release.package-plan.v1",
       releaseVersion,
       profile: PACKAGE_PROFILE,
@@ -116,6 +121,15 @@ export async function buildPackageCandidate({
       path.join(candidateStaging, "canonical-dataset-index.json"),
     );
     const packagesDir = path.join(candidateStaging, "packages");
+    const verificationWorkspace = path.join(
+      candidateStaging,
+      "validation-readback",
+    );
+    const verificationReportPath = path.join(
+      candidateStaging,
+      "package-verification-report.json",
+    );
+    packageBuildStarted = true;
     const toolResult = await runTool({
       tidasBin,
       canonicalRoot,
@@ -123,22 +137,25 @@ export async function buildPackageCandidate({
       packagesDir,
     });
     await applyDistributionNames(packagesDir, releaseVersion);
-    const packageVerification = await verifyTool({
-      tidasBin,
-      packagesDir,
-      workspace,
-      releaseVersion,
-    });
     await writeFile(
       path.join(candidateStaging, "tidas-release-report.json"),
       canonicalJson(toolResult),
       { flag: "wx" },
     );
+    qualificationStarted = true;
+    const packageVerification = await verifyTool({
+      tidasBin,
+      packagesDir,
+      workspace: verificationWorkspace,
+      releaseVersion,
+      reportPath: verificationReportPath,
+    });
     await writeFile(
-      path.join(candidateStaging, "package-verification-report.json"),
+      verificationReportPath,
       canonicalJson(packageVerification),
       { flag: "wx" },
     );
+    await rm(verificationWorkspace, { recursive: true, force: true });
     const packages = await packageArtifacts(packagesDir);
     if (
       packages.length !== 4 ||
@@ -181,10 +198,129 @@ export async function buildPackageCandidate({
   } catch (error) {
     if (error.code === "EEXIST" || error.code === "ENOTEMPTY")
       fail("output_exists", `Refusing to overwrite existing output: ${target}`);
+    if (packageBuildStarted && error.code !== "tidas_executable_missing") {
+      cleanupCandidateStaging = false;
+      const retained = await retainFailedBuild({
+        candidateStaging,
+        failedBuildTarget,
+        target,
+        releaseVersion,
+        plan,
+        qualificationStarted,
+        error,
+      });
+      error.details = {
+        ...(error.details ?? {}),
+        retainedBuild: retained,
+      };
+    }
     throw error;
   } finally {
     await rm(workspace, { recursive: true, force: true });
-    await rm(candidateStaging, { recursive: true, force: true });
+    if (cleanupCandidateStaging)
+      await rm(candidateStaging, { recursive: true, force: true });
+  }
+}
+
+function failedBuildPath(target, candidateStaging) {
+  const stagingPrefix = `${target}.tmp-`;
+  const suffix = candidateStaging.startsWith(stagingPrefix)
+    ? candidateStaging.slice(stagingPrefix.length)
+    : path.basename(candidateStaging);
+  return `${target}.failed-${suffix}`;
+}
+
+async function retainFailedBuild({
+  candidateStaging,
+  failedBuildTarget,
+  target,
+  releaseVersion,
+  plan,
+  qualificationStarted,
+  error,
+}) {
+  const packagesDir = path.join(candidateStaging, "packages");
+  const packages = await packageArtifactsIfPresent(packagesDir);
+  const failure = {
+    code: error.code ?? "unexpected_error",
+    message: error.message,
+    stage: error.details?.stage ?? "package_build_or_validation",
+    format: error.details?.format,
+    product: error.details?.product,
+    fileName: error.details?.fileName,
+    diagnostics: {
+      stderr: error.details?.stderr,
+    },
+  };
+  const artifacts = {
+    packagePlan: "package-plan.json",
+    canonicalDatasetIndex: "canonical-dataset-index.json",
+    packagesDirectory: "packages",
+  };
+  if (
+    await pathExists(path.join(candidateStaging, "tidas-release-report.json"))
+  )
+    artifacts.tidasReport = "tidas-release-report.json";
+  if (
+    await pathExists(
+      path.join(candidateStaging, "package-verification-report.json"),
+    )
+  )
+    artifacts.packageVerification = "package-verification-report.json";
+  if (await pathExists(path.join(candidateStaging, "validation-readback")))
+    artifacts.validationReadbackDirectory = "validation-readback";
+  const manifest = {
+    schemaVersion: "tiangong.release.failed-package-build.v1",
+    status: qualificationStarted
+      ? "qualification_failed"
+      : "package_build_failed",
+    publicationAuthorized: false,
+    candidateCreated: false,
+    releaseVersion,
+    profile: PACKAGE_PROFILE,
+    requestedCandidatePath: target,
+    packagePlanSha256: plan ? hashJson(plan) : undefined,
+    packages,
+    failure,
+    artifacts,
+  };
+  try {
+    await writeFile(
+      path.join(candidateStaging, "failed-package-build.json"),
+      canonicalJson(manifest),
+      { flag: "wx" },
+    );
+    await rename(candidateStaging, failedBuildTarget);
+    return {
+      path: failedBuildTarget,
+      manifest: path.join(failedBuildTarget, "failed-package-build.json"),
+      packagesDirectory: path.join(failedBuildTarget, "packages"),
+      validationReadbackDirectory: artifacts.validationReadbackDirectory
+        ? path.join(failedBuildTarget, artifacts.validationReadbackDirectory)
+        : undefined,
+      packageCount: packages.length,
+      status: manifest.status,
+      publicationAuthorized: false,
+    };
+  } catch (preservationError) {
+    const stagingManifest = path.join(
+      candidateStaging,
+      "failed-package-build.json",
+    );
+    return {
+      path: candidateStaging,
+      manifest: (await pathExists(stagingManifest))
+        ? stagingManifest
+        : undefined,
+      packagesDirectory: path.join(candidateStaging, "packages"),
+      validationReadbackDirectory: artifacts.validationReadbackDirectory
+        ? path.join(candidateStaging, artifacts.validationReadbackDirectory)
+        : undefined,
+      packageCount: packages.length,
+      status: "preserved_in_staging",
+      publicationAuthorized: false,
+      preservationError: preservationError.message,
+    };
   }
 }
 
@@ -217,6 +353,7 @@ export async function verifyBuiltPackages({
   packagesDir,
   workspace,
   releaseVersion,
+  reportPath,
   spawnCommand = spawnBounded,
 }) {
   const packages = [];
@@ -226,10 +363,18 @@ export async function verifyBuiltPackages({
     const archiveBytes = await readFile(archive);
     const listing = await spawnCommand("unzip", ["-Z1", archive]);
     if (listing.code !== 0)
-      fail(
-        "package_archive_invalid",
-        `Cannot read ZIP member catalog: ${fileName}`,
-      );
+      await failPackageVerification({
+        code: "package_archive_invalid",
+        message: `Cannot read ZIP member catalog: ${fileName}`,
+        stage: "zip_catalog",
+        format,
+        product,
+        fileName,
+        stderr: listing.stderr,
+        completedPackages: packages,
+        releaseVersion,
+        reportPath,
+      });
     const members = listing.stdout.split(/\r?\n/u).filter(Boolean);
     if (
       members.length === 0 ||
@@ -238,10 +383,17 @@ export async function verifyBuiltPackages({
           member.startsWith("/") || member.split(/[\\/]/u).includes(".."),
       )
     )
-      fail(
-        "package_archive_invalid",
-        `ZIP contains no members or unsafe paths: ${fileName}`,
-      );
+      await failPackageVerification({
+        code: "package_archive_invalid",
+        message: `ZIP contains no members or unsafe paths: ${fileName}`,
+        stage: "zip_catalog",
+        format,
+        product,
+        fileName,
+        completedPackages: packages,
+        releaseVersion,
+        reportPath,
+      });
     const extracted = path.join(workspace, "readback", fileName);
     await mkdir(extracted, { recursive: true });
     const extraction = await spawnCommand("unzip", [
@@ -251,7 +403,18 @@ export async function verifyBuiltPackages({
       extracted,
     ]);
     if (extraction.code !== 0)
-      fail("package_archive_invalid", `Cannot extract ZIP: ${fileName}`);
+      await failPackageVerification({
+        code: "package_archive_invalid",
+        message: `Cannot extract ZIP: ${fileName}`,
+        stage: "zip_readback",
+        format,
+        product,
+        fileName,
+        stderr: extraction.stderr,
+        completedPackages: packages,
+        releaseVersion,
+        reportPath,
+      });
     const action = format === "tidas" ? "validate-tidas" : "validate-ilcd";
     const validation = await spawnCommand(tidasBin, [
       "release",
@@ -262,19 +425,34 @@ export async function verifyBuiltPackages({
       "json",
     ]);
     if (validation.code !== 0)
-      fail(
-        `${format}_package_validation_failed`,
-        `${format.toUpperCase()} validation failed after ZIP readback: ${fileName}`,
-        { stderr: validation.stderr.slice(-4000) },
-      );
+      await failPackageVerification({
+        code: `${format}_package_validation_failed`,
+        message: `${format.toUpperCase()} validation failed after ZIP readback: ${fileName}`,
+        stage: action,
+        format,
+        product,
+        fileName,
+        stderr: validation.stderr,
+        completedPackages: packages,
+        releaseVersion,
+        reportPath,
+      });
     let report;
     try {
       report = JSON.parse(validation.stdout);
     } catch {
-      fail(
-        "tidas_output_invalid",
-        `Validator returned invalid JSON for ${fileName}`,
-      );
+      await failPackageVerification({
+        code: "tidas_output_invalid",
+        message: `Validator returned invalid JSON for ${fileName}`,
+        stage: `${action}_output`,
+        format,
+        product,
+        fileName,
+        stderr: validation.stderr,
+        completedPackages: packages,
+        releaseVersion,
+        reportPath,
+      });
     }
     packages.push({
       fileName,
@@ -293,6 +471,42 @@ export async function verifyBuiltPackages({
     outcome: "passed",
     packages,
   };
+}
+
+async function failPackageVerification({
+  code,
+  message,
+  stage,
+  format,
+  product,
+  fileName,
+  stderr = "",
+  completedPackages,
+  releaseVersion,
+  reportPath,
+}) {
+  const failure = {
+    code,
+    message,
+    stage,
+    format,
+    product,
+    fileName,
+    stderr: String(stderr).slice(-4000),
+  };
+  if (reportPath)
+    await writeFile(
+      reportPath,
+      canonicalJson({
+        schemaVersion: "tiangong.release.package-verification.v1",
+        releaseVersion,
+        outcome: "failed",
+        packages: completedPackages,
+        failure,
+      }),
+      { flag: "wx" },
+    );
+  fail(code, message, failure);
 }
 
 async function assembleCanonicalCollection({
@@ -592,6 +806,15 @@ async function packageArtifacts(root) {
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+async function packageArtifactsIfPresent(root) {
+  try {
+    return await packageArtifacts(root);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 async function walkFiles(root) {
   const result = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
@@ -618,6 +841,16 @@ async function assertTargetAbsent(target) {
     fail("output_exists", `Refusing to overwrite existing output: ${target}`);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+  }
+}
+
+async function pathExists(target) {
+  try {
+    await stat(target);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
   }
 }
 
