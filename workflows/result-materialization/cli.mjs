@@ -21,7 +21,8 @@ Commands:
 
 intake options:
   --bundle <path>      Local calculation-evidence-bundle.zip or extracted directory
-  --out-dir <path>     New immutable intake directory
+  --artifact-root <path>  Artifact workspace root; defaults to repository .release
+  --out-dir <path>     Advanced explicit immutable intake path
 
 materialize options:
   --intake <path>      Verified intake directory
@@ -29,10 +30,10 @@ materialize options:
   --all                Select every eligible Process in the Calculation Bundle
   --output-type <type> result-process or lifecycle-model
   --result-process-layer <layer> Result Process content: lci or lci-lcia
-  --out-dir <path>     New immutable materialization directory
+  --artifact-root <path>  Artifact workspace root; defaults to repository .release
+  --out-dir <path>     Advanced explicit immutable output path
   --first-generation   Confirm that no previous Release Manifest exists
   --previous-manifest <path>  Previous materialization/release manifest
-  --artifact-root <path>  Local job workspace root; defaults to repository .release
   --concurrency <count>   Bounded render/write workers; defaults to 2, maximum 16
 
 job options:
@@ -46,9 +47,9 @@ Common:
 `;
 
 const ACTION_HELP = {
-  intake: `release-result-materialization intake --bundle <path> --out-dir <path> [--json]\n\nVerify a local Calculation Bundle and freeze an immutable intake.\n`,
-  materialize: `release-result-materialization materialize --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <path> (--first-generation | --previous-manifest <path>) [--concurrency <1-16>] [--json]\n\nRun Result Materialization in the foreground. LifecycleModel output includes the exact Result Processes it references.\n`,
-  "materialize start": `release-result-materialization materialize start --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <path> (--first-generation | --previous-manifest <path>) [--artifact-root <path>] [--concurrency <1-16>] [--json]\n\nStart the same deterministic engine as an observable local nohup job.\n`,
+  intake: `release-result-materialization intake --bundle <path> [--artifact-root <path> | --out-dir <path>] [--json]\n\nVerify a local Calculation Bundle and freeze an immutable, content-addressed intake.\n`,
+  materialize: `release-result-materialization materialize --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> (--first-generation | --previous-manifest <path>) [--artifact-root <path> | --out-dir <path>] [--concurrency <1-16>] [--json]\n\nRun Result Materialization in the foreground. The default output path is content-addressed and safely reusable.\n`,
+  "materialize start": `release-result-materialization materialize start --intake <path> (--processes <UUID@version,...> | --all) --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> (--first-generation | --previous-manifest <path>) [--artifact-root <path>] [--out-dir <path>] [--concurrency <1-16>] [--json]\n\nStart the same deterministic engine as an observable local nohup job. With explicit --out-dir, --artifact-root only relocates job records.\n`,
   "job get": `release-result-materialization job get --job-id <uuid> [--artifact-root <path>] [--json]\n\nRead bounded status, progress, resources, throughput, and ETA for one job.\n`,
   "job logs": `release-result-materialization job logs --job-id <uuid> [--tail <1-500>] [--artifact-root <path>] [--json]\n\nRead a bounded tail of one job's structured local log.\n`,
   "job cancel": `release-result-materialization job cancel --job-id <uuid> [--artifact-root <path>] [--json]\n\nRequest cancellation after verifying the exact runner identity.\n`,
@@ -70,20 +71,27 @@ async function main() {
   }
   const options = parseArgs(tokens);
   if (command === "intake") {
-    requireOptions(options, ["bundle", "out-dir"]);
+    requireOptions(options, ["bundle"]);
+    requireExclusivePaths(options);
     const result = await createIntake({
       bundle: options.bundle,
       outDir: options["out-dir"],
+      artifactRoot: options["artifact-root"],
     });
     respond(options, {
       ok: true,
       command,
-      outcome: "verified",
+      outcome: result.disposition,
       intake: result.path,
+      artifactRoot: result.artifactRoot,
+      artifactPath: result.artifactPath,
+      recommendedCanonicalPath: result.recommendedCanonicalPath,
+      pathPolicy: result.pathPolicy,
+      artifactIdentity: result.artifactIdentity,
       calculationId: result.intake.source.calculationId,
       bundleContentHash: result.intake.source.bundleContentHash,
       nextAction: {
-        command: `node cli.mjs materialize start --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --out-dir <MATERIALIZATION_DIR> --first-generation --json`,
+        command: `node cli.mjs materialize start --intake ${quote(result.path)} --processes <UUID@VERSION,...> --output-type <result-process|lifecycle-model> --result-process-layer <lci|lci-lcia> --first-generation --json`,
         description:
           "Choose scope, final dataset type, and the Result Process content layer, then start an observable background run. Omit 'start' for a foreground run. LifecycleModel itself does not contain LCI/LCIA results.",
       },
@@ -91,7 +99,7 @@ async function main() {
     return;
   }
   if (command === "materialize" && subcommand === "start") {
-    requireMaterializationOptions(options);
+    requireMaterializationOptions(options, { background: true });
     const result = await startMaterializationJob({
       artifactRoot: options["artifact-root"],
       request: materializationRequestFromOptions(options),
@@ -113,8 +121,13 @@ async function main() {
     respond(options, {
       ok: true,
       command,
-      outcome: "materialized",
+      outcome: result.disposition,
       output: result.path,
+      artifactRoot: result.artifactRoot,
+      artifactPath: result.artifactPath,
+      recommendedCanonicalPath: result.recommendedCanonicalPath,
+      pathPolicy: result.pathPolicy,
+      artifactIdentity: result.artifactIdentity,
       completeness: result.manifest.completeness,
       outputType: result.request.outputType,
       resultProcessLayer: result.request.resultProcessLayer,
@@ -186,13 +199,9 @@ async function main() {
   });
 }
 
-function requireMaterializationOptions(options) {
-  requireOptions(options, [
-    "intake",
-    "out-dir",
-    "output-type",
-    "result-process-layer",
-  ]);
+function requireMaterializationOptions(options, { background = false } = {}) {
+  requireOptions(options, ["intake", "output-type", "result-process-layer"]);
+  if (!background) requireExclusivePaths(options);
   requireSelection(options);
   if (
     Boolean(options["first-generation"]) ===
@@ -210,7 +219,11 @@ function requireMaterializationOptions(options) {
 function materializationRequestFromOptions(options) {
   return {
     intakeDir: path.resolve(options.intake),
-    outDir: path.resolve(options["out-dir"]),
+    outDir: options["out-dir"] ? path.resolve(options["out-dir"]) : undefined,
+    artifactRoot:
+      !options["out-dir"] && options["artifact-root"]
+        ? path.resolve(options["artifact-root"])
+        : undefined,
     processUuids: options.all ? undefined : splitSelectors(options.processes),
     outputType: options["output-type"],
     resultProcessLayer: options["result-process-layer"],
@@ -223,6 +236,15 @@ function materializationRequestFromOptions(options) {
         ? 2
         : parseBoundedInteger(options.concurrency, "concurrency", 1, 16),
   };
+}
+
+function requireExclusivePaths(options) {
+  if (options["out-dir"] && options["artifact-root"]) {
+    throw Object.assign(
+      new Error("Choose either --out-dir or --artifact-root, not both"),
+      { code: "invalid_arguments" },
+    );
+  }
 }
 
 function parseInteger(value, name) {

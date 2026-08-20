@@ -12,14 +12,82 @@ import { materializeModels } from "./materialize-models.mjs";
 import { materializeResults } from "./materialize-results.mjs";
 import { hashJson } from "./versioning.mjs";
 import { loadMaterializationContext } from "./context.mjs";
+import { selectAxes } from "./context.mjs";
 import { writeCanonicalDatasetIndex } from "./canonical-index.mjs";
+import {
+  artifactPathConflict,
+  buildMaterializationIdentity,
+  canonicalMaterializationPath,
+  resolveArtifactRoot,
+  verifyExistingMaterialization,
+} from "./artifact-paths.mjs";
 
 export const OUTPUT_TYPES = new Set(["result-process", "lifecycle-model"]);
 export const RESULT_PROCESS_LAYERS = new Set(["lci", "lci-lcia"]);
 
+export async function prepareMaterialization({
+  intakeDir,
+  outDir,
+  artifactRoot,
+  processUuids,
+  outputType,
+  resultProcessLayer,
+  firstGeneration = false,
+  previousManifestPath,
+}) {
+  validateChoices(outputType, resultProcessLayer);
+  if (outDir && artifactRoot)
+    fail(
+      "invalid_arguments",
+      "Choose either --out-dir or --artifact-root, not both",
+    );
+  if (firstGeneration === Boolean(previousManifestPath))
+    fail(
+      "version_history_choice_required",
+      "Choose exactly one of --first-generation or --previous-manifest",
+    );
+  const context = await loadMaterializationContext(intakeDir);
+  const selectedAxes = selectAxes(context, processUuids);
+  if (!selectedAxes.length)
+    fail("empty_selection", "Result materialization selection is empty");
+  const previousManifestSha256 = previousManifestPath
+    ? hashJson(
+        JSON.parse(await readFile(path.resolve(previousManifestPath), "utf8")),
+      )
+    : null;
+  const identity = buildMaterializationIdentity({
+    context,
+    selectedAxes,
+    scopeMode: processUuids?.length ? "selected" : "all_eligible",
+    outputType,
+    resultProcessLayer,
+    firstGeneration,
+    previousManifestSha256,
+  });
+  const root = resolveArtifactRoot(artifactRoot);
+  const recommendedCanonicalPath = canonicalMaterializationPath(
+    root,
+    identity.key.source,
+    identity.sha256,
+  );
+  const target = outDir ? path.resolve(outDir) : recommendedCanonicalPath;
+  return {
+    context,
+    selectedAxes,
+    identity,
+    target,
+    artifactRoot: root,
+    recommendedCanonicalPath,
+    pathPolicy: outDir
+      ? "explicit-output.v1"
+      : "canonical-content-addressed.v1",
+  };
+}
+
 export async function materialize({
   intakeDir,
   outDir,
+  artifactRoot,
   processUuids,
   outputType,
   resultProcessLayer,
@@ -27,22 +95,42 @@ export async function materialize({
   previousManifestPath,
   onProgress,
   concurrency = 2,
+  prepared,
 }) {
-  if (!OUTPUT_TYPES.has(outputType))
-    fail("unsupported_output_type", `Unsupported output type: ${outputType}`);
-  if (!RESULT_PROCESS_LAYERS.has(resultProcessLayer))
-    fail(
-      "unsupported_result_process_layer",
-      `Unsupported Result Process layer: ${resultProcessLayer}`,
+  const plan =
+    prepared ??
+    (await prepareMaterialization({
+      intakeDir,
+      outDir,
+      artifactRoot,
+      processUuids,
+      outputType,
+      resultProcessLayer,
+      firstGeneration,
+      previousManifestPath,
+    }));
+  const target = plan.target;
+  if (!outDir) {
+    const existing = await verifyExistingMaterialization(
+      target,
+      plan.identity.key,
     );
-
-  const target = path.resolve(outDir);
+    if (existing === false) artifactPathConflict(target);
+    if (existing)
+      return materializationResult({
+        path: target,
+        request: existing.request,
+        manifest: existing.manifest,
+        disposition: "reused_existing",
+        plan,
+      });
+  }
   await mkdir(path.dirname(target), { recursive: true });
   const workspace = await mkdtemp(`${target}.work-`);
   let primaryError;
   try {
     await onProgress?.({ phase: "preparing", completed: 0, total: null });
-    const context = await loadMaterializationContext(intakeDir);
+    const context = plan.context;
     const results = await materializeResults({
       intakeDir,
       outDir: path.join(workspace, "complete"),
@@ -102,6 +190,11 @@ export async function materialize({
       canonicalJson(request),
       { flag: "wx" },
     );
+    await writeFile(
+      path.join(completed.path, "materialization-key.json"),
+      canonicalJson(plan.identity.key),
+      { flag: "wx" },
+    );
     const canonicalIndex = await writeCanonicalDatasetIndex(
       completed.path,
       completed.manifest.datasets,
@@ -115,32 +208,34 @@ export async function materialize({
     await onProgress?.({ phase: "committing", completed: 0, total: 1 });
     await rename(completed.path, target);
     await onProgress?.({ phase: "committing", completed: 1, total: 1 });
-    const datasets = completed.manifest.datasets;
-    return {
+    return materializationResult({
       path: target,
       request,
       manifest: completed.manifest,
-      summary: {
-        requestedRootCount: results.catalog.selection.length,
-        primaryDatasetCount: datasets.filter((item) =>
-          ["primary", "lifecycle_model"].includes(
-            item.materializationRole ?? item.role,
-          ),
-        ).length,
-        dependencyDatasetCount: datasets.filter(
-          (item) => item.materializationRole === "dependency",
-        ).length,
-        resultingDatasetCount: datasets.filter(
-          (item) => item.materializationRole === "resulting",
-        ).length,
-      },
-    };
+      disposition: "created",
+      plan,
+    });
   } catch (error) {
     primaryError = error;
     if (
       (error.code === "EEXIST" || error.code === "ENOTEMPTY") &&
       error.syscall === "rename"
     ) {
+      if (!outDir) {
+        const existing = await verifyExistingMaterialization(
+          target,
+          plan.identity.key,
+        );
+        if (existing)
+          return materializationResult({
+            path: target,
+            request: existing.request,
+            manifest: existing.manifest,
+            disposition: "reused_existing",
+            plan,
+          });
+        artifactPathConflict(target);
+      }
       primaryError = new Error(
         `Refusing to overwrite existing output: ${target}`,
       );
@@ -162,6 +257,55 @@ export async function materialize({
       };
     }
   }
+}
+
+function validateChoices(outputType, resultProcessLayer) {
+  if (!OUTPUT_TYPES.has(outputType))
+    fail("unsupported_output_type", `Unsupported output type: ${outputType}`);
+  if (!RESULT_PROCESS_LAYERS.has(resultProcessLayer))
+    fail(
+      "unsupported_result_process_layer",
+      `Unsupported Result Process layer: ${resultProcessLayer}`,
+    );
+}
+
+function materializationResult({
+  path: outputPath,
+  request,
+  manifest,
+  disposition,
+  plan,
+}) {
+  const datasets = manifest.datasets;
+  return {
+    path: outputPath,
+    artifactRoot: plan.artifactRoot,
+    artifactPath: outputPath,
+    recommendedCanonicalPath: plan.recommendedCanonicalPath,
+    request,
+    manifest,
+    disposition,
+    pathPolicy: plan.pathPolicy,
+    artifactIdentity: {
+      schemaVersion: plan.identity.key.schemaVersion,
+      materializationKeySha256: plan.identity.sha256,
+      source: plan.identity.key.source,
+    },
+    summary: {
+      requestedRootCount: request.scope.processes.length,
+      primaryDatasetCount: datasets.filter((item) =>
+        ["primary", "lifecycle_model"].includes(
+          item.materializationRole ?? item.role,
+        ),
+      ).length,
+      dependencyDatasetCount: datasets.filter(
+        (item) => item.materializationRole === "dependency",
+      ).length,
+      resultingDatasetCount: datasets.filter(
+        (item) => item.materializationRole === "resulting",
+      ).length,
+    },
+  };
 }
 
 async function finalizeResultOnly({

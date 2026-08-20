@@ -69,7 +69,7 @@ M(P)
 
 对象关系、生成模式和 provider 连接原则见 [Result Process 与 LifecycleModel 的关系与生成原则](design/result-process-and-lifecycle-model.md)。
 
-当前 CLI 仍要求显式 `--out-dir`。默认 `.release/` 路径、materialization key、验证后复用和显式覆盖的目标规则见 proposed design：[本地产物默认路径设计](design/local-artifact-path-convention.md)。在该设计完成实现和测试前，不把它描述为当前运行行为。
+CLI 默认使用 `.release/` 下的内容寻址路径，不再要求用户手写 `--out-dir`。路径、materialization key、验证后复用和显式输出规则见正式契约：[本地产物默认路径设计](design/local-artifact-path-convention.md)。
 
 ## 一个入口，由三个选择决定执行图
 
@@ -125,7 +125,6 @@ npm install
 # 一次性导入本地 Calculation Bundle；支持 evidence ZIP 或解压目录
 node cli.mjs intake \
   --bundle /path/to/calculation-evidence-bundle.zip \
-  --out-dir /path/to/intakes/<bundle-content-hash> \
   --json
 
 # 生成指定 root 的 LCI + LCIA Result Process
@@ -134,7 +133,6 @@ node cli.mjs materialize \
   --processes <UUID@VERSION> \
   --output-type result-process \
   --result-process-layer lci-lcia \
-  --out-dir /path/to/materialized/result-process \
   --first-generation \
   --json
 
@@ -144,7 +142,6 @@ node cli.mjs materialize \
   --processes <UUID@VERSION> \
   --output-type lifecycle-model \
   --result-process-layer lci-lcia \
-  --out-dir /path/to/materialized/lifecycle-model \
   --first-generation \
   --json
 ```
@@ -158,7 +155,6 @@ node cli.mjs materialize start \
   --all \
   --output-type lifecycle-model \
   --result-process-layer lci-lcia \
-  --out-dir /path/to/materialized/lifecycle-model \
   --first-generation \
   --json
 
@@ -174,7 +170,7 @@ node cli.mjs job cancel --job-id <UUID> --json
 
 生成阶段默认使用 2 个有界 render/write worker，可以用 `--concurrency 1..16` 调整。并发只控制已经冻结版本后的逐条渲染和写入，不改变 selection、identity/version 规划顺序，也不会启动无界任务集合。增加并发前应先观察相同样本的 RSS、heap、吞吐和磁盘余量。
 
-默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，包含 `job.json`、`process.json`、`status.json`、`job.log`、终态 `exit-code` 和 `result.json`。`--artifact-root` 可以整体调整这个本地 Job workspace；它不改变用户显式提供的 canonical `--out-dir`。
+默认 Job 目录位于 `.release/result-materialization/jobs/<jobId>/`，默认 intake 和 materialization 则分别位于 `intakes/<calculation-id>/<bundle-content-hash>/` 与 `materializations/<calculation-id>/<bundle-content-hash>/<materialization-key-sha256>/`。`--artifact-root` 可以整体迁移这个本地 workspace。高级场景仍可显式提供 `--out-dir`，但不会覆盖已有目录。
 
 后台命令不建立 daemon、队列或自动重试。`start` 只表示本地请求已经持久化并交给 `nohup` runner；只有 `job get` 返回 `succeeded` 且最终 manifest 存在时，Materialization 才成功。状态可区分 `queued`、`running`、`cancelling`、`succeeded`、`failed`、`cancelled` 和 `interrupted`。`job logs` 默认返回最后 100 行，允许 1–500 行，并截断超长单行，避免把大型内容写入 stdout。
 
@@ -184,7 +180,7 @@ Runner 在 phase/progress 更新以及每 5 秒记录结构化资源采样。`jo
 
 `job cancel` 只会向 PID 和 command line 都匹配该精确 Job 目录的 runner 发送 `SIGTERM`，避免 PID 被操作系统复用后终止无关进程。取消或异常退出不会提交 canonical target；可能遗留的 `.work-*`/`.tmp-*` 仍不是有效产物，可以在确认 runner 已停止后清理。首版不提供 checkpoint/resume，失败或中断使用同一冻结输入重新提交。
 
-`intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。输出目录存在时拒绝覆盖。
+`intake` 会验证 Calculation Bundle manifest、每个压缩 artifact 的 hash/size，以及 gzip 解压后的 hash/size/record count，再原子地冻结为 Release 自有的 `materialization-intake.v1`。Worker v2 的 `bundleContentHash` 基于原始 canonical manifest bytes（移除顶层 hash 字段）验证，不能先解析为 JavaScript number 再序列化，否则大整数会发生精度变化并产生假 mismatch。默认路径存在时先验证，完整一致则返回 `reused_existing`；残缺或不一致则 fail closed。
 
 `materialize` 与 `materialize start` 使用同一个确定性 engine，冻结相同的 `materialization-request.json`，并根据 `outputType` 选择内部执行图。Result-only 路线只生成 selected `R(P)`；LifecycleModel 路线自动完成 direct provider Result 扩展、Result Catalog 冻结和 requested-root `M(P)` 生成。用户不需要、也不应该先单独运行一次 Result Process 生成。`R(P)` 的 UUIDv5 name 只包含 `U(P) UUID + reference flow UUID`，其他变化由 profile、semantic hash、dataset version 和 provenance 表达。
 

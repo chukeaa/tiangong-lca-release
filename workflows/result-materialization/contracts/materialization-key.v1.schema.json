@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/materialization-key.v1.schema.json",
+  "title": "Result Materialization Artifact Identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "scope",
+    "outputType",
+    "resultProcessLayer",
+    "modelProfile",
+    "generationBase",
+    "metadataPolicySha256",
+    "recipeContractVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.materialization-key.v1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calculationId", "bundleContentHash"],
+      "properties": {
+        "calculationId": { "type": "string", "format": "uuid" },
+        "bundleContentHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "resolvedProcesses"],
+      "properties": {
+        "mode": { "enum": ["selected", "all_eligible"] },
+        "resolvedProcesses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "outputType": { "enum": ["result-process", "lifecycle-model"] },
+    "resultProcessLayer": { "enum": ["lci", "lci-lcia"] },
+    "modelProfile": { "type": ["string", "null"] },
+    "generationBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "previousManifestSha256"],
+      "properties": {
+        "mode": { "enum": ["first-generation", "previous-manifest"] },
+        "previousManifestSha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "metadataPolicySha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "recipeContractVersion": { "type": "string", "minLength": 1 }
+  }
+}

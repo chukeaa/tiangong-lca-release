@@ -12,8 +12,8 @@ whenToUpdate:
   - 当顶层 Workflow 新增、删除、重命名或重新划分时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: af8bb71c464331ad2c5a1cdf0b213c1d651122d0
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: 9c99249520d5228088d2845b42b78605bf06a524
 lastReviewedNote: "Established four-workflow navigation with Result Materialization as the canonical dataset assembly boundary."
 related:
   - ../README.md
