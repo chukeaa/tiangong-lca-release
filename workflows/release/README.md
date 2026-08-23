@@ -12,9 +12,9 @@ whenToUpdate:
   - 当包的语义、候选构建、审批、发布或回读边界变化时
 checkPaths:
   - workflows/release/**
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined package, candidate, approval, publication, and readback semantics for confirmation."
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Defined the default remote Elementary Flow cache transfer and explicit local fallback."
 related:
   - AGENTS.md
   - ../../README.md
@@ -102,6 +102,9 @@ node cli.mjs cache status --json
 # 仅在状态为 missing/stale/invalid 且用户确认后显式刷新
 node cli.mjs cache refresh --json
 
+# 只有远端路径不可用且操作员明确接受慢速直连时才使用
+node cli.mjs cache refresh --execution local --json
+
 node cli.mjs intake prepare \
   --materialization /path/to/materialized-lifecycle-model \
   --source-intake /path/to/verified-materialization-intake \
@@ -136,11 +139,15 @@ CLI 返回的自身命令以及返回 Result Materialization 的命令均使用�
 
 Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板中的“成功”只表示本地候选构建完成，永远不表示已经批准、上传或发布。
 
-`cache refresh` 是独立且需要显式执行的维护动作：通过 `CONN` 建立只读 repeatable-read snapshot，以单 SQL cursor 顺序下载全部已发布 Flow，在 Node 本地识别 Elementary Flow，并流式写入项目级共享缓存。缓存 manifest 记录内容 SHA-256、记录数以及数据库 watermark（已发布 Flow 数量与 `MAX(modified_at)`）。`cache status` 用一次轻量查询比较 watermark，并验证本地 artifact；因此能够区分 `fresh`、`missing`、`stale` 与 `invalid`。
+`cache refresh` 是独立且需要显式执行的维护动作。默认 `--execution remote`：CLI 使用 `--remote-host` 或 `RELEASE_FLOW_CACHE_REMOTE_HOST` 指定的受管 Worker EC2 SSH host，把 workflow 自带的 Python exporter 复制到远端临时目录，并只通过 SSH stdin 传入当前进程的 `CONN` 与 S3 数据面配置。两者都未提供时 fail closed，不猜测具体运行实例。远端先确认数据库连接和 Supabase Storage endpoint 属于同一 project，再建立只读 repeatable-read snapshot；查询在靠近 Supabase 的 EC2 上流式筛选全部已发布 Elementary Flow，生成 gzip artifact 并上传到 `${RELEASE_FLOW_CACHE_S3_PREFIX:-_temporary/release/elementary-flow-cache}`。对象与 GET/DELETE presigned URL 均使用一小时 expiry；URL、连接串和 secret 不进入 CLI 输出或文件。
+
+本地通过 presigned GET 下载压缩包，先核对压缩字节数与 SHA-256，再逐条解压并验证 NDJSON identity、Elementary Flow 类型、记录数和未压缩 SHA-256。全部通过后，CLI 必须先用 presigned DELETE 删除临时对象，才写入 cache manifest 并替换原缓存；失败保持旧缓存不变，且不会静默切到本地数据库路径。远端运行时必须提供 `python3`、`psql`、`boto3` 和 `botocore`。只有远端 SSH、依赖或 Storage 路径暂时无法恢复时，操作员才显式使用 `--execution local`；该 fallback 保留原有的 Node/Postgres 单 cursor 只读下载语义。
+
+两条执行路径生成相同的 `tiangong.release.elementary-flow-cache.v1`：manifest 记录内容 SHA-256、记录数以及数据库 watermark（已发布 Flow 数量与 `MAX(modified_at)`）。`cache status` 用一次轻量查询比较 watermark，并验证本地 artifact；因此能够区分 `fresh`、`missing`、`stale` 与 `invalid`。S3 `Expires` header 和 presigned URL expiry 只限制临时对象的可用期，不等同于自动删除；正常路径通过显式 DELETE 立即清理，异常终止遗留对象仍应由 Storage prefix lifecycle 兜底。
 
 `intake prepare` 不再隐式执行长时数据库下载。它只接受 fresh 缓存，扫描 source closure 中 LCIA Method 的 `characterisationFactors`，提取带精确 UUID/version 的 `referenceToFlowDataSet`，并从缓存匹配缺失的精确版本后冻结 dependency supplement。缓存缺失或过期会 fail closed，同时输出显式刷新命令。该过程不修改 Materialization Intake，也不把新增 Flow 误记为参与了原始计算。Release Intake manifest 只记录内容 hash；本地绝对路径单独保存在权限受限的 runtime locator 中，不进入可移植计划语义。
 
-CLI 会自动加载 Release 仓根目录 ignored `.env` 中已有的 `CONN`。如尚未同步，先使用 Calculation Workflow 的 `environment sync` 将 workspace 根 `.env` 中允许的数据面变量补入 Release `.env`；Release Intake 不直接读取 workspace 根配置，也不会在输出中披露连接串。
+CLI 会自动加载 Release 仓根目录 ignored `.env` 中已有的 `CONN` 和 S3 数据面变量。远端刷新要求通过 `RELEASE_FLOW_CACHE_REMOTE_HOST` 或 `--remote-host` 提供 SSH host，并配置 `CONN`、`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`；可选使用 `S3_SESSION_TOKEN`。`RELEASE_FLOW_CACHE_PROJECT_REF` 可作为从连接串和 endpoint 推导所得 project ref 的额外精确断言，但不能替代两者自身的可验证 identity。如尚未同步，先使用 Calculation Workflow 的 `environment sync` 将 workspace 根 `.env` 中允许的数据面变量补入 Release `.env`；Release Intake 不直接读取 workspace 根配置，也不会在输出中披露任何凭据或 presigned URL。
 
 执行过程：
 

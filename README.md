@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Reviewed the Result Materialization one-hop reconstruction tolerance boundary and retained fail-closed validation."
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Reviewed the Release Elementary Flow cache remote-transfer default and retained local fallback boundaries."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -49,6 +49,7 @@ Calculation 当前默认 profile 是 `global_eligible`、完整的 25 个 review
 Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接填值的 Markdown 回复模板，使用克制的状态 emoji 帮助 Agent 区分已提交、已完成、委托查询和远程结果未知等用户回复语义。
 Calculation CLI 的 help 和恢复动作使用自定位的绝对入口，复制执行不依赖客户端当前工作目录；README 仍提供仓库根目录和 workflow 目录两种便携写法。
 Release 先生成独立且不可变的 Release Intake，按精确版本补齐 LCIA Method 表征因子引用但 Materialization Intake 未携带的 Flow，再由 Package CLI 消费该 Intake；两个动作都返回 workflow-local 回复模板、结构化恢复动作和精确 artifact 路径，并明确本地准备与 Candidate build 均不构成发布授权。
+Release 的 Elementary Flow 共享缓存刷新默认在受管 Worker EC2 上执行只读 snapshot 导出，经同 project Supabase Storage 的一小时临时对象下载、完整校验和立即删除后原子安装；本地直连刷新只保留为显式 fallback。
 异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
 创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
 

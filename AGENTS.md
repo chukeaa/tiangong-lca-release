@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Reviewed the repository contract for the local Release package-build route and its canonical artifact handoff."
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Reviewed the repository contract for remote Elementary Flow cache transfer without changing repository ownership or publication authority."
 related:
   - README.md
   - .docpact/config.yaml
@@ -74,6 +74,7 @@ related:
 - Release Candidate、精确审批、发布编排和独立回读；
 - `tiangong-release` 操作入口及其有界 JSON 输出。
 - 面向批量、非常规数据处理的受控数据库/S3 数据面 adapter，包括参数化只读查询、本地 artifact 传输、完整性验证，以及后续明确授权的 staging 写入。
+- Release-owned 缓存格式、远端只读导出编排、临时 S3 传输校验和本地原子安装；Worker EC2 只作为受管执行位置，不把缓存语义转交给 Worker 仓库。
 
 本仓库不拥有：
 
@@ -92,6 +93,7 @@ related:
 - 不导入其他 workspace 子仓的内部源码。
 - 不解码、打印、持久化或放入命令参数的用户凭据。
 - 不持久化 signed URL；本地批量 artifact 传输优先使用受控 S3 数据面，避免逐 artifact 签名。
+- 临时 cache transfer 的 presigned URL 只可保存在当前进程内，不得进入 stdout、manifest、错误详情或恢复命令；成功安装前必须删除对应临时对象。
 - 不从 mutable `latest` 推断缺失的 identity、version、graph 或 method。
 - 不让 LLM 直接生成最终数值、hash 或发布证据。
 - 不把 transport success 当作 domain validity、publication 或 readback success。
@@ -105,8 +107,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-41`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#41`
+- 当前工作分支：`feature/issue-45`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#45`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

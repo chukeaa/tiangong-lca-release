@@ -9,6 +9,7 @@ import {
 } from "./lib/package-build.mjs";
 import {
   DEFAULT_FLOW_CACHE,
+  DEFAULT_FLOW_CACHE_EXECUTION,
   inspectFlowCache,
   refreshFlowCache,
 } from "./lib/flow-cache.mjs";
@@ -34,6 +35,8 @@ const VALUE_OPTIONS = new Set([
   "out-dir",
   "tidas-bin",
   "flow-cache",
+  "execution",
+  "remote-host",
 ]);
 const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
@@ -41,7 +44,7 @@ const HELP = `release-package <command> [options]
 
 Commands:
   cache status        Check whether the shared Elementary Flow cache is usable
-  cache refresh       Explicitly replace the shared cache from a read-only database snapshot
+  cache refresh       Explicitly replace the shared cache; remote Worker EC2 execution is the default
   intake prepare      Expand exact LCIA Method Flow dependencies into an immutable Release Intake
   package build       Build one local, unapproved Release Candidate from a frozen Release Intake
 
@@ -53,6 +56,8 @@ intake prepare options:
 
 cache options:
   --flow-cache <path>       Shared cache directory; defaults to ${DEFAULT_FLOW_CACHE}
+  --execution <mode>        refresh execution: remote (default) or local
+  --remote-host <host>      SSH host used by remote refresh; required unless RELEASE_FLOW_CACHE_REMOTE_HOST is set
 
 package build options:
   --release-intake <path>   Prepared immutable Release Intake directory
@@ -65,12 +70,14 @@ Common:
   --json                    Emit one bounded JSON result on stdout
   --help                    Show this help
 
-The command performs no upload or publication and does not authorize either action. It delegates closure validation,
+cache refresh may upload one temporary transfer object and deletes it before local installation; it does not authorize
+package upload or publication. Intake and package commands perform no upload or publication. Package build delegates closure validation,
 TIDAS/eILCD validation, semantic round-trip, and deterministic ZIP creation to tidas-tools.
 
 Examples:
   release-package cache status --json
   release-package cache refresh --json
+  release-package cache refresh --execution local --json
 
   release-package intake prepare --materialization .release/materialization/lifecycle-model \\
     --source-intake .release/materialization/intakes/<bundle-hash> \\
@@ -114,7 +121,11 @@ async function main() {
   if (command === "cache") {
     const result =
       action === "refresh"
-        ? await refreshFlowCache({ cacheDir: flowCacheDir })
+        ? await refreshFlowCache({
+            cacheDir: flowCacheDir,
+            execution: options.execution ?? DEFAULT_FLOW_CACHE_EXECUTION,
+            remoteHost: options["remote-host"],
+          })
         : await inspectFlowCache({ cacheDir: flowCacheDir });
     respondCache(options, action, result, flowCacheDir);
     return;
@@ -201,6 +212,8 @@ function respondCache(options, action, result, cacheDir) {
     completeness: needsRefresh ? "refresh_required" : "ready",
     cache: cacheDir,
     status,
+    execution: result.execution,
+    remoteHost: result.remoteHost,
     recordCount: result.manifest?.artifact?.recordCount ?? 0,
     databaseWatermark: result.database ?? result.manifest?.databaseWatermark,
     nextActions: needsRefresh
@@ -225,7 +238,7 @@ function respondCache(options, action, result, cacheDir) {
   if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
   else
     process.stdout.write(
-      `Elementary Flow cache: ${status}\n- Path: ${cacheDir}\n- Records: ${payload.recordCount}\n\nNext:\n- ${payload.nextActions[0].command}\n\nReply using template:\n- ${payload.replyTemplate.path}\n`,
+      `Elementary Flow cache: ${status}\n- Path: ${cacheDir}\n- Records: ${payload.recordCount}${payload.execution ? `\n- Execution: ${payload.execution}` : ""}${payload.remoteHost ? `\n- Remote host: ${payload.remoteHost}` : ""}\n\nNext:\n- ${payload.nextActions[0].command}\n\nReply using template:\n- ${payload.replyTemplate.path}\n`,
     );
 }
 
@@ -433,6 +446,21 @@ function failureNextActions(error) {
         description:
           "Inspect and explicitly refresh the shared Elementary Flow cache before retrying.",
         command: `${RELEASE_COMMAND} cache refresh --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
+      },
+    ];
+  if (String(error.code).startsWith("flow_cache_remote_"))
+    return [
+      {
+        kind: "retry_remote_cache_refresh",
+        description:
+          "Correct the remote host, SSH, dependency, or Storage failure and retry the default refresh path.",
+        command: `${RELEASE_COMMAND} cache refresh --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
+      },
+      {
+        kind: "use_local_cache_refresh",
+        description:
+          "Use the slow direct database route only when the remote path cannot be restored.",
+        command: `${RELEASE_COMMAND} cache refresh --execution local --flow-cache ${shellQuote(error.details?.cacheDir ?? DEFAULT_FLOW_CACHE_DIR)} --json`,
       },
     ];
   if (String(error.code).startsWith("release_intake_"))

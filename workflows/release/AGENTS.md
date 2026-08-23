@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 package、candidate、approval、publication 或 readback 契约变化时
 checkPaths:
   - workflows/release/**
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Defined Release Agent authority, credential, publication, and independent readback boundaries."
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Defined the default remote Elementary Flow cache transfer, credential, validation, and cleanup boundaries."
 related:
   - README.md
   - ../AGENTS.md
@@ -43,7 +43,8 @@ related:
 ## 当前本地 Package 契约
 
 - `intake prepare` 从不可变的 Materialization Intake 和完整 LifecycleModel materialization 生成独立 Release Intake；不得原地修改任一上游 manifest。
-- Release Intake 按精确 UUID/version 补齐 LCIA Method characterisation factor 引用但 source closure 缺失的 Flow。常规 Intake 只消费项目级 Elementary Flow 缓存；以 published count 和 `MAX(modified_at)` 判断缓存 freshness，缺失或过期时 fail closed，并只提示显式刷新命令。缓存刷新必须使用有界、只读 snapshot，不得由 Intake 隐式触发。
+- Release Intake 按精确 UUID/version 补齐 LCIA Method characterisation factor 引用但 source closure 缺失的 Flow。常规 Intake 只消费项目级 Elementary Flow 缓存；以 published count 和 `MAX(modified_at)` 判断缓存 freshness，缺失或过期时 fail closed，并只提示显式刷新命令。缓存刷新必须使用有界、只读 snapshot，不得由 Intake 隐式触发。显式 `cache refresh` 默认把导出放到受管 Worker EC2 上执行：Release 通过 SSH stdin 传递本次进程内数据面配置，远端不落凭据文件；远端向同一 Supabase project 的 Storage 写入一小时有效的临时 gzip artifact，本地下载并逐条校验后先删除临时对象，再原子替换共享缓存。数据库与 Storage project binding 无法一致验证时必须 fail closed。
+- 慢速本机数据库流式刷新只可通过显式 `--execution local` 使用；远端路径失败时不得静默降级。
 - `package build` 只接受已准备并重新验证上游 hash 的 Release Intake，以及 `standalone-lifecyclemodel-result-full-closure.v1`。
 - Result Materialization 的 Index 只描述新生成数据集；Release 从 source closure 与冻结的 dependency supplement 加入 Unit Process 和支持数据集，生成供 `tidas-tools` 使用的完整 Index。
 - source closure artifact hash、record count、每条 document canonical hash，以及 materialized dataset bytes 必须在调用外部工具前重新验证。
@@ -56,6 +57,7 @@ related:
 - 输出目录不可覆盖。只有四包回读校验全部通过才能原子提交可见 Candidate；包已经生成但 qualification 失败时，必须把 ZIP、结构化失败清单、已有验证报告和逐包回读目录保留为唯一 sibling failed build，并明确 `candidateCreated=false`、`publicationAuthorized=false`。它是诊断产物，不是 Candidate，也不得被发布。
 - `tidas release build-packages --format json` 非零退出时，必须把有界 stdout 解析为结构化 operation report 并写入 failed-build diagnostics；只有 stdout 不是有效 JSON 时才保留有界文本尾部。不得只保留 stderr 而丢失字段级 validation evidence。
 - CLI 的人类输出必须包含有界 `Summary / Next / Reply using template`；JSON 输出必须保持单对象、可解析，并携带 `outcome`、`completeness`、artifact 引用、`nextActions[]` 和 `replyTemplate`。
+- cache refresh 的 CLI 输出和错误不得包含连接串、S3 secret 或 presigned URL。成功结果可以披露 execution mode 与 SSH host，但不能披露临时 object locator。
 - CLI 返回的自身命令和跨 Result Materialization 命令必须使用由 `import.meta.url` 生成的绝对入口，确保从任意 cwd 可复制执行。Release Intake 准备成功后应返回确定的 Candidate 输出目录，不把 `<CANDIDATE_DIR>` 留给 Agent 猜测。
 - CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
 - Agent 回复必须读取 CLI 指定的 workflow-local 模板，以真实字段替换占位符；不得把 Candidate build 回复成批准、上传或发布完成。
