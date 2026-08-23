@@ -21,8 +21,8 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: befebe0230257cec198123f184cc6fae60c693de
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
 lastReviewedNote: "Reviewed the repository contract for the local Release package-build route and its canonical artifact handoff."
 related:
   - README.md

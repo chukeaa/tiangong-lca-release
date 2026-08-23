@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: 9c99249520d5228088d2845b42b78605bf06a524
-lastReviewedNote: "Reviewed batch materialization resource observability, bounded concurrency, shared context, and single-staging execution."
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
+lastReviewedNote: "Calibrated the one-hop reconstruction tolerance contract while retaining direction/unit isolation and fail-closed validation."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -131,7 +131,7 @@ Agent 提议不能替代用户对模型结构、重要 metadata 和首次 lineag
 - 不让 LifecycleModel 引用另一次 materialization 的未验证 Result Process。
 - 不忽略有效 direct provider edge，也不从源 Process 文本猜测 provider connection 或 factor。
 - 不跳过 TIDAS、引用闭合和数值一致性验证。
-- one-hop 数值一致性按相同 direction/unit 的可比数量组计算尺度，使用冻结的绝对与相对容差；不得用单个近零 flow 的相对误差放大正常的线性求解消减残差，也不得跨单位比较尺度。
+- one-hop 数值一致性按相同 direction/unit 的可比数量组计算尺度，冻结容差为 `1e-10 + 1e-8 × groupScale`；绝对项用于容纳近零 quantity 的正常线性求解消减残差，相对项只使用同 direction/unit 的组内尺度，不得跨方向或单位借用尺度。
 - 并发 worker 首次失败后不得领取新任务，必须等待已经启动的 worker 收敛后再清理；清理异常不得覆盖原始业务异常。
 - 不打包或远程发布。
 - 不写入远程 authoring tables。
