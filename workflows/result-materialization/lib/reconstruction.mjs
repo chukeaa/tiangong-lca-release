@@ -1,6 +1,6 @@
 import { fail } from "./common.mjs";
 
-const ABSOLUTE_TOLERANCE = 1e-12;
+const ABSOLUTE_TOLERANCE = 1e-10;
 const RELATIVE_TOLERANCE = 1e-8;
 
 export function validateOneHopReconstruction(context, processIndex) {

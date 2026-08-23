@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: 3af0a943a136c6ca756d238ab45ff8a074e986a4
-lastReviewedNote: "Documented observable bounded-concurrency batch execution and single-staging materialization."
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
+lastReviewedNote: "Calibrated one-hop reconstruction tolerance for solver residuals without weakening structural validation."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -244,7 +244,7 @@ Materialization Manifest 至少绑定：
 - Unit、Flow、direction 和 location 映射正确；
 - Calculation Bundle 到 Result Process 的 LCI/LCIA 数值一致；
 - one-hop Model 重构库存与对应 Result Process 数值一致；
-- one-hop 比较只在相同 direction/unit 的可比数量组内确定尺度，当前冻结容差为 `1e-12 + 1e-8 × groupScale`，用于容纳求解消减残差而不跨物理单位放宽校验；
+- one-hop 比较只在相同 direction/unit 的可比数量组内确定尺度，当前冻结容差为 `1e-10 + 1e-8 × groupScale`；绝对项容纳近零 quantity 的正常求解消减残差，相对项不跨方向或物理单位放宽校验，超出边界的缺失 flow 与实质数值差异仍然阻塞；
 - 相同输入和 recipe 重放得到相同内容；
 - 同一 dataset identity/version 不对应冲突内容；
 - 版本集合能够收敛。

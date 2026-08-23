@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: befebe0230257cec198123f184cc6fae60c693de
-lastReviewedNote: "Reviewed Result Materialization batch execution boundaries, bounded concurrency, resource observability, and atomic local output."
+lastReviewedAt: 2026-08-23
+lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
+lastReviewedNote: "Reviewed the Result Materialization one-hop reconstruction tolerance boundary and retained fail-closed validation."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -123,7 +123,7 @@ workflows/
 - 对大批量任务使用共享只读 Context、有界并发和逐条落盘，并通过薄 `nohup` Job 暴露内存、CPU、吞吐、ETA 和磁盘余量；
 - LifecycleModel 路线在同一个 staging collection 内完成 Result/Model 组装，验证后只进行一次原子提交；
 - 默认把 intake 和 materialization 写入 `.release/result-materialization/` 下由 Calculation、Bundle content hash 与冻结 materialization key 决定的内容寻址路径；完整一致的已有产物经验证后复用，残缺或漂移则 fail closed；
-- 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；
+- 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；one-hop 数值比较使用同 direction/unit 组内尺度与 `1e-10 + 1e-8 × groupScale` 冻结容差，超界差异继续 fail closed；
 - 输出 canonical dataset collection、dataset index 和 materialization manifest。
 - Release Workflow 已可从完整 LifecycleModel materialization 和匹配 intake 组装本地支持闭合，调用 `tidas-tools` 生成四个确定性 TIDAS/eILCD ZIP，并冻结未授权发布的 Release Candidate。
 
