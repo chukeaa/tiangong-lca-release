@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Established shared Agent boundaries for root-level workflow packages."
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Reviewed shared credential, external capability, and explicit remote-action boundaries for the Release cache transfer."
 related:
   - ../AGENTS.md
   - ../README.md

@@ -14,7 +14,11 @@ import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
-import { inspectFlowCache } from "../lib/flow-cache.mjs";
+import {
+  inspectFlowCache,
+  refreshFlowCache,
+  runRemoteFlowCacheExport,
+} from "../lib/flow-cache.mjs";
 import {
   buildPackageCandidate,
   EXPECTED_TIDAS_VERSION,
@@ -233,6 +237,209 @@ test("shared Elementary Flow cache distinguishes fresh and stale watermarks", as
     ).status,
     "stale",
   );
+});
+
+test("cache refresh defaults to remote transfer, verifies it, and deletes it before install", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "release-flow-remote-"));
+  const root = path.join(parent, "cache");
+  await mkdir(root);
+  await writeFile(path.join(root, "previous"), "preserve until replacement");
+  const document = {
+    flowDataSet: {
+      modellingAndValidation: {
+        LCIMethod: { typeOfDataSet: "Elementary flow" },
+      },
+    },
+  };
+  const artifact = Buffer.from(
+    `${JSON.stringify({ datasetType: "flow", uuid: FLOW_ID, version: VERSION, document })}\n`,
+  );
+  const compressed = gzipSync(artifact);
+  const calls = [];
+  const result = await refreshFlowCache({
+    cacheDir: root,
+    env: { RELEASE_FLOW_CACHE_REMOTE_HOST: "worker-cache-host" },
+    remoteExporter: async ({ remoteHost }) => {
+      calls.push(["export", remoteHost]);
+      return {
+        schemaVersion: "tiangong.release.elementary-flow-cache-transfer.v1",
+        databaseWatermark: {
+          publishedCount: 12,
+          maxModifiedAt: "2026-08-23 03:21:04+00",
+        },
+        artifactSha256: sha256Bytes(artifact),
+        artifactByteSize: artifact.byteLength,
+        recordCount: 1,
+        compressedSha256: sha256Bytes(compressed),
+        compressedByteSize: compressed.byteLength,
+        createdAt: "2026-08-23T09:00:00.000Z",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        downloadUrl: "https://storage.example/cache?download-secret",
+        deleteUrl: "https://storage.example/cache?delete-secret",
+      };
+    },
+    fetchImpl: async (url, options = {}) => {
+      calls.push([options.method ?? "GET", url]);
+      return options.method === "DELETE"
+        ? new Response(null, { status: 204 })
+        : new Response(compressed, { status: 200 });
+    },
+  });
+  assert.equal(result.execution, "remote");
+  assert.equal(result.remoteHost, "worker-cache-host");
+  assert.deepEqual(
+    calls.map(([operation]) => operation),
+    ["export", "GET", "DELETE"],
+  );
+  assert.equal(
+    await readFile(path.join(root, "elementary-flows.ndjson"), "utf8"),
+    artifact.toString(),
+  );
+  const manifest = JSON.parse(
+    await readFile(path.join(root, "cache-manifest.json"), "utf8"),
+  );
+  assert.equal(manifest.artifact.sha256, sha256Bytes(artifact));
+  assert.equal(manifest.artifact.recordCount, 1);
+  assert.equal(manifest.databaseWatermark.publishedCount, 12);
+  await assert.rejects(access(path.join(root, "previous")));
+});
+
+test("remote cache refresh requires an explicitly configured SSH host", async () => {
+  await assert.rejects(
+    refreshFlowCache({
+      cacheDir: path.join(os.tmpdir(), "unused-release-flow-cache"),
+      env: {},
+      remoteExporter: async () => {
+        throw new Error("must not execute");
+      },
+    }),
+    (error) => error.code === "flow_cache_remote_host_missing",
+  );
+});
+
+test("remote cache mismatch fails closed and preserves the installed cache", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "release-flow-remote-"));
+  const root = path.join(parent, "cache");
+  await mkdir(root);
+  await writeFile(path.join(root, "previous"), "still-current");
+  const compressed = gzipSync(Buffer.from("not the declared artifact\n"));
+  let deleted = false;
+  await assert.rejects(
+    refreshFlowCache({
+      cacheDir: root,
+      env: { RELEASE_FLOW_CACHE_REMOTE_HOST: "worker-cache-host" },
+      remoteExporter: async () => ({
+        schemaVersion: "tiangong.release.elementary-flow-cache-transfer.v1",
+        databaseWatermark: { publishedCount: 1, maxModifiedAt: null },
+        artifactSha256: "a".repeat(64),
+        artifactByteSize: 999,
+        recordCount: 1,
+        compressedSha256: sha256Bytes(compressed),
+        compressedByteSize: compressed.byteLength,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        downloadUrl: "https://storage.example/cache?download-secret",
+        deleteUrl: "https://storage.example/cache?delete-secret",
+      }),
+      fetchImpl: async (_url, options = {}) => {
+        if (options.method === "DELETE") {
+          deleted = true;
+          return new Response(null, { status: 204 });
+        }
+        return new Response(compressed, { status: 200 });
+      },
+    }),
+    (error) => error.code === "flow_cache_remote_artifact_invalid",
+  );
+  assert.equal(deleted, true);
+  assert.equal(
+    await readFile(path.join(root, "previous"), "utf8"),
+    "still-current",
+  );
+});
+
+test("remote exporter rejects mismatched database and Storage projects without echoing secrets", () => {
+  const script = new URL(
+    "../scripts/remote-flow-cache-export.py",
+    import.meta.url,
+  );
+  const password = "do-not-echo-this-password";
+  const result = spawnSync("python3", [script.pathname], {
+    encoding: "utf8",
+    input: JSON.stringify({
+      schemaVersion: "tiangong.release.elementary-flow-cache-export-request.v1",
+      connectionString: `postgresql://postgres.databaseproject:${password}@aws-0-us-east-1.pooler.supabase.com:6543/postgres`,
+      s3Endpoint: "https://storageproject.storage.supabase.co/storage/v1/s3",
+      s3Region: "us-east-1",
+      s3Bucket: "calculation-results",
+      s3AccessKeyId: "access-key",
+      s3SecretAccessKey: "secret-key",
+      objectPrefix: "_temporary/release/elementary-flow-cache",
+    }),
+  });
+  assert.equal(result.status, 1);
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.code, "flow_cache_remote_project_binding_mismatch");
+  assert.doesNotMatch(result.stderr, new RegExp(password));
+  assert.doesNotMatch(result.stderr, /secret-key/u);
+});
+
+test("remote exporter resolves an exact matching Supabase project binding", () => {
+  const script = new URL(
+    "../scripts/remote-flow-cache-export.py",
+    import.meta.url,
+  );
+  const probe = [
+    "import runpy,sys",
+    "module=runpy.run_path(sys.argv[1])",
+    "config={'connectionString':'postgresql://postgres.projectref:secret@aws-0-us-east-1.pooler.supabase.com/postgres','s3Endpoint':'https://projectref.storage.supabase.co/storage/v1/s3'}",
+    "print(module['validate_project_binding'](config))",
+  ].join(";");
+  const result = spawnSync("python3", ["-c", probe, script.pathname], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.trim(), "projectref");
+  assert.equal(result.stderr, "");
+});
+
+test("remote transport keeps credentials on SSH stdin and applies bounded SSH options", async () => {
+  const calls = [];
+  const secret = "stdin-only-secret";
+  const result = await runRemoteFlowCacheExport({
+    remoteHost: "worker-cache-host",
+    env: {
+      CONN: `postgresql://postgres.project:${secret}@pooler.example/postgres`,
+      S3_ENDPOINT: "https://project.storage.supabase.co/storage/v1/s3",
+      S3_REGION: "us-east-1",
+      S3_BUCKET: "cache",
+      S3_ACCESS_KEY_ID: "access",
+      S3_SECRET_ACCESS_KEY: secret,
+    },
+    spawnCommand: async (command, args, options = {}) => {
+      calls.push({ command, args, options });
+      if (args.some((value) => value.includes("mktemp")))
+        return {
+          code: 0,
+          stdout: "/tmp/tiangong-release-flow-cache.abcdefgh\n",
+          stderr: "",
+        };
+      if (command === "scp") return { code: 0, stdout: "", stderr: "" };
+      if (args.includes("python3"))
+        return {
+          code: 0,
+          stdout: JSON.stringify({ protocol: "fixture" }),
+          stderr: "",
+        };
+      return { code: 0, stdout: "", stderr: "" };
+    },
+  });
+  assert.deepEqual(result, { protocol: "fixture" });
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(({ args }) => args.includes("BatchMode=yes")));
+  assert.ok(calls.every(({ args }) => !args.join(" ").includes(secret)));
+  const execution = calls.find(({ args }) => args.includes("python3"));
+  assert.match(execution.options.input, new RegExp(secret));
 });
 
 test("package build assembles local closure and delegates four-package build", async () => {

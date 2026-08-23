@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Established four-workflow navigation with Result Materialization as the canonical dataset assembly boundary."
+lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
+lastReviewedNote: "Reviewed four-workflow navigation after the Release cache transport change; workflow boundaries remain unchanged."
 related:
   - ../README.md
   - AGENTS.md
