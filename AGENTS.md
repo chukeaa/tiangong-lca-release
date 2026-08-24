@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
-lastReviewedNote: "Reviewed the lineage-aware exclusion impact fix; repository ownership and completion boundaries remain unchanged."
+lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
+lastReviewedNote: "Reviewed one-pass package artifact evidence collection; repository ownership and completion boundaries remain unchanged."
 related:
   - README.md
   - .docpact/config.yaml
@@ -107,8 +107,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-49`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#49`
+- 当前工作分支：`feature/issue-51`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#51`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
-lastReviewedNote: "Aligned exclusion impact traversal with TIDAS reference roles so historical lineage does not block scope changes."
+lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
+lastReviewedNote: "Reviewed one-pass package artifact evidence collection; workflow boundaries remain unchanged."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -249,7 +249,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#49`
-- 当前分支：`feature/issue-49`
-- 当前阶段：修正 Release 排除影响分析中的 lineage / closure dependency 语义
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#51`
+- 当前分支：`feature/issue-51`
+- 当前阶段：优化大型 Release 包的流式 artifact evidence 收集
 - 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证、薄后台 Job 入口，以及 canonical intake/materialization artifact 路径

@@ -1008,15 +1008,17 @@ test("final distribution ZIPs are independently extracted and validated", async 
   const root = await mkdtemp(path.join(os.tmpdir(), "release-readback-"));
   const packagesDir = path.join(root, "packages");
   await mkdir(packagesDir);
+  const expectedArtifacts = new Map();
   for (const product of ["UnitProcessDatabase", "ResultDatabase"])
-    for (const format of ["tidas", "ilcd"])
-      await writeFile(
-        path.join(
-          packagesDir,
-          `TiangongLCA-${RELEASE_VERSION}-${product}.${format}.zip`,
-        ),
-        `${product}:${format}`,
-      );
+    for (const format of ["tidas", "ilcd"]) {
+      const fileName = `TiangongLCA-${RELEASE_VERSION}-${product}.${format}.zip`;
+      const bytes = Buffer.from(`${product}:${format}\n`.repeat(20_000));
+      await writeFile(path.join(packagesDir, fileName), bytes);
+      expectedArtifacts.set(fileName, {
+        byteSize: bytes.length,
+        sha256: sha256Bytes(bytes),
+      });
+    }
   const calls = [];
   const report = await verifyBuiltPackages({
     tidasBin: "/tools/tidas",
@@ -1037,6 +1039,14 @@ test("final distribution ZIPs are independently extracted and validated", async 
   });
   assert.equal(report.outcome, "passed");
   assert.equal(report.packages.length, 4);
+  for (const artifact of report.packages)
+    assert.deepEqual(
+      {
+        byteSize: artifact.byteSize,
+        sha256: artifact.sha256,
+      },
+      expectedArtifacts.get(artifact.fileName),
+    );
   assert.equal(calls.filter(([command]) => command === "unzip").length, 8);
   assert.deepEqual(
     calls

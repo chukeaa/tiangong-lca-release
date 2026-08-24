@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -399,7 +401,6 @@ export async function verifyBuiltPackages({
   for (const [, product, format] of DISTRIBUTION_PACKAGES) {
     const fileName = `TiangongLCA-${releaseVersion}-${product}.${format}.zip`;
     const archive = path.join(packagesDir, fileName);
-    const archiveBytes = await readFile(archive);
     const listing = await spawnCommand("unzip", ["-Z1", archive]);
     if (listing.code !== 0)
       await failPackageVerification({
@@ -493,13 +494,13 @@ export async function verifyBuiltPackages({
         reportPath,
       });
     }
+    const artifact = await inspectFile(archive);
     packages.push({
       fileName,
       product,
       format,
       memberCount: members.length,
-      byteSize: archiveBytes.length,
-      sha256: sha256Bytes(archiveBytes),
+      ...artifact,
       outcome: "passed",
       validation: report,
     });
@@ -951,17 +952,26 @@ async function packageArtifacts(root) {
   const files = await walkFiles(root);
   const result = [];
   for (const file of files) {
-    const bytes = await readFile(file);
+    const artifact = await inspectFile(file);
     result.push({
       path: path.relative(path.dirname(root), file).split(path.sep).join("/"),
       mediaType: file.endsWith(".zip")
         ? "application/zip"
         : "application/octet-stream",
-      byteSize: bytes.length,
-      sha256: sha256Bytes(bytes),
+      ...artifact,
     });
   }
   return result.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function inspectFile(file) {
+  const hash = createHash("sha256");
+  let byteSize = 0;
+  for await (const chunk of createReadStream(file)) {
+    byteSize += chunk.length;
+    hash.update(chunk);
+  }
+  return { byteSize, sha256: hash.digest("hex") };
 }
 
 async function packageArtifactsIfPresent(root) {
