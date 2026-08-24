@@ -23,6 +23,33 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "failure analyze": [
+    "release-exclusion-impact",
+    "release-exclusion-impact.md",
+    [
+      "impactReport",
+      "impactReportSha256",
+      "invalidDatasetCount",
+      "affectedRootCount",
+      "excludedDatasetCount",
+      "safeToExclude",
+      "nextActions",
+    ],
+  ],
+  "failure decide": [
+    "release-scope-decision",
+    "release-scope-decision.md",
+    [
+      "action",
+      "decidedAt",
+      "decidedBy",
+      "scopeDecision",
+      "scopeDecisionSha256",
+      "publicationAuthorized",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
   "package build": [
     "release-candidate-built",
     "release-candidate-built.md",

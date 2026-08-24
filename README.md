@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Reviewed the Release Elementary Flow cache remote-transfer default and retained local fallback boundaries."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Added the current failed-build impact analysis and confirmed scope-exclusion recovery route."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -50,6 +50,7 @@ Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接
 Calculation CLI 的 help 和恢复动作使用自定位的绝对入口，复制执行不依赖客户端当前工作目录；README 仍提供仓库根目录和 workflow 目录两种便携写法。
 Release 先生成独立且不可变的 Release Intake，按精确版本补齐 LCIA Method 表征因子引用但 Materialization Intake 未携带的 Flow，再由 Package CLI 消费该 Intake；两个动作都返回 workflow-local 回复模板、结构化恢复动作和精确 artifact 路径，并明确本地准备与 Candidate build 均不构成发布授权。
 Release 的 Elementary Flow 共享缓存刷新默认在受管 Worker EC2 上执行只读 snapshot 导出，经同 project Supabase Storage 的一小时临时对象下载、完整校验和立即删除后原子安装；本地直连刷新只保留为显式 fallback。
+Release package validation 失败后会保留 non-candidate failed build，并可从精确 issue spool、Calculation graph、Materialization lineage 和 canonical references 生成不可变 exclusion impact report。任何排除都必须先确认完整影响集合及报告 hash，再生成新的 Package Plan 并重跑全部验证；修复精确上游版本始终是推荐动作，错误不得被降级或静默忽略。
 异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
 创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
 
@@ -141,6 +142,7 @@ LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个�
 - 选择已经 materialize 并验证的 canonical dataset collection；
 - 决定包中包含哪些 dataset roots、result layers、closure 和 formats；
 - 生成可审查的 Package Plan 和 Release Candidate；
+- 对验证错误生成完整影响报告，让用户选择修复、确认完整集合排除或停止；
 - 执行 TIDAS/ILCD 验证、格式转换、语义 round-trip 和确定性打包；
 - 将人工决定绑定到精确 plan hash 和 target fingerprint；
 - 通过 actor-scoped 外部接口执行上传和发布；
@@ -237,6 +239,7 @@ Agent 不能替代用户决定：
 8. LifecycleModel 首版采用 resolved one-hop aggregated-background：根 instance 引用 `U(P)`，每条有效 direct provider edge 引用对应聚合 `R(Q)`，resulting Process 引用 `R(P)`。
 9. 同一 Result UUID lineage 可包含多个 exact source Process revisions；每个 revision 使用独立 dataset version，Model 引用 calculation axis 对应的精确版本。
 10. Quantitative reference 保持 Worker 的 raw direction/amount 与 signed normalization pivot；旧 Bundle 只从本地已校验 exact source closure 回推，不访问 mutable 远端状态。
+11. Release validation error 永远阻断当前 Candidate；排除必须绑定完整反向影响闭包和 exact report hash，并通过新的 Package Plan 重新执行完整验证。
 
 ## 仍需确认的细节
 
@@ -246,7 +249,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#33`
-- 当前分支：`codex/feature-issue-33-canonical-materialization-paths`
-- 当前阶段：实现 Result Materialization 内容寻址默认路径与验证后复用
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#47`
+- 当前分支：`feature/issue-47`
+- 当前阶段：实现 Release validation failure 的完整影响分析、范围决定与新 Candidate 重验证
 - 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证、薄后台 Job 入口，以及 canonical intake/materialization artifact 路径

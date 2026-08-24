@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { canonicalJson, fail, hashJson, sha256Bytes } from "./common.mjs";
+import { loadScopeDecision } from "./exclusion-impact.mjs";
 import { readNdjson } from "./records.mjs";
 import { loadReleaseIntake } from "./release-intake.mjs";
 
@@ -38,12 +39,16 @@ export async function buildPackageCandidate({
   releaseIntakeDir,
   outDir,
   releaseVersion,
+  scopeDecisionDir,
   tidasBin = process.env.TIDAS_BIN ?? "tidas",
   runTool = runTidas,
   verifyTool = verifyBuiltPackages,
 }) {
   validateReleaseVersion(releaseVersion);
   const releaseIntake = await loadReleaseIntake(releaseIntakeDir);
+  const scopeDecision = scopeDecisionDir
+    ? await loadScopeDecision(scopeDecisionDir)
+    : null;
   const materializationRoot = path.resolve(
     releaseIntake.locators.materializationDir,
   );
@@ -78,6 +83,14 @@ export async function buildPackageCandidate({
       materializedIndex,
       intake,
     );
+    if (scopeDecision)
+      validateScopeDecisionBindings({
+        scopeDecision,
+        releaseIntake: releaseIntake.manifest,
+        materializationManifest: manifest,
+        materializedIndex,
+        sourceIntake: intake,
+      });
     const canonicalRoot = path.join(workspace, "canonical");
     await mkdir(canonicalRoot, { recursive: true });
     const entries = await assembleCanonicalCollection({
@@ -87,8 +100,22 @@ export async function buildPackageCandidate({
       intake,
       dependencyArtifacts: [releaseIntake.dependencyArtifact],
       canonicalRoot,
+      excludedPaths: scopeDecision?.excludedPaths,
     });
     const assembledIndex = buildIndex(entries);
+    if (
+      scopeDecision &&
+      assembledIndex.datasetCount !==
+        scopeDecision.decision.exclusion.resultingDatasetCount
+    )
+      fail(
+        "scope_decision_result_count_mismatch",
+        "Scope decision resulting dataset count does not match assembled input",
+        {
+          expected: scopeDecision.decision.exclusion.resultingDatasetCount,
+          observed: assembledIndex.datasetCount,
+        },
+      );
     const indexPath = path.join(workspace, "canonical-dataset-index.json");
     await writeFile(indexPath, canonicalJson(assembledIndex), { flag: "wx" });
     plan = {
@@ -111,6 +138,13 @@ export async function buildPackageCandidate({
         artifactSetHash: assembledIndex.artifactSetHash,
       },
       packager: { adapter: "tidas-tools.release-build-packages.v1" },
+      scopeDecision: scopeDecision
+        ? {
+            decisionSha256: scopeDecision.decisionSha256,
+            impactReportSha256: scopeDecision.decision.impactReportSha256,
+            excludedSetHash: scopeDecision.decision.exclusion.excludedSetHash,
+          }
+        : null,
     };
     await writeFile(
       path.join(candidateStaging, "package-plan.json"),
@@ -188,6 +222,7 @@ export async function buildPackageCandidate({
         reportPath: "tidas-release-report.json",
         archiveReadbackReportPath: "package-verification-report.json",
       },
+      scopeDecisionSha256: scopeDecision?.decisionSha256 ?? null,
     };
     await writeFile(
       path.join(candidateStaging, "release-candidate.json"),
@@ -212,6 +247,7 @@ export async function buildPackageCandidate({
       });
       error.details = {
         ...(error.details ?? {}),
+        releaseIntakeDir: path.resolve(releaseIntakeDir),
         retainedBuild: retained,
       };
     }
@@ -519,6 +555,7 @@ async function assembleCanonicalCollection({
   intake,
   dependencyArtifacts = [],
   canonicalRoot,
+  excludedPaths = new Set(),
 }) {
   const entries = [];
   const identities = new Map();
@@ -526,6 +563,7 @@ async function assembleCanonicalCollection({
   for (const dataset of materializedIndex.datasets) {
     const sourcePath = resolveContained(materializationRoot, dataset.path);
     const relativePath = stripCanonicalPrefix(dataset.path);
+    if (excludedPaths.has(relativePath)) continue;
     const destination = resolveContained(canonicalRoot, relativePath);
     await mkdir(path.dirname(destination), { recursive: true });
     const bytes = await readFile(sourcePath);
@@ -564,6 +602,7 @@ async function assembleCanonicalCollection({
     for await (const record of readNdjson(artifact.resolvedPath)) {
       recordCount += 1;
       const relativePath = safeRelative(record.path);
+      if (excludedPaths.has(relativePath)) continue;
       const contentHash = hashJson(record.document);
       if (contentHash !== record.sha256)
         fail(
@@ -605,6 +644,7 @@ async function assembleCanonicalCollection({
   for (const artifactPath of dependencyArtifacts) {
     for await (const record of readNdjson(artifactPath)) {
       const relativePath = safeRelative(record.path);
+      if (excludedPaths.has(relativePath)) continue;
       const contentHash = hashJson(record.document);
       if (contentHash !== record.sha256)
         fail(
@@ -639,6 +679,27 @@ async function assembleCanonicalCollection({
     }
   }
   return entries;
+}
+
+function validateScopeDecisionBindings({
+  scopeDecision,
+  releaseIntake,
+  materializationManifest,
+  materializedIndex,
+  sourceIntake,
+}) {
+  const source = scopeDecision.decision.source;
+  if (
+    source.releaseIntakeManifestSha256 !== hashJson(releaseIntake) ||
+    source.materializationManifestSha256 !==
+      hashJson(materializationManifest) ||
+    source.materializedDatasetIndexSha256 !== hashJson(materializedIndex) ||
+    source.sourceIntakeManifestSha256 !== hashJson(sourceIntake)
+  )
+    fail(
+      "scope_decision_input_mismatch",
+      "Scope decision no longer matches the frozen Release inputs",
+    );
 }
 
 function validateReleaseIntakeBindings(

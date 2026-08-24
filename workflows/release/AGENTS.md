@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 package、candidate、approval、publication 或 readback 契约变化时
 checkPaths:
   - workflows/release/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Defined the default remote Elementary Flow cache transfer, credential, validation, and cleanup boundaries."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Defined complete exclusion impact analysis, hash-bound decisions, and scope-filtered revalidation."
 related:
   - README.md
   - ../AGENTS.md
@@ -28,6 +28,8 @@ related:
 - 根据用户目标提出 package recipe，不擅自扩大发布内容。
 - 验证 Result Materialization 输出与 frozen dataset bytes 的精确绑定。
 - 调用确定性 validator、converter 和 packager。
+- 当本地 package validation 发现数据错误时，使用冻结的 issue spool、精确 dataset identity、Calculation graph 和 Materialization lineage 生成完整排除影响报告；不得把报错数据直接称为孤儿。
+- 把修复、完整集合排除或停止决定绑定到精确 impact-report hash；只有完整集合排除被明确确认后才允许构建新的 scope-filtered Candidate。
 - 汇总候选、验证证据、target 和 plan hash 供用户决定。
 - 只在精确批准后执行远程发布。
 - 发布后独立下载并验证全部正式产物。
@@ -38,6 +40,7 @@ related:
 - 构建本地 Package Plan；
 - 运行不产生远程副作用的验证和打包；
 - 生成有界 candidate report；
+- 对 preserved failed build 执行只读影响分析，并记录不构成发布授权的本地范围决定；
 - 在用户已授权发布后继续同一 run 的 readback。
 
 ## 当前本地 Package 契约
@@ -46,6 +49,11 @@ related:
 - Release Intake 按精确 UUID/version 补齐 LCIA Method characterisation factor 引用但 source closure 缺失的 Flow。常规 Intake 只消费项目级 Elementary Flow 缓存；以 published count 和 `MAX(modified_at)` 判断缓存 freshness，缺失或过期时 fail closed，并只提示显式刷新命令。缓存刷新必须使用有界、只读 snapshot，不得由 Intake 隐式触发。显式 `cache refresh` 默认把导出放到受管 Worker EC2 上执行：Release 通过 SSH stdin 传递本次进程内数据面配置，远端不落凭据文件；远端向同一 Supabase project 的 Storage 写入一小时有效的临时 gzip artifact，本地下载并逐条校验后先删除临时对象，再原子替换共享缓存。数据库与 Storage project binding 无法一致验证时必须 fail closed。
 - 慢速本机数据库流式刷新只可通过显式 `--execution local` 使用；远端路径失败时不得静默降级。
 - `package build` 只接受已准备并重新验证上游 hash 的 Release Intake，以及 `standalone-lifecyclemodel-result-full-closure.v1`。
+- `failure analyze` 只接受 preserved failed build、其原始 Release Intake 和可验证的 TIDAS issue spool。它必须同时遍历 exact Process axis、technosphere 反向依赖、Materialization `processIndex/sourceProcess` lineage 和 canonical 文档引用；输出中分别列出初始错误、受影响 Process roots、派生 Result/Model、变得不可达的 support datasets 和剩余引用冲突。
+- 没有 inbound reference 不能单独证明 orphan。只要一个数据集本身是冻结发布 root，就必须标记为 `invalid_selected_root`，并将删除它视为发布范围变化。
+- `failure decide` 必须记录非空 `--reason` 和 `--decided-by`；`--action exclude` 还必须携带与报告 canonical SHA-256 完全一致的 `--confirm-impact-sha256`。确认对象是完整 `excludedSetHash`，不是最初报错的 UUID 列表。`repair` 保持推荐动作，`stop` 保留 failed build 而不创建 Candidate。
+- Exclusion impact report 是稳定的 F3 Workflow contract；改变发布内容的 scope decision 是 F4 审计证据。两者均不可原地修改，运行时绝对路径单独保存在权限受限 locator 中。
+- `package build --scope-decision` 只消费 `action=exclude`、hash 与全部冻结上游仍匹配且 `safeToExclude=true` 的决定。它按精确 canonical path 过滤完整影响集合，冻结新的 Package Plan，再重新执行全部 TIDAS/eILCD、closure、round-trip 和最终 ZIP readback validation；不得复用失败构建的通过结论。
 - Result Materialization 的 Index 只描述新生成数据集；Release 从 source closure 与冻结的 dependency supplement 加入 Unit Process 和支持数据集，生成供 `tidas-tools` 使用的完整 Index。
 - source closure artifact hash、record count、每条 document canonical hash，以及 materialized dataset bytes 必须在调用外部工具前重新验证。
 - Package Plan 不记录机器绝对路径；它只绑定 manifest/index/bundle hashes 和 canonical input summary，保证换目录重放不改变计划语义。
@@ -65,6 +73,7 @@ related:
 ## 必须明确确认的动作
 
 - 选择最终发布内容和 package recipe；
+- 确认排除影响报告中的完整数据集集合及其 hash；
 - 冻结 Release Candidate；
 - 绑定 target fingerprint 和 publish plan hash 的批准；
 - prepare、upload、approve、publish 等任何远程写入；
@@ -77,6 +86,8 @@ related:
 - 不从 mutable `latest` 补齐 graph、exchange、provider、method 或 version。
 - 不在 Package build 中生成或修改 Result Process、LifecycleModel、identity 或 dataset version。
 - 不发布 partial closure 或未通过必要验证的 package。
+- 不把 validation error 降级为 warning，不提供忽略错误继续打包的开关，也不把 mutable `latest` 作为替换候选自动应用。
+- 不直接从失败 Candidate 删除文件；排除只能生成新的 immutable scope decision、Package Plan 和 Candidate。
 - 不把本地 approval receipt 当作可转移的远程授权 token。
 - 不把 upload success 当作 publication success。
 - 不把 publication success 当作 readback verification success。

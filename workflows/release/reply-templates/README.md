@@ -33,4 +33,9 @@ related:
 - 不输出 credential、内部 locator、signed URL 或未确认的远程状态；
 - 模板可以按对话语气压缩，但不能改变授权边界或完成状态。
 
+当前 failure recovery 模板还区分：
+
+- `release-exclusion-impact`：完整排除影响已经计算，等待修复、确认完整集合或停止；
+- `release-scope-decision`：范围决定已经冻结，但不代表 Candidate 或发布授权。
+
 模板 ID 是稳定的 Agent-facing 接口；正文可以改进，ID 只有在消费者迁移后才能删除或改名。

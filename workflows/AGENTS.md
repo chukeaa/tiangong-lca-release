@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Reviewed shared credential, external capability, and explicit remote-action boundaries for the Release cache transfer."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Reviewed shared human-decision and recovery boundaries for Release exclusion impact decisions; the shared contract remains current."
 related:
   - ../AGENTS.md
   - ../README.md

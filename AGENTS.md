@@ -21,9 +21,9 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Reviewed the repository contract for remote Elementary Flow cache transfer without changing repository ownership or publication authority."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Added fail-closed exclusion impact and hash-bound scope-decision boundaries without changing source-data or publication authority."
 related:
   - README.md
   - .docpact/config.yaml
@@ -107,8 +107,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-45`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#45`
+- 当前工作分支：`feature/issue-47`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#47`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
@@ -131,4 +131,5 @@ related:
 - Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和 Result Process 内容层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
 - Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
 - Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
+- preserved failed build 可生成完整 exclusion impact report；范围排除必须由 hash-bound decision 明确确认，并通过新的 Package Plan 重跑全部 validator，不能绕过错误或修改失败 Candidate；
 - 当前变更通过仓库门禁并形成独立 Git commit。

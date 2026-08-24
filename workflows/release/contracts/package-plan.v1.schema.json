@@ -6,14 +6,17 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "releaseVersion",
     "profile",
     "materialization",
     "intake",
     "canonicalInput",
-    "packager"
+    "packager",
+    "scopeDecision"
   ],
   "properties": {
     "schemaVersion": { "const": "tiangong.release.package-plan.v1" },
+    "releaseVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
     "profile": { "const": "standalone-lifecyclemodel-result-full-closure.v1" },
     "materialization": {
       "type": "object",
@@ -57,6 +60,25 @@
       "properties": {
         "adapter": { "const": "tidas-tools.release-build-packages.v1" }
       }
+    },
+    "scopeDecision": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decisionSha256",
+            "impactReportSha256",
+            "excludedSetHash"
+          ],
+          "properties": {
+            "decisionSha256": { "$ref": "#/$defs/hash" },
+            "impactReportSha256": { "$ref": "#/$defs/hash" },
+            "excludedSetHash": { "$ref": "#/$defs/hash" }
+          }
+        }
+      ]
     }
   },
   "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
