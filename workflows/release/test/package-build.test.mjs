@@ -7,6 +7,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
@@ -14,6 +15,11 @@ import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
+import {
+  analyzeExclusionImpact,
+  recordScopeDecision,
+} from "../lib/exclusion-impact.mjs";
+import { buildExclusionReviewWorkbookModel } from "../lib/exclusion-review-workbook.mjs";
 import {
   inspectFlowCache,
   refreshFlowCache,
@@ -27,6 +33,7 @@ import {
   verifyTidasRuntime,
   verifyBuiltPackages,
 } from "../lib/package-build.mjs";
+import { readNdjson } from "../lib/records.mjs";
 import { prepareReleaseIntake } from "../lib/release-intake.mjs";
 import {
   REPLY_TEMPLATE_COMMANDS,
@@ -683,7 +690,8 @@ exit 0
   await access(payload.artifacts.failureManifest);
   assert.equal(payload.nextActions[0].kind, "inspect_failed_build");
   assert.match(payload.nextActions[0].command, /failed-package-build\.json/u);
-  assert.equal(payload.nextActions[1].kind, "inspect_retained_artifacts");
+  assert.equal(payload.nextActions[1].kind, "analyze_exclusion_impact");
+  assert.equal(payload.nextActions[2].kind, "inspect_retained_artifacts");
   assert.equal(payload.replyTemplate.id, "release-package-validation-failed");
   await assert.rejects(
     access(fixture.output),
@@ -796,6 +804,126 @@ test("Release Intake fails closed when an exact LCIA Method Flow is unavailable"
   );
 });
 
+test("Release failure analysis binds the complete exclusion set before rebuilding a candidate", async () => {
+  const fixture = await createExclusionFixture();
+  const impactDir = path.join(fixture.root, "impact");
+  const analysis = await analyzeExclusionImpact({
+    failedBuildDir: fixture.failedBuild,
+    releaseIntakeDir: fixture.releaseIntake,
+    outDir: impactDir,
+  });
+  assert.equal(analysis.report.status, "complete");
+  assert.equal(analysis.report.impact.safeToExclude, true);
+  assert.equal(
+    analysis.report.validationIssues.invalidDatasets[0].classification,
+    "invalid_selected_root",
+  );
+  assert.equal(
+    analysis.report.validationIssues.invalidDatasets[0].orphan,
+    false,
+  );
+  assert.equal(analysis.report.impact.affectedProcessRoots.length, 1);
+  assert.deepEqual(
+    analysis.report.impact.excludedCanonicalDatasets
+      .map(({ path: itemPath }) => itemPath)
+      .sort(),
+    [
+      `lifecyclemodels/${MODEL_ID}_${VERSION}.json`,
+      `processes/${RESULT_ID}_${VERSION}.json`,
+      `processes/${UNIT_ID}_${VERSION}.json`,
+    ],
+  );
+  assert.equal(analysis.report.impact.resultingDatasetCount, 1);
+  const reviewModel = buildExclusionReviewWorkbookModel(analysis.report);
+  assert.equal(reviewModel.invalidData.rows.length, 1);
+  assert.equal(reviewModel.affectedRoots.rows.length, 1);
+  assert.equal(reviewModel.derivedData.rows.length, 2);
+  assert.equal(reviewModel.unreachableSupport.rows.length, 0);
+  assert.equal(reviewModel.completeExclusionSet.rows.length, 3);
+  assert.deepEqual(
+    reviewModel.completeExclusionSet.rows.map((row) => row.at(-1)).sort(),
+    [
+      "Affected materialized dataset",
+      "Affected materialized dataset",
+      "Initial validation error",
+    ],
+  );
+
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const reviewEnvironment = { ...process.env };
+  delete reviewEnvironment.RELEASE_SPREADSHEET_NODE_MODULES;
+  const missingSpreadsheetRuntime = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "failure",
+      "review",
+      "--impact-report",
+      path.join(impactDir, "exclusion-impact-report.json"),
+      "--out-dir",
+      path.join(fixture.root, "review"),
+      "--preview-dir",
+      path.join(fixture.root, "review-previews"),
+      "--json",
+    ],
+    { encoding: "utf8", env: reviewEnvironment },
+  );
+  assert.equal(missingSpreadsheetRuntime.status, 1);
+  assert.equal(
+    JSON.parse(missingSpreadsheetRuntime.stderr).error.code,
+    "spreadsheet_runtime_missing",
+  );
+
+  await assert.rejects(
+    recordScopeDecision({
+      impactReportPath: path.join(impactDir, "exclusion-impact-report.json"),
+      outDir: path.join(fixture.root, "bad-decision"),
+      action: "exclude",
+      reason: "fixture",
+      decidedBy: "fixture-user",
+      confirmImpactSha256: "0".repeat(64),
+    }),
+    (error) => error.code === "impact_confirmation_mismatch",
+  );
+
+  const decision = await recordScopeDecision({
+    impactReportPath: path.join(impactDir, "exclusion-impact-report.json"),
+    outDir: path.join(fixture.root, "decision"),
+    action: "exclude",
+    reason: "Confirmed fixture exclusion set",
+    decidedBy: "fixture-user",
+    confirmImpactSha256: analysis.reportSha256,
+  });
+  assert.equal(decision.decision.action, "exclude");
+  assert.equal(decision.decision.publicationAuthorized, false);
+
+  const scopedOutput = path.join(fixture.root, "scoped-candidate");
+  const result = await buildPackageCandidate({
+    releaseIntakeDir: fixture.releaseIntake,
+    scopeDecisionDir: decision.path,
+    outDir: scopedOutput,
+    releaseVersion: RELEASE_VERSION,
+    runTool: async (request) => {
+      const index = JSON.parse(await readFile(request.indexPath, "utf8"));
+      assert.equal(index.datasetCount, 1);
+      assert.deepEqual(
+        index.datasets.map(({ path: itemPath }) => itemPath),
+        [`flows/${FLOW_ID}_${VERSION}.json`],
+      );
+      return writeFixturePackages(request);
+    },
+    verifyTool: async ({ releaseVersion }) => ({
+      schemaVersion: "tiangong.release.package-verification.v1",
+      releaseVersion,
+      outcome: "passed",
+      packages: [],
+    }),
+  });
+  assert.equal(result.candidate.publicationAuthorized, false);
+  assert.equal(result.candidate.scopeDecisionSha256, decision.decisionSha256);
+  assert.equal(result.plan.scopeDecision.excludedSetHash.length, 64);
+});
+
 test("release version is filename-safe before any input is read", async () => {
   await assert.rejects(
     buildPackageCandidate({
@@ -857,6 +985,7 @@ test("CLI exposes one bounded local package build route", () => {
   });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /package build/);
+  assert.match(help.stdout, /failure review/);
   assert.match(help.stdout, /does not authorize/);
   assert.match(help.stdout, /Examples:/);
   assert.match(help.stdout, /replyTemplate/);
@@ -971,10 +1100,15 @@ test("every Release CLI outcome maps to an existing bounded reply template", asy
     "cache status",
     "cache refresh",
     "intake prepare",
+    "failure analyze",
+    "failure review",
+    "failure decide",
     "package build",
   ]);
   for (const template of [
     replyTemplateFor("intake prepare", { ok: true }),
+    replyTemplateFor("failure analyze", { ok: true }),
+    replyTemplateFor("failure review", { ok: true }),
     replyTemplateFor("package build", { ok: true }),
     replyTemplateFor("package build", {
       ok: false,
@@ -1117,6 +1251,225 @@ async function createFixture() {
     outDir: releaseIntake,
   });
   return { root, materialization, intake, releaseIntake, output };
+}
+
+async function createExclusionFixture() {
+  const fixture = await createFixture();
+  const processAxisRecord = {
+    processIndex: 0,
+    rootProcess: { id: UNIT_ID, version: VERSION },
+    quantitativeReference: {
+      direction: "Output",
+      exchangeInternalId: "0",
+      flow: { id: FLOW_ID, version: VERSION },
+      meanAmount: 1,
+      referenceUnit: "kg",
+    },
+  };
+  const processAxisText = `${JSON.stringify(processAxisRecord)}\n`;
+  const processAxisPath = path.join(
+    fixture.intake,
+    "calculation-bundle",
+    "axes",
+    "processes-000000.ndjson",
+  );
+  await mkdir(path.dirname(processAxisPath), { recursive: true });
+  await writeFile(processAxisPath, processAxisText);
+
+  const intakePath = path.join(fixture.intake, "intake-manifest.json");
+  const intake = JSON.parse(await readFile(intakePath, "utf8"));
+  intake.artifacts.push({
+    kind: "process_axis",
+    path: "axes/processes-000000.ndjson",
+    sha256: sha256Bytes(Buffer.from(processAxisText)),
+    recordCount: 1,
+  });
+  await writeFile(intakePath, canonicalJson(intake));
+
+  const resultDocument = {
+    processDataSet: {
+      id: RESULT_ID,
+      referenceToSourceProcess: {
+        "@refObjectId": UNIT_ID,
+        "@version": VERSION,
+      },
+    },
+  };
+  const modelDocument = {
+    lifeCycleModelDataSet: {
+      id: MODEL_ID,
+      referenceToReferenceProcess: {
+        "@refObjectId": UNIT_ID,
+        "@version": VERSION,
+      },
+      referenceToResultingProcess: {
+        "@refObjectId": RESULT_ID,
+        "@version": VERSION,
+      },
+    },
+  };
+  const materializedIndexPath = path.join(
+    fixture.materialization,
+    "canonical-dataset-index.json",
+  );
+  const materializedIndex = JSON.parse(
+    await readFile(materializedIndexPath, "utf8"),
+  );
+  for (const [uuid, document] of [
+    [RESULT_ID, resultDocument],
+    [MODEL_ID, modelDocument],
+  ]) {
+    const dataset = materializedIndex.datasets.find(
+      (candidate) => candidate.uuid === uuid,
+    );
+    const content = canonicalJson(document);
+    await writeFile(path.join(fixture.materialization, dataset.path), content);
+    dataset.sha256 = sha256Bytes(Buffer.from(content));
+    dataset.byteSize = Buffer.byteLength(content);
+    dataset.canonicalContentHash = hashJson(document);
+  }
+  const rebuiltIndex = buildIndex(materializedIndex.datasets);
+  await writeFile(materializedIndexPath, canonicalJson(rebuiltIndex));
+
+  const manifestPath = path.join(
+    fixture.materialization,
+    "materialization-manifest.json",
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.inputs.intakeManifestSha256 = hashJson(intake);
+  manifest.inputs.canonicalDatasetIndexSha256 = hashJson(rebuiltIndex);
+  manifest.datasets = rebuiltIndex.datasets.map((dataset) => ({
+    ...dataset,
+    processIndex: 0,
+    sourceProcess: { id: UNIT_ID, version: VERSION },
+    materializationRole:
+      dataset.datasetType === "lifecyclemodel" ? "primary" : "resulting",
+  }));
+  await writeFile(manifestPath, canonicalJson(manifest));
+
+  await rm(fixture.releaseIntake, { recursive: true, force: true });
+  await prepareReleaseIntake({
+    materializationDir: fixture.materialization,
+    sourceIntakeDir: fixture.intake,
+    outDir: fixture.releaseIntake,
+  });
+
+  const sourceRecords = [];
+  const sourceArtifact = intake.artifacts.find(
+    ({ kind }) => kind === "source_closure",
+  );
+  for await (const record of readNdjson(
+    path.join(fixture.intake, "calculation-bundle", sourceArtifact.path),
+  ))
+    sourceRecords.push(record);
+  const failedDatasets = [
+    ...rebuiltIndex.datasets.map((dataset) => ({
+      ...dataset,
+      path: dataset.path.replace(/^canonical-datasets\//u, ""),
+    })),
+    ...sourceRecords.map((record) => ({
+      datasetType: record.datasetType,
+      role: record.role,
+      uuid: record.uuid,
+      version: record.version,
+      path: record.path,
+      sha256: record.sha256,
+      byteSize: Buffer.byteLength(canonicalJson(record.document)),
+      canonicalContentHash: record.sha256,
+    })),
+  ];
+  const failedIndex = buildIndex(failedDatasets);
+  const failedBuild = path.join(fixture.root, "failed-build");
+  await mkdir(failedBuild);
+  await writeFile(
+    path.join(failedBuild, "canonical-dataset-index.json"),
+    canonicalJson(failedIndex),
+  );
+  const releaseIntake = JSON.parse(
+    await readFile(
+      path.join(fixture.releaseIntake, "release-intake-manifest.json"),
+      "utf8",
+    ),
+  );
+  const failedPlan = {
+    schemaVersion: "tiangong.release.package-plan.v1",
+    releaseVersion: RELEASE_VERSION,
+    profile: PACKAGE_PROFILE,
+    materialization: {
+      manifestSha256: hashJson(manifest),
+      canonicalDatasetIndexSha256: hashJson(rebuiltIndex),
+    },
+    intake: {
+      calculationId: CALCULATION_ID,
+      bundleContentHash: intake.source.bundleContentHash,
+      manifestSha256: hashJson(intake),
+      releaseIntakeManifestSha256: hashJson(releaseIntake),
+    },
+    canonicalInput: {
+      datasetCount: failedIndex.datasetCount,
+      byteSize: failedIndex.byteSize,
+      artifactSetHash: failedIndex.artifactSetHash,
+    },
+    packager: { adapter: "tidas-tools.release-build-packages.v1" },
+  };
+  await writeFile(
+    path.join(failedBuild, "package-plan.json"),
+    canonicalJson(failedPlan),
+  );
+  const issueSpool = path.join(fixture.root, "issues.ndjson");
+  const issueEvent = {
+    type: "issue",
+    schema_version: "tidas.validation-issue-event.v1",
+    issue_ordinal: 0,
+    issue: {
+      issue_code: "variable_parameter_reference_missing",
+      severity: "error",
+      category: "processes",
+      file_path: `processes/${UNIT_ID}_${VERSION}.json`,
+      location: "processDataSet/exchanges/exchange/0/referenceToVariable",
+      message: "fixture missing variable",
+    },
+  };
+  const issueText = `${JSON.stringify(issueEvent)}\n`;
+  await writeFile(issueSpool, issueText);
+  const failedManifest = {
+    schemaVersion: "tiangong.release.failed-package-build.v1",
+    status: "package_build_failed",
+    publicationAuthorized: false,
+    candidateCreated: false,
+    releaseVersion: RELEASE_VERSION,
+    profile: PACKAGE_PROFILE,
+    requestedCandidatePath: fixture.output,
+    packagePlanSha256: hashJson(failedPlan),
+    packages: [],
+    failure: {
+      code: "tidas_package_build_failed",
+      message: "fixture validation failed",
+      stage: "package_build_or_validation",
+      diagnostics: {
+        operationReport: {
+          artifacts: [
+            {
+              path: issueSpool,
+              media_type: "application/x-ndjson",
+              bytes: Buffer.byteLength(issueText),
+              sha256: sha256Bytes(Buffer.from(issueText)),
+            },
+          ],
+        },
+      },
+    },
+    artifacts: {
+      canonicalDatasetIndex: "canonical-dataset-index.json",
+      packagePlan: "package-plan.json",
+      packagesDirectory: "packages",
+    },
+  };
+  await writeFile(
+    path.join(failedBuild, "failed-package-build.json"),
+    canonicalJson(failedManifest),
+  );
+  return { ...fixture, failedBuild };
 }
 
 async function configureMissingMethodFlow(fixture) {

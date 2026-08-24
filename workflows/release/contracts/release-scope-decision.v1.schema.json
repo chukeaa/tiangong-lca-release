@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/release-scope-decision.v1.schema.json",
+  "title": "Release Scope Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "action",
+    "publicationAuthorized",
+    "decidedAt",
+    "decidedBy",
+    "reason",
+    "impactReportSha256",
+    "source",
+    "exclusion"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.scope-decision.v1" },
+    "action": { "enum": ["repair", "exclude", "stop"] },
+    "publicationAuthorized": { "const": false },
+    "decidedAt": { "type": "string", "format": "date-time" },
+    "decidedBy": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "impactReportSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source": { "type": "object" },
+    "exclusion": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "excludedSetHash",
+            "excludedCanonicalDatasets",
+            "affectedProcessRoots",
+            "resultingDatasetCount"
+          ],
+          "properties": {
+            "excludedSetHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "excludedCanonicalDatasets": { "type": "array", "minItems": 1 },
+            "affectedProcessRoots": { "type": "array", "minItems": 1 },
+            "resultingDatasetCount": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    }
+  }
+}

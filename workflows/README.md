@@ -12,9 +12,9 @@ whenToUpdate:
   - 当顶层 Workflow 新增、删除、重命名或重新划分时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Reviewed four-workflow navigation after the Release cache transport change; workflow boundaries remain unchanged."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Reviewed four-workflow navigation for the Release Excel impact review step; workflow boundaries remain unchanged."
 related:
   - ../README.md
   - AGENTS.md
@@ -24,12 +24,12 @@ related:
 
 本目录是 Release 项目的主要入口，不是脚本集合。
 
-| Workflow                                                   | 解决的问题                                          | 主要输出                                                  |
-| ---------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
-| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载 | Closure evidence、Calculation Bundle                      |
-| [Dataset Transformation](dataset-transformation/README.md) | 从已有数据或结果产生可追溯的派生数据                | Frozen transformation spec、派生数据集/结果               |
-| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel         | Canonical datasets、identity/version plan、manifest       |
-| [Release](release/README.md)                               | 准备独立 Release Intake，验证、打包并正式发布数据集 | Release Intake、Package、Candidate、Publication、Readback |
+| Workflow                                                   | 解决的问题                                                        | 主要输出                                                                         |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载               | Closure evidence、Calculation Bundle                                             |
+| [Dataset Transformation](dataset-transformation/README.md) | 从已有数据或结果产生可追溯的派生数据                              | Frozen transformation spec、派生数据集/结果                                      |
+| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel                       | Canonical datasets、identity/version plan、manifest                              |
+| [Release](release/README.md)                               | 准备独立 Release Intake，分析失败范围，验证、打包并正式发布数据集 | Release Intake、Impact/Scope Decision、Package、Candidate、Publication、Readback |
 
 Agent 进入具体 Workflow 前，先读取：
 

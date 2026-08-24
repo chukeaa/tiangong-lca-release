@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/exclusion-impact-review-receipt.v1.schema.json",
+  "title": "Release Exclusion Impact Review Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authoritative",
+    "publicationAuthorized",
+    "source",
+    "workbook",
+    "verification"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.exclusion-impact-review-receipt.v1"
+    },
+    "authoritative": { "const": false },
+    "publicationAuthorized": { "const": false },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["impactReportSha256"],
+      "properties": {
+        "impactReportSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "workbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byteSize", "sheets"],
+      "properties": {
+        "path": { "const": "exclusion-impact-review.xlsx" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "byteSize": { "type": "integer", "minimum": 1 },
+        "sheets": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keyRangeInspected",
+        "formulaErrorScanCompleted",
+        "formulaErrorCount",
+        "visualPreviewSheetCount"
+      ],
+      "properties": {
+        "keyRangeInspected": { "const": "Summary!A1:D22" },
+        "formulaErrorScanCompleted": { "const": true },
+        "formulaErrorCount": { "const": 0 },
+        "visualPreviewSheetCount": { "const": 7 }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/exclusion-impact-report.v1.schema.json",
+  "title": "Release Exclusion Impact Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "publicationAuthorized",
+    "source",
+    "validationIssues",
+    "impact",
+    "options"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.exclusion-impact-report.v1"
+    },
+    "status": { "enum": ["complete", "blocked"] },
+    "publicationAuthorized": { "const": false },
+    "source": { "type": "object" },
+    "validationIssues": {
+      "type": "object",
+      "required": ["errorCount", "issueCodes", "invalidDatasets"],
+      "properties": {
+        "errorCount": { "type": "integer", "minimum": 1 },
+        "issueCodes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "invalidDatasets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/invalidDataset" },
+          "minItems": 1
+        }
+      }
+    },
+    "impact": {
+      "type": "object",
+      "required": [
+        "affectedProcessRoots",
+        "affectedMaterializedDatasets",
+        "newlyUnreachableSupportDatasets",
+        "excludedCanonicalDatasets",
+        "excludedSetHash",
+        "originalDatasetCount",
+        "resultingDatasetCount",
+        "remainingReferenceConflicts",
+        "safeToExclude"
+      ],
+      "properties": {
+        "processGraphAvailable": { "type": "boolean" },
+        "affectedProcessRoots": { "type": "array" },
+        "affectedMaterializedDatasets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataset" }
+        },
+        "newlyUnreachableSupportDatasets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataset" }
+        },
+        "excludedCanonicalDatasets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataset" },
+          "minItems": 1
+        },
+        "excludedSetHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "originalDatasetCount": { "type": "integer", "minimum": 1 },
+        "resultingDatasetCount": { "type": "integer", "minimum": 1 },
+        "remainingReferenceConflicts": { "type": "array" },
+        "safeToExclude": { "type": "boolean" }
+      }
+    },
+    "options": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["action", "recommended", "allowed", "description"],
+        "properties": {
+          "action": { "enum": ["repair", "exclude", "stop"] },
+          "recommended": { "type": "boolean" },
+          "allowed": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object",
+      "required": ["datasetType", "uuid", "version", "path"],
+      "properties": {
+        "datasetType": { "type": "string" },
+        "uuid": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        },
+        "path": { "type": "string" }
+      }
+    },
+    "invalidDataset": {
+      "allOf": [
+        { "$ref": "#/$defs/dataset" },
+        {
+          "type": "object",
+          "required": [
+            "issueCount",
+            "issueCodes",
+            "classification",
+            "orphan",
+            "inboundCalculationEdgeCount",
+            "outboundCalculationEdgeCount"
+          ],
+          "properties": {
+            "classification": {
+              "enum": [
+                "invalid_selected_root",
+                "invalid_dependency",
+                "invalid_unselected_dataset"
+              ]
+            },
+            "orphan": { "type": "boolean" }
+          }
+        }
+      ]
+    }
+  }
+}

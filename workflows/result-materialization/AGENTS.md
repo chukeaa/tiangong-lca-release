@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Calibrated the one-hop reconstruction tolerance contract while retaining direction/unit isolation and fail-closed validation."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Required exact lineage evidence for Release impact analysis while keeping Materialization immutable."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -38,6 +38,7 @@ related:
 - 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
 - 只把通过验证的 canonical dataset collection 交给 Release Workflow。
+- Manifest 中每个 dataset 的 exact `sourceProcess`、`processIndex`、role 和 materializationRole 必须足以让 Release 对 validation failure 做反向影响分析；不得仅靠 UUID 或文件名猜测派生关系。
 - Worker Calculation Bundle v2 的 content hash 必须在原始 canonical manifest bytes 上移除顶层 `bundleContentHash` 后验证；不得先把任意 JSON number 转成 JavaScript `number` 再重序列化，因为超出安全整数范围时会改变证据字节。
 - 正常运行必须使用 `design/local-artifact-path-convention.md` 定义的内容寻址默认路径；路径只用于导航，`materialization-key.json`、manifest、精确 identity/version 和 SHA-256 才是权威证据。
 - canonical 路径已存在时必须先验证完整产物：完全一致返回 `reused_existing`，残缺或漂移返回 `artifact_path_conflict`；不得提供静默覆盖 canonical artifact 的 `--force`。
@@ -102,6 +103,7 @@ related:
 - 同一 exact source revision 重复出现、Result version 碰撞或同一 identity/version 内容冲突必须 fail closed。
 - 缺失或为空的 `treatmentStandardsRoutes`、`mixAndLocationTypes` 使用既有单空格多语言字段兼容；兼容必须对源文档副本显式执行，Result/Model renderer 不得依赖修改共享 context 的副作用。
 - 输入或 recipe 改变时，不得静默复用无效 materialization evidence。
+- Release 的 exclusion decision 不得原地修改 Materialization。只有报告证明剩余 roots 在冻结 Calculation graph 中不依赖完整排除集合时，Release 才能筛选已经验证的 exact outputs 形成新的 Package Plan；任何替换版本、provider 或 graph 变化都必须回到本 Workflow 重新 materialize。
 
 ## Quantitative-reference pivot
 

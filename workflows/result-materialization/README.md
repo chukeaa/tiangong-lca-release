@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 5d4fd4af0c1bd769f058551ab9a698dc55a51c00
-lastReviewedNote: "Calibrated one-hop reconstruction tolerance for solver residuals without weakening structural validation."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
+lastReviewedNote: "Documented how exact Materialization lineage supports Release exclusion impact without mutating outputs."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -223,6 +223,8 @@ materialization-report.json
 ```
 
 `canonical-dataset-index.json` 使用 `tiangong.release.canonical-dataset-index.v1`，把每个已生成数据集的 type、role、UUID/version、相对路径、原始文件 SHA-256、canonical content hash 和 byte size 冻结为 `tidas-tools` 可消费的交接契约。Materialization Manifest 绑定该 Index 的 canonical SHA-256。Result-only 模式的 canonical datasets 只有 primary Result Processes；LifecycleModel 模式同时包含 primary Models、resulting Result Processes 和 dependency Result Processes。
+
+Materialization Manifest 还保留 exact source Process、process index、role 和 materialization role。Release validation 失败时，这些 lineage 字段与冻结的 Calculation graph 一起用于计算受影响 roots 及其 Result/Model；Release 不会据此改写本 Materialization。只有完整影响报告证明未排除 roots 不受影响时，后续 Package Plan 才能引用原有 exact outputs 的子集。若修复版本、provider 或 graph，必须创建新的 Materialization Request 并重新验证。
 
 Materialization Manifest 至少绑定：
 

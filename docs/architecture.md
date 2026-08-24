@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Reviewed the Release cache adapter's remote execution and temporary S3 transfer boundary."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Added the derived Excel human-review bundle between exclusion impact analysis and scope decision."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -100,9 +100,22 @@ Dataset Transformation Manifest ----------+--> Result Materialization
                                                    |
                                                    v
                                       Local TIDAS Package Build
-                                                   |
-                                                   v
-                                           Release Candidate
+                                          /                 \
+                                  validation passed      validation failed
+                                         |                    |
+                                         v                    v
+                                 Release Candidate     Failed Build Evidence
+                                                              |
+                                                              v
+                                                Exclusion Impact Report
+                                                              |
+                                                              v
+                                              Excel Human Review Bundle
+                                                              |
+                                            repair / confirmed exclude / stop
+                                                              |
+                                                              v
+                                                   Scope Decision + new Plan
 ```
 
 一个 Workflow 可以建议用户进入另一个 Workflow，但不得自动把“建议下一步”解释成授权执行。
@@ -118,6 +131,8 @@ Dataset Transformation Manifest ----------+--> Result Materialization
 - Decision Evidence：绑定精确 subject hash 和 target 的用户决定。
 
 Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容 hash 标识。Draft 可修改；Frozen Spec 和已经执行的产物不可原地改写。
+
+Exclusion Impact Report 是由失败证据和冻结图派生的只读 contract；Scope Decision 是改变后续分发内容的审计证据。两者都通过 canonical SHA-256 绑定输入，不能原地修改。Excel Human Review Bundle 是从报告派生的可编辑人工视图，receipt 记录源报告 hash 和 workbook hash，但它不是决定权威。确认排除只允许新的 Package Plan 选择既有、验证过且未受影响的 exact datasets；它不会改写 Materialization、源数据或失败构建。任何 replacement version 或依赖图变化都返回上游生成新证据。
 
 ## 恢复模型
 
@@ -152,4 +167,4 @@ Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容
 
 Calculation 当前已经实现 ResultSet 的 actor-scoped create/list/get、Closure/Calculation 提交、数据库优先的任务状态查询，以及数据库/S3 Calculation Bundle 数据面。Bundle list/get 直接执行参数化只读 SQL；download 通过精确 Package metadata 从 S3 有界并发下载并校验 manifest/artifacts，不调用重量级 Edge 签名路径，也不把 credential、object locator 或 signed URL 放入输出。外部 payload 统一经 provider compatibility adapter 转为 Release-owned 最小引用。后续能力仍一次只优化一个 Workflow；只有当前确认的说明、契约、实现和验证进入活动结构。
 
-Result Materialization 当前在每次成功执行后生成内容寻址的 canonical dataset index，并由 materialization manifest 绑定该索引。Release 不再把 Materialization Intake 直接视为最终分发输入：独立维护的项目级 Elementary Flow 缓存以数据库 published count 与 `MAX(modified_at)` 作为 freshness watermark，只有显式 `cache refresh` 才执行长时只读下载。该刷新默认通过受管 SSH host 在靠近 Supabase 的 EC2 上执行 repeatable-read 导出，并以同 project Storage 的一小时临时对象完成压缩传输；Release 仍拥有格式、project binding、hash/record 验证、临时对象删除和本地原子安装，本机数据库流式路径只作为显式 fallback。常规 `intake prepare` 只消费 fresh 缓存，保持两个上游不可变，按精确版本补齐 LCIA Method characterisation Flow，并冻结独立 Release Intake。Package build 只消费该 Intake，重新验证上游和 supplement hash，形成 canonical TIDAS 输入，再委托 `tidas-tools` 完成通用精确引用闭包、TIDAS/eILCD 验证、转换、语义回读和四类 ZIP 生成。生成 ZIP 与 Candidate qualification 是独立状态：qualification 失败会保留未授权的 failed build 和诊断证据；只有最终 ZIP 全部回读通过才原子提交 `publicationAuthorized=false` 的 Release Candidate。审批、上传、发布和独立远端回读仍是后续独立动作。
+Result Materialization 当前在每次成功执行后生成内容寻址的 canonical dataset index，并由 materialization manifest 绑定该索引。Release 不再把 Materialization Intake 直接视为最终分发输入：独立维护的项目级 Elementary Flow 缓存以数据库 published count 与 `MAX(modified_at)` 作为 freshness watermark，只有显式 `cache refresh` 才执行长时只读下载。该刷新默认通过受管 SSH host 在靠近 Supabase 的 EC2 上执行 repeatable-read 导出，并以同 project Storage 的一小时临时对象完成压缩传输；Release 仍拥有格式、project binding、hash/record 验证、临时对象删除和本地原子安装，本机数据库流式路径只作为显式 fallback。常规 `intake prepare` 只消费 fresh 缓存，保持两个上游不可变，按精确版本补齐 LCIA Method characterisation Flow，并冻结独立 Release Intake。Package build 只消费该 Intake，重新验证上游和 supplement hash，形成 canonical TIDAS 输入，再委托 `tidas-tools` 完成通用精确引用闭包、TIDAS/eILCD 验证、转换、语义回读和四类 ZIP 生成。生成 ZIP 与 Candidate qualification 是独立状态：qualification 失败会保留未授权的 failed build 和诊断证据；当 failed build 携带可验证 issue spool 时，Release 可以只读计算完整反向影响闭包并记录 hash-bound scope decision，随后以新的 Package Plan 过滤完整确认集合并重跑全部门禁。只有最终 ZIP 全部回读通过才原子提交 `publicationAuthorized=false` 的 Release Candidate。审批、上传、发布和独立远端回读仍是后续独立动作。

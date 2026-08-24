@@ -8,17 +8,20 @@
     "schemaVersion",
     "status",
     "publicationAuthorized",
+    "releaseVersion",
     "profile",
     "packagePlanSha256",
     "canonicalDatasetIndexSha256",
     "packages",
     "packageSetHash",
-    "validation"
+    "validation",
+    "scopeDecisionSha256"
   ],
   "properties": {
     "schemaVersion": { "const": "tiangong.release.release-candidate.v1" },
     "status": { "const": "local_candidate" },
     "publicationAuthorized": { "const": false },
+    "releaseVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
     "profile": { "const": "standalone-lifecyclemodel-result-full-closure.v1" },
     "packagePlanSha256": { "$ref": "#/$defs/hash" },
     "canonicalDatasetIndexSha256": { "$ref": "#/$defs/hash" },
@@ -42,12 +45,24 @@
     "validation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["delegatedTo", "outcome", "reportPath"],
+      "required": [
+        "delegatedTo",
+        "outcome",
+        "reportPath",
+        "archiveReadbackReportPath"
+      ],
       "properties": {
         "delegatedTo": { "const": "tidas-tools" },
         "outcome": { "const": "passed" },
-        "reportPath": { "const": "tidas-release-report.json" }
+        "reportPath": { "const": "tidas-release-report.json" },
+        "archiveReadbackReportPath": {
+          "const": "package-verification-report.json"
+        }
       }
+    },
+    "scopeDecisionSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
     }
   },
   "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }

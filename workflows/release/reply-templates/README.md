@@ -33,4 +33,10 @@ related:
 - 不输出 credential、内部 locator、signed URL 或未确认的远程状态；
 - 模板可以按对话语气压缩，但不能改变授权边界或完成状态。
 
+当前 failure recovery 模板还区分：
+
+- `release-exclusion-impact-analyzed`：权威 JSON 已生成，等待客户端 Agent 生成并逐页检查 Excel 审核表；
+- `release-exclusion-impact`：Excel 审核材料已准备，明确展示修复、完整集合排除或停止三种选择；
+- `release-scope-decision`：范围决定已经冻结，但不代表 Candidate 或发布授权。
+
 模板 ID 是稳定的 Agent-facing 接口；正文可以改进，ID 只有在消费者迁移后才能删除或改名。

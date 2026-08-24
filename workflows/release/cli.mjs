@@ -8,6 +8,11 @@ import {
   PACKAGE_PROFILE,
 } from "./lib/package-build.mjs";
 import {
+  analyzeExclusionImpact,
+  recordScopeDecision,
+} from "./lib/exclusion-impact.mjs";
+import { buildExclusionImpactReviewWorkbook } from "./lib/exclusion-review-workbook.mjs";
+import {
   DEFAULT_FLOW_CACHE,
   DEFAULT_FLOW_CACHE_EXECUTION,
   inspectFlowCache,
@@ -37,6 +42,16 @@ const VALUE_OPTIONS = new Set([
   "flow-cache",
   "execution",
   "remote-host",
+  "failed-build",
+  "issue-spool",
+  "impact-report",
+  "scope-decision",
+  "action",
+  "reason",
+  "decided-by",
+  "confirm-impact-sha256",
+  "spreadsheet-node-modules",
+  "preview-dir",
 ]);
 const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
@@ -46,6 +61,9 @@ Commands:
   cache status        Check whether the shared Elementary Flow cache is usable
   cache refresh       Explicitly replace the shared cache; remote Worker EC2 execution is the default
   intake prepare      Expand exact LCIA Method Flow dependencies into an immutable Release Intake
+  failure analyze     Compute the complete exclusion impact of exact validation failures
+  failure review      Generate the human-review Excel workbook from one impact report
+  failure decide      Record repair, hash-confirmed exclusion, or stop against one impact report
   package build       Build one local, unapproved Release Candidate from a frozen Release Intake
 
 intake prepare options:
@@ -65,6 +83,27 @@ package build options:
   --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
   --tidas-bin <path>        exact tidas v0.2.0 executable; defaults to TIDAS_BIN or PATH lookup
+  --scope-decision <path>   Optional verified exclusion decision directory
+
+failure analyze options:
+  --failed-build <path>     Preserved failed build directory
+  --release-intake <path>   Frozen Release Intake used by the failed build
+  --issue-spool <path>      Explicit validation issue NDJSON when not referenced by the failed build
+  --out-dir <path>          New immutable impact-analysis directory
+
+failure decide options:
+  --impact-report <path>    Exact exclusion-impact-report.json
+  --action <action>         repair, exclude, or stop
+  --reason <text>           Durable decision reason
+  --decided-by <identity>   Human or actor identity making the decision
+  --confirm-impact-sha256 <hash> Required for exclude; must match the exact report
+  --out-dir <path>          New immutable scope-decision directory
+
+failure review options:
+  --impact-report <path>    Exact exclusion-impact-report.json
+  --spreadsheet-node-modules <path> Client Agent workspace dependency node_modules; defaults to RELEASE_SPREADSHEET_NODE_MODULES
+  --preview-dir <path>      Rendered PNG directory required for visual verification
+  --out-dir <path>          New review bundle containing the Excel workbook and receipt
 
 Common:
   --json                    Emit one bounded JSON result on stdout
@@ -87,6 +126,10 @@ Examples:
     --profile ${PACKAGE_PROFILE} --release-version 2026.08.0 \
     --out-dir .release/candidates/<candidate-name> --json
 
+  release-package failure analyze --failed-build .release/candidates/<failed-build> \\
+    --release-intake .release/release/intakes/<release-intake-name> \\
+    --out-dir .release/release/impact/<analysis-name> --json
+
 JSON results include outcome, completeness, artifact paths, nextActions, and a workflow-local replyTemplate.
 `;
 
@@ -99,6 +142,8 @@ async function main() {
   if (!(
     (command === "cache" && ["status", "refresh"].includes(action)) ||
     (command === "intake" && action === "prepare") ||
+    (command === "failure" &&
+      ["analyze", "review", "decide"].includes(action)) ||
     (command === "package" && action === "build")
   )) {
     throw Object.assign(
@@ -141,6 +186,51 @@ async function main() {
     respondIntake(options, result);
     return;
   }
+  if (command === "failure" && action === "analyze") {
+    requireOptions(options, ["failed-build", "release-intake", "out-dir"]);
+    const result = await analyzeExclusionImpact({
+      failedBuildDir: path.resolve(options["failed-build"]),
+      releaseIntakeDir: path.resolve(options["release-intake"]),
+      outDir: path.resolve(options["out-dir"]),
+      issueSpoolPath: options["issue-spool"]
+        ? path.resolve(options["issue-spool"])
+        : undefined,
+    });
+    respondImpact(options, result);
+    return;
+  }
+  if (command === "failure" && action === "decide") {
+    requireOptions(options, [
+      "impact-report",
+      "action",
+      "reason",
+      "decided-by",
+      "out-dir",
+    ]);
+    const result = await recordScopeDecision({
+      impactReportPath: path.resolve(options["impact-report"]),
+      outDir: path.resolve(options["out-dir"]),
+      action: options.action,
+      reason: options.reason,
+      decidedBy: options["decided-by"],
+      confirmImpactSha256: options["confirm-impact-sha256"],
+    });
+    respondDecision(options, result);
+    return;
+  }
+  if (command === "failure" && action === "review") {
+    requireOptions(options, ["impact-report", "preview-dir", "out-dir"]);
+    const result = await buildExclusionImpactReviewWorkbook({
+      impactReportPath: path.resolve(options["impact-report"]),
+      outDir: path.resolve(options["out-dir"]),
+      spreadsheetNodeModules: options["spreadsheet-node-modules"],
+      previewDir: options["preview-dir"]
+        ? path.resolve(options["preview-dir"])
+        : undefined,
+    });
+    respondImpactReview(options, result);
+    return;
+  }
   requireOptions(options, ["release-intake", "profile", "out-dir"]);
   if (options.profile !== PACKAGE_PROFILE) {
     throw Object.assign(
@@ -159,6 +249,9 @@ async function main() {
     outDir: path.resolve(options["out-dir"]),
     tidasBin: options["tidas-bin"],
     releaseVersion: options["release-version"],
+    scopeDecisionDir: options["scope-decision"]
+      ? path.resolve(options["scope-decision"])
+      : undefined,
   });
   const candidateManifest = path.join(result.path, "release-candidate.json");
   respond(options, {
@@ -185,6 +278,9 @@ async function main() {
         "package-verification-report.json",
       ),
       packagesDirectory: path.join(result.path, "packages"),
+      scopeDecision: options["scope-decision"]
+        ? path.resolve(options["scope-decision"])
+        : undefined,
     },
     nextActions: [
       {
@@ -266,6 +362,8 @@ function respondVersionConfirmation(options) {
   ];
   if (options["tidas-bin"])
     argv.push("--tidas-bin", path.resolve(options["tidas-bin"]));
+  if (options["scope-decision"])
+    argv.push("--scope-decision", path.resolve(options["scope-decision"]));
   argv.push("--json");
   const payload = {
     ok: true,
@@ -341,6 +439,191 @@ function respondIntake(options, result) {
     process.stdout.write(
       `Release Intake prepared\n\nSummary:\n- Path: ${result.path}\n- Added exact Flows: ${result.report.addedExactFlowCount}\n\nNext:\n- ${payload.nextActions[0].command}\n\nReply using template:\n- ${payload.replyTemplate.path}\n`,
     );
+}
+
+function respondImpact(options, result) {
+  const reportPath = path.join(result.path, "exclusion-impact-report.json");
+  const reviewBase = `${result.path}-review`;
+  const payload = {
+    ok: true,
+    command: "failure analyze",
+    outcome: "exclusion_impact_analyzed",
+    completeness: "awaiting_human_review_workbook",
+    publicationAuthorized: false,
+    impactReport: reportPath,
+    impactReportSha256: result.reportSha256,
+    invalidDatasetCount: result.report.validationIssues.invalidDatasets.length,
+    affectedRootCount: result.report.impact.affectedProcessRoots.length,
+    excludedDatasetCount: result.report.impact.excludedCanonicalDatasets.length,
+    safeToExclude: result.report.impact.safeToExclude,
+    reviewWorkbookRequired: true,
+    spreadsheetRuntimeEnv: "RELEASE_SPREADSHEET_NODE_MODULES",
+    nextActions: [
+      {
+        kind: "build_human_review_workbook",
+        recommended: true,
+        description:
+          "Use the client Agent spreadsheet runtime to render and visually verify the complete review workbook before asking for a scope decision.",
+        command: `${RELEASE_COMMAND} failure review --impact-report ${shellQuote(reportPath)} --preview-dir ${shellQuote(`${reviewBase}-previews`)} --out-dir ${shellQuote(reviewBase)} --json`,
+      },
+    ],
+    replyTemplate: replyTemplateFor("failure analyze", { ok: true }),
+  };
+  respondGeneric(options, payload, "Release exclusion impact analyzed");
+}
+
+function respondImpactReview(options, result) {
+  if (result.receipt.verification.visualPreviewSheetCount !== 7)
+    throw Object.assign(
+      new Error("All seven review workbook sheets must be rendered"),
+      { code: "review_workbook_visual_verification_incomplete" },
+    );
+  const effectiveReportPath = result.impactReportPath;
+  const decisionBase = `${result.path}-decision`;
+  const model = result.model;
+  const payload = {
+    ok: true,
+    command: "failure review",
+    outcome: model.safeToExclude
+      ? "exclusion_review_ready"
+      : "exclusion_review_blocked",
+    completeness: model.status,
+    publicationAuthorized: false,
+    impactReport: effectiveReportPath,
+    impactReportSha256: result.sourceReportSha256,
+    reviewWorkbook: result.workbookPath,
+    reviewWorkbookSha256: result.receipt.workbook.sha256,
+    reviewReceipt: result.receiptPath,
+    invalidDatasetCount: model.invalidData.rows.length,
+    affectedRootCount: model.affectedRoots.rows.length,
+    affectedMaterializedDatasetCount: model.derivedData.rows.length,
+    newlyUnreachableSupportDatasetCount: model.unreachableSupport.rows.length,
+    excludedDatasetCount: model.completeExclusionSet.rows.length,
+    originalDatasetCount: model.originalDatasetCount,
+    resultingDatasetCount: model.resultingDatasetCount,
+    remainingReferenceConflictCount: model.referenceConflicts.rows.length,
+    excludedSetHash: model.excludedSetHash,
+    safeToExclude: model.safeToExclude,
+    choices: [
+      {
+        action: "repair",
+        recommended: true,
+        allowed: true,
+        description: "Repair or reselect exact upstream versions.",
+      },
+      {
+        action: "exclude",
+        recommended: false,
+        allowed: model.safeToExclude,
+        description:
+          "Confirm the complete exclusion set shown in the workbook and bind the decision to the exact impact-report hash.",
+      },
+      {
+        action: "stop",
+        recommended: false,
+        allowed: true,
+        description: "Keep the failed build and stop this release attempt.",
+      },
+    ],
+    nextActions: [
+      {
+        kind: "repair_upstream_scope",
+        recommended: true,
+        command: `${MATERIALIZATION_COMMAND} materialize --help`,
+      },
+      ...(model.safeToExclude
+        ? [
+            {
+              kind: "confirm_complete_exclusion",
+              recommended: false,
+              command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(effectiveReportPath)} --action exclude --reason <REASON> --decided-by <IDENTITY> --confirm-impact-sha256 ${result.sourceReportSha256} --out-dir ${shellQuote(`${decisionBase}-exclude`)} --json`,
+            },
+          ]
+        : []),
+      {
+        kind: "stop_release_attempt",
+        recommended: false,
+        command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(effectiveReportPath)} --action stop --reason <REASON> --decided-by <IDENTITY> --out-dir ${shellQuote(`${decisionBase}-stop`)} --json`,
+      },
+    ],
+    replyTemplate: replyTemplateFor("failure review", { ok: true }),
+  };
+  respondGeneric(options, payload, "Release exclusion impact review ready");
+}
+
+function respondDecision(options, result) {
+  const decisionPath = path.join(result.path, "release-scope-decision.json");
+  const candidateDir = path.join(
+    REPOSITORY_ROOT,
+    ".release",
+    "candidates",
+    path.basename(result.path),
+  );
+  const nextActions =
+    result.decision.action === "exclude"
+      ? [
+          {
+            kind: "build_scope_filtered_candidate",
+            description:
+              "Build a new candidate from the confirmed scope and rerun every package validator.",
+            command: `${RELEASE_COMMAND} package build --release-intake ${shellQuote(result.locators.releaseIntakeDir)} --profile ${PACKAGE_PROFILE} --scope-decision ${shellQuote(result.path)} --out-dir ${shellQuote(candidateDir)} --json`,
+          },
+        ]
+      : result.decision.action === "repair"
+        ? [
+            {
+              kind: "repair_upstream_scope",
+              description:
+                "Return to exact upstream scope/version repair before creating a new candidate.",
+              command: `${MATERIALIZATION_COMMAND} materialize --help`,
+            },
+          ]
+        : [
+            {
+              kind: "inspect_failed_build",
+              description:
+                "Keep the failed build and decision evidence; do not create a Candidate.",
+              command: `jq . ${shellQuote(decisionPath)}`,
+            },
+          ];
+  const payload = {
+    ok: true,
+    command: "failure decide",
+    outcome: `release_scope_${result.decision.action}_recorded`,
+    completeness:
+      result.decision.action === "exclude"
+        ? "scope_confirmed_candidate_not_built"
+        : "release_attempt_not_resumed",
+    publicationAuthorized: false,
+    action: result.decision.action,
+    decidedAt: result.decision.decidedAt,
+    decidedBy: result.decision.decidedBy,
+    scopeDecision: result.path,
+    scopeDecisionSha256: result.decisionSha256,
+    artifacts: {
+      releaseScopeDecision: decisionPath,
+      exclusionImpactReport: path.join(
+        result.path,
+        "exclusion-impact-report.json",
+      ),
+    },
+    nextActions,
+    replyTemplate: replyTemplateFor("failure decide", { ok: true }),
+  };
+  respondGeneric(options, payload, "Release scope decision recorded");
+}
+
+function respondGeneric(options, payload, title) {
+  if (options.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+  else {
+    process.stdout.write(`${title}\n\nSummary:\n`);
+    process.stdout.write(`- Outcome: ${payload.outcome}\n`);
+    process.stdout.write("- Publication authorized: no\n\nNext:\n");
+    for (const action of payload.nextActions)
+      process.stdout.write(`- ${action.command}\n`);
+    process.stdout.write("\nReply using template:\n");
+    process.stdout.write(`- ${payload.replyTemplate.path}\n`);
+  }
 }
 
 function recommendedReleaseVersion(now = new Date()) {
@@ -429,6 +712,13 @@ function failureNextActions(error) {
           "Inspect the preserved failure manifest before changing source data or retrying the build.",
         command: `jq . ${shellQuote(retained.manifest)}`,
         argv: ["jq", ".", retained.manifest],
+      });
+    if (error.details?.releaseIntakeDir)
+      actions.push({
+        kind: "analyze_exclusion_impact",
+        description:
+          "Analyze the complete affected root and dependency set before considering any exclusion.",
+        command: `${RELEASE_COMMAND} failure analyze --failed-build ${shellQuote(retained.path)} --release-intake ${shellQuote(error.details.releaseIntakeDir)} --out-dir ${shellQuote(`${retained.path}.impact`)} --json`,
       });
     actions.push({
       kind: "inspect_retained_artifacts",

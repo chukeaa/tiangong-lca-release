@@ -12,9 +12,9 @@ whenToUpdate:
   - 当包的语义、候选构建、审批、发布或回读边界变化时
 checkPaths:
   - workflows/release/**
-lastReviewedAt: 2026-08-23
-lastReviewedCommit: 04faf325d1f33912b0a92a511d0cb0fc2bb0fce1
-lastReviewedNote: "Defined the default remote Elementary Flow cache transfer and explicit local fallback."
+lastReviewedAt: 2026-08-24
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Added the Agent-generated Excel review bundle before repair, complete exclusion, or stop decisions."
 related:
   - AGENTS.md
   - ../../README.md
@@ -87,6 +87,22 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
   -> independent readback
 ```
 
+如果 Package build 或 qualification 发现数据错误，当前 Candidate 路线立即停止并保留 failed build。恢复路线是：
+
+```text
+preserved failed build + exact issue spool
+  -> failure analyze
+  -> invalid datasets + reverse-dependent roots + derived Result/Model + unreachable support
+  -> failure review -> JSON + Excel human-review bundle
+  -> 用户选择 repair / confirm complete exclusion set / stop
+  -> immutable scope decision
+  -> 新 Package Plan
+  -> 全量 TIDAS/eILCD validation 和 ZIP readback
+  -> 新 Candidate
+```
+
+影响分析不是与“排除”和“停止”并列的可选动作，而是任何排除的强制前置条件。一个数据集没有 inbound reference 并不自动意味着 orphan；如果它本身是冻结发布 root，删除它仍然改变发布范围。
+
 Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 
 ## 当前可执行入口
@@ -118,6 +134,40 @@ node cli.mjs package build \
   --out-dir /path/to/release-candidate \
   --tidas-bin /path/to/tidas \
   --json
+
+# preserved failed build 上只读计算完整排除影响
+node cli.mjs failure analyze \
+  --failed-build /path/to/preserved-failed-build \
+  --release-intake /path/to/original-release-intake \
+  --out-dir /path/to/exclusion-impact \
+  --json
+
+# 客户端 Agent 使用 workspace dependency runtime 生成并逐页检查 Excel
+node cli.mjs failure review \
+  --impact-report /path/to/exclusion-impact/exclusion-impact-report.json \
+  --spreadsheet-node-modules /path/from/load-workspace-dependencies/node_modules \
+  --preview-dir /path/to/exclusion-impact-review-previews \
+  --out-dir /path/to/exclusion-impact-review \
+  --json
+
+# 用户确认报告中的完整集合和精确报告 hash 后记录决定
+node cli.mjs failure decide \
+  --impact-report /path/to/exclusion-impact/exclusion-impact-report.json \
+  --action exclude \
+  --reason "confirmed complete exclusion set" \
+  --decided-by "release-operator@example.com" \
+  --confirm-impact-sha256 <exact-report-sha256> \
+  --out-dir /path/to/scope-decision \
+  --json
+
+# 新 Candidate 消费确认后的范围并重新跑所有 validator
+node cli.mjs package build \
+  --release-intake /path/to/release-intake \
+  --profile standalone-lifecyclemodel-result-full-closure.v1 \
+  --scope-decision /path/to/scope-decision \
+  --release-version 2026.08.0 \
+  --out-dir /path/to/new-release-candidate \
+  --json
 ```
 
 `--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。开始组装前会执行 `version` 与 `validate --describe` 握手，并要求精确的 `tidas v0.2.0` 与既定 validation protocol；旧版本会在产生 staging 输出前以可操作错误停止。命令随后生成本地 package build，并用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
@@ -136,6 +186,8 @@ CLI 返回的自身命令以及返回 Result Materialization 的命令均使用�
 - ⚠️ ZIP 已生成但 qualification 未通过，失败构建已保留用于诊断；
 - ⚠️ frozen input 与当前字节发生漂移；
 - ❌ 参数、依赖、profile 或工具执行失败。
+- ⚠️ 排除影响分析已完成，等待用户选择修复、确认完整排除集合或停止；
+- 🧾 Release 范围决定已冻结，但尚未构建或授权发布。
 
 Agent 使用 CLI 返回的模板路径和 `requiredFacts` 填写回复。模板中的“成功”只表示本地候选构建完成，永远不表示已经批准、上传或发布。
 
@@ -177,6 +229,12 @@ Release 只实现当前产品契约明确要求的 LCIA Method characterisation 
 打包完成后的验证以最终 ZIP 字节为输入，而不是复用 staging 结论。Workflow 先读取完整 member catalog 并拒绝空包、绝对路径和 `..` 路径，再隔离解压；两个 `.tidas.zip` 分别调用 `tidas release validate-tidas`，两个 `.ilcd.zip` 分别调用 `tidas release validate-ilcd`。任一归档无法读取、解压或验证时都不会冻结 Candidate，但已经生成的包和诊断证据不会删除。
 
 Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只说明构建产物存在；TIDAS/eILCD 回读全部通过后，它们才具备成为 Candidate 的资格。失败时，用户请求的 Candidate 目录保持不存在，Workflow 将 staging 原子保留到同级唯一目录 `<candidate>.failed-<run-suffix>/`。该目录包含 `failed-package-build.json`、已有的四个 ZIP、`package-verification-report.json`（若已进入逐包验证）以及 `validation-readback/`。CLI 返回这些精确路径和查看命令，便于定位 schema、转换或数据字段问题；失败构建始终记录 `candidateCreated=false` 和 `publicationAuthorized=false`。
+
+当失败证据包含可验证的 TIDAS issue spool 时，CLI 同时给出 `failure analyze` 恢复动作。分析以 exact UUID/version 为起点，用 Calculation graph 求所有反向依赖 roots，再通过 Materialization lineage 找出对应 Result Process/LifecycleModel，并用 canonical 文档引用闭包识别只被这些 roots 使用、删除后变得不可达的 support datasets。只要仍有可达文档引用建议排除集合，报告就设置 `safeToExclude=false`，禁止生成 exclusion decision。
+
+客户端 Agent 随后执行 `failure review`，用其 workspace dependency runtime 中的 `@oai/artifact-tool` 生成七个工作表的 `exclusion-impact-review.xlsx`，检查 Summary 的值与公式、扫描公式错误并逐页渲染验证。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单和验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
+
+用户确认排除时，`failure decide` 将原始 failed build、Release Intake、Materialization、source intake、issue spool、完整排除集合和 resulting dataset count 绑定到不可变决定。后续 `package build --scope-decision` 会重新核对全部 hash，按 canonical path 构造新的发布输入并重新委托完整验证。原 failed build、Materialization 和源数据保持不变；范围决定不构成批准、上传或发布授权。
 
 如果 `tidas release build-packages --format json` 在构建阶段非零退出，Workflow 会把有界 stdout 解析为结构化 operation report 并保存在 `failed-package-build.json` 的 `failure.diagnostics.operationReport`；stdout 不是有效 JSON 时才保存有界 `stdoutTail`。这样字段级 validation issues 不会因 stderr 为空或只含摘要而丢失。
 
