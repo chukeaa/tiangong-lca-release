@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
-lastReviewedNote: "Reviewed lineage-aware exclusion impact traversal; Workflow topology and artifact authority remain unchanged."
+lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
+lastReviewedNote: "Reviewed one-pass package artifact evidence collection; Workflow topology and artifact authority remain unchanged."
 related:
   - ../AGENTS.md
   - ../README.md
