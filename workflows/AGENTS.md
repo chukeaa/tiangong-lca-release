@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
 lastReviewedNote: "Reviewed Agent-generated Excel impact review against shared human-decision and recovery boundaries; the shared contract remains current."
 related:
   - ../AGENTS.md

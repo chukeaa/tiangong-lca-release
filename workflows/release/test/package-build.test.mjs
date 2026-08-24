@@ -46,6 +46,7 @@ const RESULT_ID = "33333333-3333-4333-8333-333333333333";
 const UNIT_ID = "44444444-4444-4444-8444-444444444444";
 const FLOW_ID = "55555555-5555-4555-8555-555555555555";
 const METHOD_ID = "66666666-6666-4666-8666-666666666666";
+const RETAINED_UNIT_VERSION = "01.00.001";
 const VERSION = "01.00.000";
 const REPOSITORY_ROOT = new URL("../../../", import.meta.url).pathname;
 const RELEASE_VERSION = "2026.08.0";
@@ -924,6 +925,74 @@ test("Release failure analysis binds the complete exclusion set before rebuildin
   assert.equal(result.plan.scopeDecision.excludedSetHash.length, 64);
 });
 
+test("Release exclusion impact treats preceding-version references as non-closure lineage", async (t) => {
+  for (const retainedReference of [
+    {
+      field: "common:referenceToPrecedingDataSetVersion",
+      role: "lineage",
+      asArray: false,
+    },
+    {
+      field: "referenceToPrecedingDataSetVersion",
+      role: "lineage",
+      asArray: true,
+    },
+  ])
+    await t.test(
+      `${retainedReference.field} (${retainedReference.asArray ? "array" : "object"})`,
+      async () => {
+        const fixture = await createExclusionFixture({
+          retainedReference,
+        });
+        const analysis = await analyzeExclusionImpact({
+          failedBuildDir: fixture.failedBuild,
+          releaseIntakeDir: fixture.releaseIntake,
+          outDir: path.join(fixture.root, "impact-lineage-reference"),
+        });
+        assert.equal(analysis.report.status, "complete");
+        assert.equal(analysis.report.impact.safeToExclude, true);
+        assert.deepEqual(
+          analysis.report.impact.remainingReferenceConflicts,
+          [],
+        );
+        assert.equal(
+          analysis.report.impact.excludedCanonicalDatasets.some(
+            ({ version }) => version === RETAINED_UNIT_VERSION,
+          ),
+          false,
+        );
+      },
+    );
+});
+
+test("Release exclusion impact still blocks retained functional references to excluded data", async () => {
+  const fixture = await createExclusionFixture({
+    retainedReference: {
+      field: "referenceToIncludedProcesses",
+      role: "closure_dependency",
+    },
+  });
+  const analysis = await analyzeExclusionImpact({
+    failedBuildDir: fixture.failedBuild,
+    releaseIntakeDir: fixture.releaseIntake,
+    outDir: path.join(fixture.root, "impact-functional-reference"),
+  });
+  assert.equal(analysis.report.status, "blocked");
+  assert.equal(analysis.report.impact.safeToExclude, false);
+  assert.equal(analysis.report.impact.remainingReferenceConflicts.length, 1);
+  assert.deepEqual(
+    analysis.report.impact.remainingReferenceConflicts[0].reference,
+    {
+      uuid: UNIT_ID,
+      version: VERSION,
+      location:
+        "processDataSet/processInformation/technology/referenceToIncludedProcesses",
+      role: "closure_dependency",
+      closureRequired: true,
+    },
+  );
+});
+
 test("release version is filename-safe before any input is read", async () => {
   await assert.rejects(
     buildPackageCandidate({
@@ -1253,7 +1322,7 @@ async function createFixture() {
   return { root, materialization, intake, releaseIntake, output };
 }
 
-async function createExclusionFixture() {
+async function createExclusionFixture({ retainedReference } = {}) {
   const fixture = await createFixture();
   const processAxisRecord = {
     processIndex: 0,
@@ -1278,6 +1347,61 @@ async function createExclusionFixture() {
 
   const intakePath = path.join(fixture.intake, "intake-manifest.json");
   const intake = JSON.parse(await readFile(intakePath, "utf8"));
+  if (retainedReference) {
+    const sourceArtifact = intake.artifacts.find(
+      ({ kind }) => kind === "source_closure",
+    );
+    const sourcePath = path.join(
+      fixture.intake,
+      "calculation-bundle",
+      sourceArtifact.path,
+    );
+    const sourceRecords = [];
+    for await (const record of readNdjson(sourcePath))
+      sourceRecords.push(record);
+    const reference = {
+      "@type": "process data set",
+      "@refObjectId": UNIT_ID,
+      "@version": VERSION,
+    };
+    const document =
+      retainedReference.role === "lineage"
+        ? {
+            processDataSet: {
+              administrativeInformation: {
+                publicationAndOwnership: {
+                  [retainedReference.field]: retainedReference.asArray
+                    ? [reference]
+                    : reference,
+                },
+              },
+            },
+          }
+        : {
+            processDataSet: {
+              processInformation: {
+                technology: {
+                  [retainedReference.field]: reference,
+                },
+              },
+            },
+          };
+    sourceRecords.push(
+      sourceRecord(
+        "process",
+        "unit_process",
+        UNIT_ID,
+        document,
+        RETAINED_UNIT_VERSION,
+      ),
+    );
+    const sourceBytes = gzipSync(
+      `${sourceRecords.map((record) => JSON.stringify(record)).join("\n")}\n`,
+    );
+    await writeFile(sourcePath, sourceBytes);
+    sourceArtifact.sha256 = sha256Bytes(sourceBytes);
+    sourceArtifact.recordCount = sourceRecords.length;
+  }
   intake.artifacts.push({
     kind: "process_axis",
     path: "axes/processes-000000.ndjson",
@@ -1541,14 +1665,14 @@ async function generatedEntry(
   };
 }
 
-function sourceRecord(datasetType, role, uuid, document) {
+function sourceRecord(datasetType, role, uuid, document, version = VERSION) {
   return {
     schemaVersion: "tiangong.source-closure.dataset.v1",
     datasetType,
     role,
     uuid,
-    version: VERSION,
-    path: `${category(datasetType)}/${uuid}_${VERSION}.json`,
+    version,
+    path: `${category(datasetType)}/${uuid}_${version}.json`,
     sha256: hashJson(document),
     document,
   };

@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
-lastReviewedNote: "Added the current failed-build impact analysis, Excel review, and confirmed scope-exclusion recovery route."
+lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
+lastReviewedNote: "Aligned exclusion impact traversal with TIDAS reference roles so historical lineage does not block scope changes."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -50,7 +50,7 @@ Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接
 Calculation CLI 的 help 和恢复动作使用自定位的绝对入口，复制执行不依赖客户端当前工作目录；README 仍提供仓库根目录和 workflow 目录两种便携写法。
 Release 先生成独立且不可变的 Release Intake，按精确版本补齐 LCIA Method 表征因子引用但 Materialization Intake 未携带的 Flow，再由 Package CLI 消费该 Intake；两个动作都返回 workflow-local 回复模板、结构化恢复动作和精确 artifact 路径，并明确本地准备与 Candidate build 均不构成发布授权。
 Release 的 Elementary Flow 共享缓存刷新默认在受管 Worker EC2 上执行只读 snapshot 导出，经同 project Supabase Storage 的一小时临时对象下载、完整校验和立即删除后原子安装；本地直连刷新只保留为显式 fallback。
-Release package validation 失败后会保留 non-candidate failed build，并可从精确 issue spool、Calculation graph、Materialization lineage 和 canonical references 生成不可变 exclusion impact report；客户端 Agent 还会从该权威 JSON 生成并逐页验证包含完整剔除清单的 Excel 审核表。任何排除都必须先审阅完整影响集合并确认报告 hash，再生成新的 Package Plan 并重跑全部验证；修复精确上游版本始终是推荐动作，错误不得被降级或静默忽略。
+Release package validation 失败后会保留 non-candidate failed build，并可从精确 issue spool、Calculation graph、Materialization lineage 和 canonical references 生成不可变 exclusion impact report；影响图沿用 TIDAS 引用角色语义，`referenceToPrecedingDataSetVersion` 只保留为历史 lineage，不参与包内可达性或排除冲突。客户端 Agent 还会从该权威 JSON 生成并逐页验证包含完整剔除清单的 Excel 审核表。任何排除都必须先审阅完整影响集合并确认报告 hash，再生成新的 Package Plan 并重跑全部验证；修复精确上游版本始终是推荐动作，错误不得被降级或静默忽略。
 异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
 创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
 
@@ -249,7 +249,7 @@ Agent 不能替代用户决定：
 
 ## 开发状态
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#47`
-- 当前分支：`feature/issue-47`
-- 当前阶段：实现 Release validation failure 的完整影响分析、范围决定与新 Candidate 重验证
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#49`
+- 当前分支：`feature/issue-49`
+- 当前阶段：修正 Release 排除影响分析中的 lineage / closure dependency 语义
 - 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证、薄后台 Job 入口，以及 canonical intake/materialization artifact 路径
