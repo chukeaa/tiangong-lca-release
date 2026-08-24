@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Added fail-closed exclusion impact and hash-bound scope-decision boundaries without changing source-data or publication authority."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Reviewed the Agent-generated Excel impact review step; repository ownership and completion boundaries remain unchanged."
 related:
   - README.md
   - .docpact/config.yaml

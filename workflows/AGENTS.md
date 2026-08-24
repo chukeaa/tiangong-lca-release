@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Reviewed shared human-decision and recovery boundaries for Release exclusion impact decisions; the shared contract remains current."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Reviewed Agent-generated Excel impact review against shared human-decision and recovery boundaries; the shared contract remains current."
 related:
   - ../AGENTS.md
   - ../README.md

@@ -14,9 +14,13 @@
 
 `{{nextActions.0.command}}`
 
-需要逐个检查已生成包时：
+随后对 preserved failed build 执行只读影响分析：
 
 `{{nextActions.1.command}}`
 
-修正源数据后应使用新的 Candidate 输出路径重新构建；该失败构建只用于诊断，不能发布。
+需要逐个检查已保留工件时：
+
+`{{nextActions.2.command}}`
+
+影响分析完成后，客户端 Agent 还会生成 Excel 审核表，再请求用户选择修复、确认完整集合排除或停止。该失败构建只用于诊断，不能发布。
 ```

@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/release/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Defined complete exclusion impact analysis, hash-bound decisions, and scope-filtered revalidation."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Defined JSON authority, Agent-generated Excel review, hash-bound decisions, and scope-filtered revalidation."
 related:
   - README.md
   - ../AGENTS.md
@@ -29,6 +29,7 @@ related:
 - 验证 Result Materialization 输出与 frozen dataset bytes 的精确绑定。
 - 调用确定性 validator、converter 和 packager。
 - 当本地 package validation 发现数据错误时，使用冻结的 issue spool、精确 dataset identity、Calculation graph 和 Materialization lineage 生成完整排除影响报告；不得把报错数据直接称为孤儿。
+- 从权威 impact report 生成供用户审核的 Excel 工作簿，逐页做视觉检查，并在回复中同时提供 JSON 和 Excel；审核表准备好之前不得请求排除确认。
 - 把修复、完整集合排除或停止决定绑定到精确 impact-report hash；只有完整集合排除被明确确认后才允许构建新的 scope-filtered Candidate。
 - 汇总候选、验证证据、target 和 plan hash 供用户决定。
 - 只在精确批准后执行远程发布。
@@ -40,7 +41,7 @@ related:
 - 构建本地 Package Plan；
 - 运行不产生远程副作用的验证和打包；
 - 生成有界 candidate report；
-- 对 preserved failed build 执行只读影响分析，并记录不构成发布授权的本地范围决定；
+- 对 preserved failed build 执行只读影响分析，并生成不改变权威证据的本地 Excel 审核视图；
 - 在用户已授权发布后继续同一 run 的 readback。
 
 ## 当前本地 Package 契约
@@ -50,9 +51,10 @@ related:
 - 慢速本机数据库流式刷新只可通过显式 `--execution local` 使用；远端路径失败时不得静默降级。
 - `package build` 只接受已准备并重新验证上游 hash 的 Release Intake，以及 `standalone-lifecyclemodel-result-full-closure.v1`。
 - `failure analyze` 只接受 preserved failed build、其原始 Release Intake 和可验证的 TIDAS issue spool。它必须同时遍历 exact Process axis、technosphere 反向依赖、Materialization `processIndex/sourceProcess` lineage 和 canonical 文档引用；输出中分别列出初始错误、受影响 Process roots、派生 Result/Model、变得不可达的 support datasets 和剩余引用冲突。
+- `failure review` 使用客户端 Agent workspace dependency runtime 提供的 `@oai/artifact-tool`，从 exact impact report 生成 `exclusion-impact-review.xlsx` 与 review receipt。工作簿必须包含 Summary、Invalid Data、Affected Roots、Derived Data、Unreachable Support、Complete Exclusion Set 和 Reference Conflicts 七个工作表，并在回复用户前完成关键范围、公式错误和全部工作表的视觉检查。
 - 没有 inbound reference 不能单独证明 orphan。只要一个数据集本身是冻结发布 root，就必须标记为 `invalid_selected_root`，并将删除它视为发布范围变化。
 - `failure decide` 必须记录非空 `--reason` 和 `--decided-by`；`--action exclude` 还必须携带与报告 canonical SHA-256 完全一致的 `--confirm-impact-sha256`。确认对象是完整 `excludedSetHash`，不是最初报错的 UUID 列表。`repair` 保持推荐动作，`stop` 保留 failed build 而不创建 Candidate。
-- Exclusion impact report 是稳定的 F3 Workflow contract；改变发布内容的 scope decision 是 F4 审计证据。两者均不可原地修改，运行时绝对路径单独保存在权限受限 locator 中。
+- Exclusion impact report 是稳定的 F3 Workflow contract；改变发布内容的 scope decision 是 F4 审计证据。Excel 是可编辑的 F2 派生审核视图，只通过 receipt 绑定源报告 hash 和当前 workbook hash，不参与 scope decision hash。权威报告和决定均不可原地修改，运行时绝对路径单独保存在权限受限 locator 中。
 - `package build --scope-decision` 只消费 `action=exclude`、hash 与全部冻结上游仍匹配且 `safeToExclude=true` 的决定。它按精确 canonical path 过滤完整影响集合，冻结新的 Package Plan，再重新执行全部 TIDAS/eILCD、closure、round-trip 和最终 ZIP readback validation；不得复用失败构建的通过结论。
 - Result Materialization 的 Index 只描述新生成数据集；Release 从 source closure 与冻结的 dependency supplement 加入 Unit Process 和支持数据集，生成供 `tidas-tools` 使用的完整 Index。
 - source closure artifact hash、record count、每条 document canonical hash，以及 materialized dataset bytes 必须在调用外部工具前重新验证。
@@ -69,6 +71,7 @@ related:
 - CLI 返回的自身命令和跨 Result Materialization 命令必须使用由 `import.meta.url` 生成的绝对入口，确保从任意 cwd 可复制执行。Release Intake 准备成功后应返回确定的 Candidate 输出目录，不把 `<CANDIDATE_DIR>` 留给 Agent 猜测。
 - CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
 - Agent 回复必须读取 CLI 指定的 workflow-local 模板，以真实字段替换占位符；不得把 Candidate build 回复成批准、上传或发布完成。
+- Agent 在 `failure analyze` 后必须继续完成 `failure review`，向用户提供可点击的 JSON/Excel 路径、分类计数、排除前后数据量及 repair/exclude/stop 三种选择；不得把只包含计数而没有完整 Excel 清单的回复当作排除确认请求。
 
 ## 必须明确确认的动作
 

@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/release/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Added the executable repair, complete exclusion, and stop recovery flow for validation failures."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Added the Agent-generated Excel review bundle before repair, complete exclusion, or stop decisions."
 related:
   - AGENTS.md
   - ../../README.md
@@ -93,6 +93,7 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
 preserved failed build + exact issue spool
   -> failure analyze
   -> invalid datasets + reverse-dependent roots + derived Result/Model + unreachable support
+  -> failure review -> JSON + Excel human-review bundle
   -> 用户选择 repair / confirm complete exclusion set / stop
   -> immutable scope decision
   -> 新 Package Plan
@@ -139,6 +140,14 @@ node cli.mjs failure analyze \
   --failed-build /path/to/preserved-failed-build \
   --release-intake /path/to/original-release-intake \
   --out-dir /path/to/exclusion-impact \
+  --json
+
+# 客户端 Agent 使用 workspace dependency runtime 生成并逐页检查 Excel
+node cli.mjs failure review \
+  --impact-report /path/to/exclusion-impact/exclusion-impact-report.json \
+  --spreadsheet-node-modules /path/from/load-workspace-dependencies/node_modules \
+  --preview-dir /path/to/exclusion-impact-review-previews \
+  --out-dir /path/to/exclusion-impact-review \
   --json
 
 # 用户确认报告中的完整集合和精确报告 hash 后记录决定
@@ -222,6 +231,8 @@ Release 只实现当前产品契约明确要求的 LCIA Method characterisation 
 Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只说明构建产物存在；TIDAS/eILCD 回读全部通过后，它们才具备成为 Candidate 的资格。失败时，用户请求的 Candidate 目录保持不存在，Workflow 将 staging 原子保留到同级唯一目录 `<candidate>.failed-<run-suffix>/`。该目录包含 `failed-package-build.json`、已有的四个 ZIP、`package-verification-report.json`（若已进入逐包验证）以及 `validation-readback/`。CLI 返回这些精确路径和查看命令，便于定位 schema、转换或数据字段问题；失败构建始终记录 `candidateCreated=false` 和 `publicationAuthorized=false`。
 
 当失败证据包含可验证的 TIDAS issue spool 时，CLI 同时给出 `failure analyze` 恢复动作。分析以 exact UUID/version 为起点，用 Calculation graph 求所有反向依赖 roots，再通过 Materialization lineage 找出对应 Result Process/LifecycleModel，并用 canonical 文档引用闭包识别只被这些 roots 使用、删除后变得不可达的 support datasets。只要仍有可达文档引用建议排除集合，报告就设置 `safeToExclude=false`，禁止生成 exclusion decision。
+
+客户端 Agent 随后执行 `failure review`，用其 workspace dependency runtime 中的 `@oai/artifact-tool` 生成七个工作表的 `exclusion-impact-review.xlsx`，检查 Summary 的值与公式、扫描公式错误并逐页渲染验证。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单和验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
 
 用户确认排除时，`failure decide` 将原始 failed build、Release Intake、Materialization、source intake、issue spool、完整排除集合和 resulting dataset count 绑定到不可变决定。后续 `package build --scope-decision` 会重新核对全部 hash，按 canonical path 构造新的发布输入并重新委托完整验证。原 failed build、Materialization 和源数据保持不变；范围决定不构成批准、上传或发布授权。
 

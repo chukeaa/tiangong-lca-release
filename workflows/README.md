@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Reviewed four-workflow navigation for Release failure impact analysis and scope decisions; workflow boundaries remain unchanged."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Reviewed four-workflow navigation for the Release Excel impact review step; workflow boundaries remain unchanged."
 related:
   - ../README.md
   - AGENTS.md

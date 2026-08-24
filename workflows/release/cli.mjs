@@ -11,6 +11,7 @@ import {
   analyzeExclusionImpact,
   recordScopeDecision,
 } from "./lib/exclusion-impact.mjs";
+import { buildExclusionImpactReviewWorkbook } from "./lib/exclusion-review-workbook.mjs";
 import {
   DEFAULT_FLOW_CACHE,
   DEFAULT_FLOW_CACHE_EXECUTION,
@@ -49,6 +50,8 @@ const VALUE_OPTIONS = new Set([
   "reason",
   "decided-by",
   "confirm-impact-sha256",
+  "spreadsheet-node-modules",
+  "preview-dir",
 ]);
 const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
@@ -59,6 +62,7 @@ Commands:
   cache refresh       Explicitly replace the shared cache; remote Worker EC2 execution is the default
   intake prepare      Expand exact LCIA Method Flow dependencies into an immutable Release Intake
   failure analyze     Compute the complete exclusion impact of exact validation failures
+  failure review      Generate the human-review Excel workbook from one impact report
   failure decide      Record repair, hash-confirmed exclusion, or stop against one impact report
   package build       Build one local, unapproved Release Candidate from a frozen Release Intake
 
@@ -94,6 +98,12 @@ failure decide options:
   --decided-by <identity>   Human or actor identity making the decision
   --confirm-impact-sha256 <hash> Required for exclude; must match the exact report
   --out-dir <path>          New immutable scope-decision directory
+
+failure review options:
+  --impact-report <path>    Exact exclusion-impact-report.json
+  --spreadsheet-node-modules <path> Client Agent workspace dependency node_modules; defaults to RELEASE_SPREADSHEET_NODE_MODULES
+  --preview-dir <path>      Rendered PNG directory required for visual verification
+  --out-dir <path>          New review bundle containing the Excel workbook and receipt
 
 Common:
   --json                    Emit one bounded JSON result on stdout
@@ -132,7 +142,8 @@ async function main() {
   if (!(
     (command === "cache" && ["status", "refresh"].includes(action)) ||
     (command === "intake" && action === "prepare") ||
-    (command === "failure" && ["analyze", "decide"].includes(action)) ||
+    (command === "failure" &&
+      ["analyze", "review", "decide"].includes(action)) ||
     (command === "package" && action === "build")
   )) {
     throw Object.assign(
@@ -205,6 +216,19 @@ async function main() {
       confirmImpactSha256: options["confirm-impact-sha256"],
     });
     respondDecision(options, result);
+    return;
+  }
+  if (command === "failure" && action === "review") {
+    requireOptions(options, ["impact-report", "preview-dir", "out-dir"]);
+    const result = await buildExclusionImpactReviewWorkbook({
+      impactReportPath: path.resolve(options["impact-report"]),
+      outDir: path.resolve(options["out-dir"]),
+      spreadsheetNodeModules: options["spreadsheet-node-modules"],
+      previewDir: options["preview-dir"]
+        ? path.resolve(options["preview-dir"])
+        : undefined,
+    });
+    respondImpactReview(options, result);
     return;
   }
   requireOptions(options, ["release-intake", "profile", "out-dir"]);
@@ -419,14 +443,12 @@ function respondIntake(options, result) {
 
 function respondImpact(options, result) {
   const reportPath = path.join(result.path, "exclusion-impact-report.json");
-  const decisionBase = `${result.path}-decision`;
+  const reviewBase = `${result.path}-review`;
   const payload = {
     ok: true,
     command: "failure analyze",
-    outcome: result.report.impact.safeToExclude
-      ? "exclusion_impact_ready"
-      : "exclusion_blocked",
-    completeness: result.report.status,
+    outcome: "exclusion_impact_analyzed",
+    completeness: "awaiting_human_review_workbook",
     publicationAuthorized: false,
     impactReport: reportPath,
     impactReportSha256: result.reportSha256,
@@ -434,36 +456,99 @@ function respondImpact(options, result) {
     affectedRootCount: result.report.impact.affectedProcessRoots.length,
     excludedDatasetCount: result.report.impact.excludedCanonicalDatasets.length,
     safeToExclude: result.report.impact.safeToExclude,
+    reviewWorkbookRequired: true,
+    spreadsheetRuntimeEnv: "RELEASE_SPREADSHEET_NODE_MODULES",
+    nextActions: [
+      {
+        kind: "build_human_review_workbook",
+        recommended: true,
+        description:
+          "Use the client Agent spreadsheet runtime to render and visually verify the complete review workbook before asking for a scope decision.",
+        command: `${RELEASE_COMMAND} failure review --impact-report ${shellQuote(reportPath)} --preview-dir ${shellQuote(`${reviewBase}-previews`)} --out-dir ${shellQuote(reviewBase)} --json`,
+      },
+    ],
+    replyTemplate: replyTemplateFor("failure analyze", { ok: true }),
+  };
+  respondGeneric(options, payload, "Release exclusion impact analyzed");
+}
+
+function respondImpactReview(options, result) {
+  if (result.receipt.verification.visualPreviewSheetCount !== 7)
+    throw Object.assign(
+      new Error("All seven review workbook sheets must be rendered"),
+      { code: "review_workbook_visual_verification_incomplete" },
+    );
+  const effectiveReportPath = result.impactReportPath;
+  const decisionBase = `${result.path}-decision`;
+  const model = result.model;
+  const payload = {
+    ok: true,
+    command: "failure review",
+    outcome: model.safeToExclude
+      ? "exclusion_review_ready"
+      : "exclusion_review_blocked",
+    completeness: model.status,
+    publicationAuthorized: false,
+    impactReport: effectiveReportPath,
+    impactReportSha256: result.sourceReportSha256,
+    reviewWorkbook: result.workbookPath,
+    reviewWorkbookSha256: result.receipt.workbook.sha256,
+    reviewReceipt: result.receiptPath,
+    invalidDatasetCount: model.invalidData.rows.length,
+    affectedRootCount: model.affectedRoots.rows.length,
+    affectedMaterializedDatasetCount: model.derivedData.rows.length,
+    newlyUnreachableSupportDatasetCount: model.unreachableSupport.rows.length,
+    excludedDatasetCount: model.completeExclusionSet.rows.length,
+    originalDatasetCount: model.originalDatasetCount,
+    resultingDatasetCount: model.resultingDatasetCount,
+    remainingReferenceConflictCount: model.referenceConflicts.rows.length,
+    excludedSetHash: model.excludedSetHash,
+    safeToExclude: model.safeToExclude,
+    choices: [
+      {
+        action: "repair",
+        recommended: true,
+        allowed: true,
+        description: "Repair or reselect exact upstream versions.",
+      },
+      {
+        action: "exclude",
+        recommended: false,
+        allowed: model.safeToExclude,
+        description:
+          "Confirm the complete exclusion set shown in the workbook and bind the decision to the exact impact-report hash.",
+      },
+      {
+        action: "stop",
+        recommended: false,
+        allowed: true,
+        description: "Keep the failed build and stop this release attempt.",
+      },
+    ],
     nextActions: [
       {
         kind: "repair_upstream_scope",
         recommended: true,
-        description:
-          "Repair or reselect exact upstream versions and rebuild frozen evidence.",
         command: `${MATERIALIZATION_COMMAND} materialize --help`,
       },
-      ...(result.report.impact.safeToExclude
+      ...(model.safeToExclude
         ? [
             {
               kind: "confirm_complete_exclusion",
               recommended: false,
-              description:
-                "Ask the user to confirm the complete exclusion set bound to this report hash.",
-              command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(reportPath)} --action exclude --reason <REASON> --decided-by <IDENTITY> --confirm-impact-sha256 ${result.reportSha256} --out-dir ${shellQuote(`${decisionBase}-exclude`)} --json`,
+              command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(effectiveReportPath)} --action exclude --reason <REASON> --decided-by <IDENTITY> --confirm-impact-sha256 ${result.sourceReportSha256} --out-dir ${shellQuote(`${decisionBase}-exclude`)} --json`,
             },
           ]
         : []),
       {
         kind: "stop_release_attempt",
         recommended: false,
-        description:
-          "Record that this release attempt stops at the failed build.",
-        command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(reportPath)} --action stop --reason <REASON> --decided-by <IDENTITY> --out-dir ${shellQuote(`${decisionBase}-stop`)} --json`,
+        command: `${RELEASE_COMMAND} failure decide --impact-report ${shellQuote(effectiveReportPath)} --action stop --reason <REASON> --decided-by <IDENTITY> --out-dir ${shellQuote(`${decisionBase}-stop`)} --json`,
       },
     ],
-    replyTemplate: replyTemplateFor("failure analyze", { ok: true }),
+    replyTemplate: replyTemplateFor("failure review", { ok: true }),
   };
-  respondGeneric(options, payload, "Release exclusion impact analyzed");
+  respondGeneric(options, payload, "Release exclusion impact review ready");
 }
 
 function respondDecision(options, result) {

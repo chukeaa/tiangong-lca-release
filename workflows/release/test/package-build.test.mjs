@@ -19,6 +19,7 @@ import {
   analyzeExclusionImpact,
   recordScopeDecision,
 } from "../lib/exclusion-impact.mjs";
+import { buildExclusionReviewWorkbookModel } from "../lib/exclusion-review-workbook.mjs";
 import {
   inspectFlowCache,
   refreshFlowCache,
@@ -833,6 +834,45 @@ test("Release failure analysis binds the complete exclusion set before rebuildin
     ],
   );
   assert.equal(analysis.report.impact.resultingDatasetCount, 1);
+  const reviewModel = buildExclusionReviewWorkbookModel(analysis.report);
+  assert.equal(reviewModel.invalidData.rows.length, 1);
+  assert.equal(reviewModel.affectedRoots.rows.length, 1);
+  assert.equal(reviewModel.derivedData.rows.length, 2);
+  assert.equal(reviewModel.unreachableSupport.rows.length, 0);
+  assert.equal(reviewModel.completeExclusionSet.rows.length, 3);
+  assert.deepEqual(
+    reviewModel.completeExclusionSet.rows.map((row) => row.at(-1)).sort(),
+    [
+      "Affected materialized dataset",
+      "Affected materialized dataset",
+      "Initial validation error",
+    ],
+  );
+
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const reviewEnvironment = { ...process.env };
+  delete reviewEnvironment.RELEASE_SPREADSHEET_NODE_MODULES;
+  const missingSpreadsheetRuntime = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "failure",
+      "review",
+      "--impact-report",
+      path.join(impactDir, "exclusion-impact-report.json"),
+      "--out-dir",
+      path.join(fixture.root, "review"),
+      "--preview-dir",
+      path.join(fixture.root, "review-previews"),
+      "--json",
+    ],
+    { encoding: "utf8", env: reviewEnvironment },
+  );
+  assert.equal(missingSpreadsheetRuntime.status, 1);
+  assert.equal(
+    JSON.parse(missingSpreadsheetRuntime.stderr).error.code,
+    "spreadsheet_runtime_missing",
+  );
 
   await assert.rejects(
     recordScopeDecision({
@@ -945,6 +985,7 @@ test("CLI exposes one bounded local package build route", () => {
   });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /package build/);
+  assert.match(help.stdout, /failure review/);
   assert.match(help.stdout, /does not authorize/);
   assert.match(help.stdout, /Examples:/);
   assert.match(help.stdout, /replyTemplate/);
@@ -1060,11 +1101,14 @@ test("every Release CLI outcome maps to an existing bounded reply template", asy
     "cache refresh",
     "intake prepare",
     "failure analyze",
+    "failure review",
     "failure decide",
     "package build",
   ]);
   for (const template of [
     replyTemplateFor("intake prepare", { ok: true }),
+    replyTemplateFor("failure analyze", { ok: true }),
+    replyTemplateFor("failure review", { ok: true }),
     replyTemplateFor("package build", { ok: true }),
     replyTemplateFor("package build", {
       ok: false,

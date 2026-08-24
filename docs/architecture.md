@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Added failed-build evidence, exclusion impact, scope decision, and new Package Plan relationships."
+lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
+lastReviewedNote: "Added the derived Excel human-review bundle between exclusion impact analysis and scope decision."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -109,6 +109,9 @@ Dataset Transformation Manifest ----------+--> Result Materialization
                                                               v
                                                 Exclusion Impact Report
                                                               |
+                                                              v
+                                              Excel Human Review Bundle
+                                                              |
                                             repair / confirmed exclude / stop
                                                               |
                                                               v
@@ -129,7 +132,7 @@ Dataset Transformation Manifest ----------+--> Result Materialization
 
 Remote Resource 的状态由外部系统权威持有。本地 Artifact 由内容 hash 标识。Draft 可修改；Frozen Spec 和已经执行的产物不可原地改写。
 
-Exclusion Impact Report 是由失败证据和冻结图派生的只读 contract；Scope Decision 是改变后续分发内容的审计证据。两者都通过 canonical SHA-256 绑定输入，不能原地修改。确认排除只允许新的 Package Plan 选择既有、验证过且未受影响的 exact datasets；它不会改写 Materialization、源数据或失败构建。任何 replacement version 或依赖图变化都返回上游生成新证据。
+Exclusion Impact Report 是由失败证据和冻结图派生的只读 contract；Scope Decision 是改变后续分发内容的审计证据。两者都通过 canonical SHA-256 绑定输入，不能原地修改。Excel Human Review Bundle 是从报告派生的可编辑人工视图，receipt 记录源报告 hash 和 workbook hash，但它不是决定权威。确认排除只允许新的 Package Plan 选择既有、验证过且未受影响的 exact datasets；它不会改写 Materialization、源数据或失败构建。任何 replacement version 或依赖图变化都返回上游生成新证据。
 
 ## 恢复模型
 
