@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/release/**
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
-lastReviewedNote: "Added the Agent-generated Excel review bundle before repair, complete exclusion, or stop decisions."
+lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
+lastReviewedNote: "Aligned exclusion impact references with TIDAS lineage and closure-dependency roles."
 related:
   - AGENTS.md
   - ../../README.md
@@ -230,7 +230,7 @@ Release 只实现当前产品契约明确要求的 LCIA Method characterisation 
 
 Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只说明构建产物存在；TIDAS/eILCD 回读全部通过后，它们才具备成为 Candidate 的资格。失败时，用户请求的 Candidate 目录保持不存在，Workflow 将 staging 原子保留到同级唯一目录 `<candidate>.failed-<run-suffix>/`。该目录包含 `failed-package-build.json`、已有的四个 ZIP、`package-verification-report.json`（若已进入逐包验证）以及 `validation-readback/`。CLI 返回这些精确路径和查看命令，便于定位 schema、转换或数据字段问题；失败构建始终记录 `candidateCreated=false` 和 `publicationAuthorized=false`。
 
-当失败证据包含可验证的 TIDAS issue spool 时，CLI 同时给出 `failure analyze` 恢复动作。分析以 exact UUID/version 为起点，用 Calculation graph 求所有反向依赖 roots，再通过 Materialization lineage 找出对应 Result Process/LifecycleModel，并用 canonical 文档引用闭包识别只被这些 roots 使用、删除后变得不可达的 support datasets。只要仍有可达文档引用建议排除集合，报告就设置 `safeToExclude=false`，禁止生成 exclusion decision。
+当失败证据包含可验证的 TIDAS issue spool 时，CLI 同时给出 `failure analyze` 恢复动作。分析以 exact UUID/version 为起点，用 Calculation graph 求所有反向依赖 roots，再通过 Materialization lineage 找出对应 Result Process/LifecycleModel，并按字段路径保留 canonical 文档引用的 TIDAS 角色。`referenceToPrecedingDataSetVersion` 是允许指向包外历史版本的 lineage，不参与包内可达性或剩余引用冲突；其他 closure dependency 仍然 fail closed。只要仍有可达文档通过 closure dependency 引用建议排除集合，报告就设置 `safeToExclude=false`，禁止生成 exclusion decision。
 
 客户端 Agent 随后执行 `failure review`，用其 workspace dependency runtime 中的 `@oai/artifact-tool` 生成七个工作表的 `exclusion-impact-review.xlsx`，检查 Summary 的值与公式、扫描公式错误并逐页渲染验证。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单和验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
 

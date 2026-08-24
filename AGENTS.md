@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-24
-lastReviewedCommit: d1253b48bfcfe862da3345c28f16bfc7cb887ef7
-lastReviewedNote: "Reviewed the Agent-generated Excel impact review step; repository ownership and completion boundaries remain unchanged."
+lastReviewedCommit: 782172475ac4fdc85ea01a458b96c85475cc1861
+lastReviewedNote: "Reviewed the lineage-aware exclusion impact fix; repository ownership and completion boundaries remain unchanged."
 related:
   - README.md
   - .docpact/config.yaml
@@ -107,8 +107,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-47`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#47`
+- 当前工作分支：`feature/issue-49`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#49`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 

@@ -732,9 +732,11 @@ function reachableKeys({ records, keysByUuid, rootKeys, excludedPaths }) {
     const record = records.get(key);
     if (!record || excludedPaths.has(record.path)) continue;
     reachable.add(key);
-    for (const reference of record.references)
+    for (const reference of record.references) {
+      if (!reference.closureRequired) continue;
       for (const target of resolveReference(reference, records, keysByUuid))
         if (!reachable.has(target)) queue.push(target);
+    }
   }
   return reachable;
 }
@@ -744,6 +746,7 @@ function referenceConflicts({ records, keysByUuid, reachable, excludedPaths }) {
   for (const key of reachable) {
     const record = records.get(key);
     for (const reference of record.references) {
+      if (!reference.closureRequired) continue;
       const targets = resolveReference(reference, records, keysByUuid);
       if (
         targets.length > 0 &&
@@ -757,19 +760,45 @@ function referenceConflicts({ records, keysByUuid, reachable, excludedPaths }) {
 
 function collectReferences(document) {
   const result = [];
-  const visit = (value) => {
+  const visit = (value, location, parentKey) => {
     if (!value || typeof value !== "object") return;
     if (!Array.isArray(value) && typeof value["@refObjectId"] === "string") {
       const uuid = value["@refObjectId"].toLowerCase();
       const version = value["@version"];
+      const role = referenceRole(parentKey);
       if (UUID.test(uuid) && (version === undefined || VERSION.test(version)))
-        result.push({ uuid, version: version ?? null });
+        result.push({
+          uuid,
+          version: version ?? null,
+          location,
+          role,
+          closureRequired: role !== "lineage",
+        });
     }
-    for (const child of Array.isArray(value) ? value : Object.values(value))
-      visit(child);
+    if (Array.isArray(value)) {
+      for (const [index, child] of value.entries())
+        visit(child, joinLocation(location, String(index)), parentKey);
+      return;
+    }
+    for (const [key, child] of Object.entries(value))
+      visit(child, joinLocation(location, key), key);
   };
-  visit(document);
+  visit(document, "", null);
   return result;
+}
+
+function referenceRole(parentKey) {
+  const localName = String(parentKey ?? "")
+    .split(":")
+    .at(-1)
+    .toLowerCase();
+  return localName === "referencetoprecedingdatasetversion"
+    ? "lineage"
+    : "closure_dependency";
+}
+
+function joinLocation(parent, child) {
+  return parent ? `${parent}/${child}` : child;
 }
 
 function resolveReference(reference, records, keysByUuid) {
