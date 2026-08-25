@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publish-plan.v1.schema.json",
+  "title": "Prepared Publish Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "publicationAuthorized",
+    "candidate",
+    "scope",
+    "target",
+    "execution"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.publish-plan.v1" },
+    "status": { "const": "prepared_unapproved" },
+    "publicationAuthorized": { "const": false },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseCandidateSha256",
+        "releaseVersion",
+        "packagePlanSha256",
+        "canonicalDatasetIndexSha256",
+        "publicationCatalogSha256",
+        "packageSetHash"
+      ],
+      "properties": {
+        "releaseCandidateSha256": { "$ref": "#/$defs/hash" },
+        "releaseVersion": { "type": "string", "minLength": 1 },
+        "packagePlanSha256": { "$ref": "#/$defs/hash" },
+        "canonicalDatasetIndexSha256": { "$ref": "#/$defs/hash" },
+        "publicationCatalogSha256": { "$ref": "#/$defs/hash" },
+        "packageSetHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestSha256",
+        "resolutionSha256",
+        "component",
+        "effectiveDatasetCount",
+        "effectiveSetHash"
+      ],
+      "properties": {
+        "requestSha256": { "$ref": "#/$defs/hash" },
+        "resolutionSha256": { "$ref": "#/$defs/hash" },
+        "component": { "enum": ["unit-process", "result", "both"] },
+        "effectiveDatasetCount": { "type": "integer", "minimum": 1 },
+        "effectiveSetHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "inspectionStatus", "fingerprint", "publishedState"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "inspectionStatus": { "const": "pending_contract" },
+        "fingerprint": { "type": "null" },
+        "publishedState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["semantic", "code"],
+          "properties": {
+            "semantic": { "const": "published" },
+            "code": { "type": "null" }
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "const": "unavailable" },
+        "reason": {
+          "const": "target_state_transaction_approval_and_readback_contracts_pending"
+        }
+      }
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

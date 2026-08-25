@@ -264,7 +264,7 @@ rules:
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Candidate intake, package planning, validation, scope refinement, and immutable Candidate behavior must stay coherent.
+    reason: Candidate intake, package planning, validation-failure repair, Publication handoff, and immutable Candidate behavior must stay coherent.
   - id: publication-workflow-contract
     scope: repo
     repo: release
@@ -278,7 +278,7 @@ rules:
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Publication remains a distinct, explicitly authorized remote mutation boundary while detailed rules are deferred.
+    reason: Candidate-bound scope planning, dependency closure, authorization boundaries, and future remote mutation/readback behavior must stay coherent.
   - id: release-validation-contract
     scope: repo
     repo: release

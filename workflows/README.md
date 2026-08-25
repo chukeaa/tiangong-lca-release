@@ -32,7 +32,7 @@ related:
 | [Dataset Transformation](dataset-transformation/README.md) | 对 Candidate 中的精确数据执行后续定义的可追溯再加工        | Transformation evidence、transformed canonical datasets           |
 | [Publication](publication/README.md)                       | 消费不可变 Candidate，经过精确授权后写入平台并确认发布终态 | Publish Plan、approval、publication receipt、independent readback |
 
-默认主线是 `Calculation -> Result Materialization -> Release Candidate`。Candidate 完成后可以直接进入 Publication，也可以经依赖闭合的范围收缩生成新 Candidate，或进入 Dataset Transformation 再加工后生成新 Candidate。任何分支都不得原地修改已有 Candidate。
+默认主线是 `Calculation -> Result Materialization -> Release Candidate`。Candidate 完成后进入 Publication 做全量或选择性的依赖闭合范围规划，或进入 Dataset Transformation 再加工并生成新 Candidate。任何分支都不得原地修改已有 Candidate。
 
 Agent 进入具体 Workflow 前，先读取：
 

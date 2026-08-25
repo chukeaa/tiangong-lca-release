@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-scope-resolution.v1.schema.json",
+  "title": "Publication Scope Resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "scopeRequestSha256",
+    "candidatePublicationCatalogSha256",
+    "requestedRootCount",
+    "selectedBeforePruningCount",
+    "effectiveDatasetCount",
+    "effectiveSetHash",
+    "requestedRoots",
+    "dependencyAdditions",
+    "prunedDatasets",
+    "effectiveDatasets",
+    "referenceComplete"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.publication-scope-resolution.v1"
+    },
+    "scopeRequestSha256": { "$ref": "#/$defs/hash" },
+    "candidatePublicationCatalogSha256": { "$ref": "#/$defs/hash" },
+    "requestedRootCount": { "type": "integer", "minimum": 1 },
+    "selectedBeforePruningCount": { "type": "integer", "minimum": 1 },
+    "effectiveDatasetCount": { "type": "integer", "minimum": 1 },
+    "effectiveSetHash": { "$ref": "#/$defs/hash" },
+    "requestedRoots": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/key" }
+    },
+    "dependencyAdditions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "prunedDatasets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pruned" }
+    },
+    "effectiveDatasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "referenceComplete": { "const": true }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*:[0-9a-f-]{36}@[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "datasetType",
+        "role",
+        "uuid",
+        "version",
+        "path",
+        "sha256",
+        "canonicalContentHash"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "datasetType": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "uuid": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "canonicalContentHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "causedBy"],
+      "properties": {
+        "code": {
+          "enum": [
+            "explicitly_excluded",
+            "required_dependency_excluded",
+            "not_reachable_after_pruning"
+          ]
+        },
+        "causedBy": { "oneOf": [{ "$ref": "#/$defs/key" }, { "type": "null" }] }
+      }
+    },
+    "pruned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "datasetType",
+        "role",
+        "uuid",
+        "version",
+        "path",
+        "sha256",
+        "canonicalContentHash",
+        "reason"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "datasetType": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "uuid": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "canonicalContentHash": { "$ref": "#/$defs/hash" },
+        "reason": { "$ref": "#/$defs/reason" }
+      }
+    }
+  }
+}

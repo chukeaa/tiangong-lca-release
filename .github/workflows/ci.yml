@@ -28,6 +28,7 @@ jobs:
             workflows/calculation/package-lock.json
             workflows/result-materialization/package-lock.json
             workflows/release-candidate/package-lock.json
+            workflows/publication/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -35,6 +36,7 @@ jobs:
           npm --prefix workflows/calculation ci
           npm --prefix workflows/result-materialization ci
           npm --prefix workflows/release-candidate ci
+          npm --prefix workflows/publication ci
 
       - name: Validate workflow documentation baseline
         run: npm run prepush:gate

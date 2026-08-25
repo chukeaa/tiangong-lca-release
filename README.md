@@ -53,16 +53,15 @@ Calculation
   -> Release Candidate
 ```
 
-Release Candidate 完成后提供三个明确选择：
+Release Candidate 完成后提供两个明确方向：
 
 ```text
 Release Candidate
-  ├─ direct publish -> Publication
-  ├─ scope refinement -> dependency impact -> new Candidate -> Publication
+  ├─ Publication -> full/selective dependency-closed Publish Plan
   └─ data refinement -> Dataset Transformation -> new Candidate
 ```
 
-Candidate、范围决定和变换产物都不可原地改写。任何改变 Candidate 内容的动作必须产生新 Candidate，并绑定父 Candidate 与决定或变换证据。
+Candidate 和变换产物都不可原地改写。Publication 可以从 Candidate 选择引用完整的发布子集；任何数据内容变化仍必须产生新 Candidate，并绑定父 Candidate 与变换证据。
 
 ## 1. Calculation Workflow
 
@@ -115,13 +114,12 @@ Release Candidate 负责把已经 materialize 并验证的数据组织为不可�
 
 Packaging 和 Candidate qualification 都属于本 Workflow。生成 ZIP 不等于 Candidate 已通过资格验证，Candidate 构建成功也不等于已经获得发布授权。
 
-Candidate 完成后必须展示三个后续方向：
+Candidate 完成后必须展示两个后续方向：
 
-1. 原 Candidate 直接进入 Publication；
-2. 选择依赖闭合的子范围，生成并验证新的 Candidate；
-3. 选择精确 Candidate 数据进入 Dataset Transformation，再生成新 Candidate。
+1. 进入 Publication，选择 Unit Process、Result、Both 或精确 datasets，生成依赖闭合的 Publish Plan；
+2. 选择精确 Candidate 数据进入 Dataset Transformation，再生成新 Candidate。
 
-按 Unit Process、Result 或 Both 选择已经独立闭合的 Candidate component，可以留到 Publication Plan；任何 dataset-level 的排除都会改变内容和 hash，必须先回到本 Workflow 生成新 Candidate。
+Release Candidate v2 额外冻结 `publication-catalog.json`，让 Publication 在不改变 Candidate 的前提下执行确定性的正向依赖补齐和反向剪枝。
 
 详见 [Release Candidate Workflow](workflows/release-candidate/README.md)。
 
@@ -145,39 +143,44 @@ Dataset Transformation 是 Candidate 完成后的可选再加工入口。它消�
 
 Publication 负责消费不可变 Release Candidate，在精确选择和授权后改变 TianGong LCA 平台上的发布状态，并独立确认终态。
 
-当前确认的发布方向是：
+当前已经实现本地 Publication planning：
 
-- 用户选择发布 Unit Process、Result 或 Both；
+- 用户选择发布 Unit Process、Result、Both 或精确 datasets；
+- Publication 从 Candidate v2 的 hash-bound catalog 计算 forward closure 和 exclude 的 transitive reverse pruning；
+- request、resolution 和 prepared Publish Plan 原子写入，且明确 `publicationAuthorized=false`；
+- target inspection、approval、remote execution 和 independent readback 继续 fail closed；
+
+后续远程发布方向是：
+
 - 平台已存在精确 UUID + Version 的数据时，发布动作改变其生命周期状态；
 - 平台不存在该主键时，发布动作写入精确 Candidate 数据并进入发布态；
 - 发布计划必须区分用户选择的 roots 与保证引用完整性所需的有效发布集合；
 - 精确状态码、事务、写入 adapter、审批 artifact 和恢复规则留待后续设计。
 
-Publication 不得在执行阶段临时修改 Candidate 内容、删除数据集或补猜依赖。内容变化必须先返回 Release Candidate 或 Dataset Transformation 生成新 Candidate。
+Publication 不修改 Candidate；纯范围选择只生成 hash-bound Publish Plan。内容变化必须返回 Release Candidate、Dataset Transformation 或更早上游生成新 Candidate。
 
 详见 [Publication Workflow](workflows/publication/README.md)。
 
-## Candidate 的三条后续路径
+## Candidate 的两个后续方向
 
 ### 直接发布
 
-Publication 以原 Candidate 为不可变输入。用户仍需确认发布类型、精确 target 和后续定义的 Publish Plan。
+Publication 以 Candidate v2 为不可变输入。用户确认 component、精确 scope 和 target intent，Workflow 生成未授权 Publish Plan。
 
 ### 选择性发布
 
-如果只选择已经独立闭合的 Candidate component，Publication Plan 可以选择该 component。如果选择或剔除包内具体数据集，则必须：
+Publication 可以选择 component 或包内具体 dataset：
 
 ```text
 Candidate
   -> scope selection
-  -> dependency and reverse-impact analysis
-  -> scope decision
-  -> new Package Plan
-  -> full validation
-  -> new Candidate
+  -> forward dependency expansion
+  -> transitive reverse pruning for exclusions
+  -> reference-complete effective set
+  -> prepared Publish Plan
 ```
 
-剔除集合必须包含所有因此失去完整性的关联数据。原 Candidate、失败构建和上游 materialization 均保持不变。
+剔除集合必须递归包含所有因此失去完整性的关联数据。原 Candidate、package 和上游 materialization 均保持不变。
 
 ### 再加工
 
@@ -198,4 +201,4 @@ Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它�
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
 - Dataset Transformation 当前只有高层边界，没有已确认的加工规则或执行入口。
-- Publication 当前只有高层边界，没有已确认的状态码、写入契约或执行入口。
+- Publication 已实现 Candidate v2 catalog、本地范围解析、未授权 Publish Plan、CLI、回复模板和 fail-closed 测试；远程状态码、写入、审批与回读尚未实现。

@@ -80,8 +80,8 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
   -> ILCD conversion / validation
   -> semantic round-trip / package closure / cross-package consistency
   -> deterministic package build
-  -> Release Candidate
-  -> direct Publication / scope refinement / Dataset Transformation
+  -> Release Candidate v2 + Publication catalog
+  -> Publication planning / Dataset Transformation
 ```
 
 如果 Package build 或 qualification 发现数据错误，当前 Candidate 路线立即停止并保留 failed build。恢复路线是：
@@ -242,7 +242,8 @@ package-plan.json
 canonical-dataset-index.json
 tidas-release-report.json
 package-verification-report.json
-release-candidate.json
+publication-catalog.json                 # exact identity/reference/component handoff
+release-candidate.json                   # v2 binds Publication catalog hash
 packages/                              # exactly four deterministic ZIPs
   TiangongLCA-<version>-UnitProcessDatabase.tidas.zip
   TiangongLCA-<version>-UnitProcessDatabase.ilcd.zip
@@ -252,13 +253,12 @@ packages/                              # exactly four deterministic ZIPs
 
 ## Candidate 完成后的选择
 
-Candidate 成功冻结后必须展示三个互斥的当前方向：
+Candidate 成功冻结后必须展示两个互斥的当前方向：
 
-1. 原 Candidate 进入 Publication Workflow；
-2. 选择或剔除具体 dataset 时，在本 Workflow 内执行依赖与反向影响分析、冻结 scope decision、重跑全部验证并生成新 Candidate；
-3. 选择精确 Candidate 数据进入 Dataset Transformation，完成再加工后生成新 Candidate。
+1. 进入 Publication Workflow，选择 component 或精确 datasets，生成依赖闭合、未授权的 Publish Plan；
+2. 选择精确 Candidate 数据进入 Dataset Transformation，完成再加工后生成新 Candidate。
 
-按 Unit Process、Result 或 Both 选择已经独立闭合的 Candidate component，不改变 component 内容，可以留给未来 Publish Plan。任何 dataset-level 过滤都会改变内容和 hash，必须先形成新 Candidate。
+Candidate v2 在 canonical bytes 仍可验证时生成 `publication-catalog.json`，记录 exact identity、required references 和 Unit Process/Result component sets。Publication 的纯 include/exclude 只引用 Candidate 子集，不改变 Candidate；只有 dataset bytes、identity、version 或 package 内容变化才形成新 Candidate。
 
 ## 失败与恢复
 
@@ -281,6 +281,5 @@ Candidate 成功冻结后必须展示三个互斥的当前方向：
 
 ## 后续增强点
 
-1. 把现有 validation-failure exclusion 路径泛化为用户主动 dataset-level scope refinement，同时保持相同依赖闭合门禁。
-2. 为派生 Candidate 增加显式 `parentCandidateHash` 与 scope/Transformation evidence binding。
-3. 在 Publication 规则确定后，让 Candidate CLI 输出结构化但无副作用的 Publication handoff。
+1. 为 Dataset Transformation 派生 Candidate 增加显式 `parentCandidateHash` 与 transformation evidence binding。
+2. 在 Publication target inspection 契约确定后，把 Candidate component metadata 与远程 target classification 对接。

@@ -7,14 +7,14 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当 Agent 评估或设计 Release Candidate 的远程发布时
+  - 当 Agent 设计、实现或运行 Candidate-bound Publication 规划时
 whenToUpdate:
-  - 当 Publication 的状态、授权、写入、恢复或回读规则得到确认时
+  - 当 Publication 的范围、状态、授权、写入、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 6c8a25b20830794c855549a4866456a5a0c6e3ea
-lastReviewedNote: "Kept remote publication fail closed while its detailed contract and implementation remain deferred."
+lastReviewedCommit: d34113a7087e90f52e367f1cd02e166e367dc629
+lastReviewedNote: "Established deterministic local scope planning and retained a fail-closed remote execution boundary."
 related:
   - README.md
   - ../AGENTS.md
@@ -22,26 +22,71 @@ related:
 
 # Publication Workflow Agent Contract
 
-## 当前阶段
+## 当前职责
 
-本 Workflow 只有高层产品边界，没有已确认的 Publish Plan、approval、状态码、写入 adapter、事务、恢复或 readback 契约，也没有可执行 CLI。
+- 只消费不可变、未授权且带 hash-bound Publication catalog 的 Release Candidate v2；
+- 帮助用户选择 Unit Process、Result、Both 或精确 dataset roots；
+- 用 Candidate catalog 确定性计算 forward dependency closure；
+- 对显式排除递归计算 reverse dependents，并把所有剪枝原因写入 resolution；
+- 冻结 request、resolution 和 `publicationAuthorized=false` 的 prepared Publish Plan；
+- 明确披露远程 target inspection、approval、execution 和 readback 尚不可用。
 
-## 当前允许的动作
+## Representation Decision
 
-- 只读检查 Candidate identity、hash、components 和已有本地验证证据；
-- 帮助用户表达希望发布 Unit Process、Result 或 Both；
-- 识别 dataset-level 范围变化并返回 Release Candidate Workflow；
-- 整理后续 Publication 设计需要解决的问题。
+- Publication Scope Request：F2 半结构化用户投影，可在生成计划前重新表达；
+- Publication Scope Resolution：F3 稳定确定性证据，生成后不可原地修改；
+- prepared Publish Plan：F4 审计边界，绑定 Candidate/request/resolution/target intent，始终未授权；
+- future approval、execution receipt、independent readback：F4，只有平台契约确认后才实现。
 
-## 当前硬边界
+任何重新选择都生成新的输出目录和新的 artifacts，不覆盖已有计划。
 
-- 不执行任何远程发布或数据库状态修改；
-- 不把 Candidate 构建成功解释为发布授权；
-- 不在 Publication 中修改、删除或补写 Candidate 内容；
-- 不猜测最终 state code、target、写入接口或事务语义；
-- 不把 transport success 当作 publication 或 independent readback success；
-- 不根据名称或 mutable `latest` 选择发布对象。
+## 可自动执行
 
-## 进入实现的前提
+- 只读核对 Candidate manifest、index、catalog 和 package bytes；
+- 解析 component preset 和 exact include/exclude；
+- 计算正向闭包、反向剪枝和最终集合；
+- 写出本地 immutable planning artifacts；
+- 返回有界 JSON、人类摘要、恢复动作和 workflow-local reply template。
 
-必须通过单独跟踪的设计任务确认 Publish Plan、精确授权、目标差异分类、状态转换、缺失数据写入、幂等、失败恢复和独立回读契约，才能增加远程执行代码。
+## 必须 fail closed
+
+- Candidate 不是 v2、已授权或缺少 Publication catalog；
+- Candidate、Package Plan、index、catalog 或 ZIP hash/size 漂移；
+- exact identity 不存在或不属于所选 component；
+- required reference target 缺失；
+- exclude 不属于当前请求闭包；
+- include/exclude 冲突；
+- 剪枝后集合为空或仍有不完整 required references；
+- 输出目录已经存在。
+
+## 当前禁止
+
+- 修改、删除、补写或重新打包 Candidate；
+- 把纯 Publication scope 选择解释为新 Candidate；
+- 修改 dataset content、UUID 或 Version；
+- 猜测 target fingerprint、平台现状或 published state code；
+- 生成 approval、调用远程写接口、转换状态或声称发布完成；
+- 把 transport success 当作 Publication 或 independent readback success；
+- 使用 service-role、secret、mutable `latest` 或未验证的远程 identity。
+
+## 下一实现门槛
+
+增加 target inspection 或 remote execution 之前，必须单独确认并测试：
+
+- actor-scoped target read/write interface；
+- UUID + Version 的 exact-content 一致、缺失和冲突分类；
+- semantic `published` 到具体 state code 的 adapter mapping；
+- mixed insert/state-transition 的事务和原子性；
+- approval subject hash、expiry、actor 和 replay protection；
+- retry/idempotency、partial failure recovery 和 independent readback。
+
+## 完成条件
+
+本地 Publication planning 只有在以下条件同时成立时完成：
+
+- Candidate 全部绑定证据重新验证；
+- effective set 非空且 required-reference complete；
+- 自动 additions/pruning 及原因完整保存；
+- request、resolution 和 plan 原子写入新目录；
+- plan 明确 `publicationAuthorized=false`、target inspection pending、execution unavailable；
+- 用户回复没有暗示远程发布已经发生。
