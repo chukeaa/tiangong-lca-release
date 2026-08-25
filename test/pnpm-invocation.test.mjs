@@ -22,10 +22,30 @@ test("pnpm invocation supports Corepack JavaScript and pnpm/setup executables wi
     { command: "/home/runner/setup-pnpm/pnpm", prefixArgs: [] },
   );
   assert.deepEqual(
+    resolvePnpmInvocation("pnpm", {
+      execPath: "/runtime/node",
+      fileExists: (candidate) =>
+        candidate === "/home/runner/setup-pnpm/pnpm",
+      platform: "linux",
+      pnpmHome: "/home/runner/setup-pnpm",
+    }),
+    { command: "/home/runner/setup-pnpm/pnpm", prefixArgs: [] },
+  );
+  assert.deepEqual(
     resolvePnpmInvocation("C:\\setup-pnpm\\pnpm.exe", {
       execPath: "C:\\node\\node.exe",
       fileExists: exists,
       platform: "win32",
+    }),
+    { command: "C:\\setup-pnpm\\pnpm.exe", prefixArgs: [] },
+  );
+  assert.deepEqual(
+    resolvePnpmInvocation("pnpm", {
+      execPath: "C:\\node\\node.exe",
+      fileExists: (candidate) =>
+        candidate === "C:\\setup-pnpm\\pnpm.exe",
+      platform: "win32",
+      pnpmHome: "C:\\setup-pnpm",
     }),
     { command: "C:\\setup-pnpm\\pnpm.exe", prefixArgs: [] },
   );
