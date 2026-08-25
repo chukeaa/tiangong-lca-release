@@ -17,9 +17,9 @@ const FIXTURE_EVIDENCE = Object.freeze({
   schema: "tiangong.release.tidas-sdk-fixture-evidence.v1",
   sdk: "@tiangong-lca/tidas-sdk@0.2.0",
   processSha256:
-    "f0ab64b6f143159007716fbd64ba0b2625d7bb9fab064d692e95e34df19ca06b",
+    "0469b5b6fa53e874dce582d592b0b90b53e78e03e68f4aba079a8cff7fc15ed1",
   lifecycleModelSha256:
-    "7b1551f108b22fe6fe07eb9c8aa4080faf1f177b1cfa5ae9a37cda72c9cefadd",
+    "7c21c0abe0d309d091065a7e2aae58fb19f5ae554a3f011470173cb2010ab486",
 });
 
 test("Result Materialization pins and reports the released SDK 0.2.0", async () => {
@@ -106,10 +106,28 @@ function validUnitProcess() {
           classificationInformation: {
             "common:classification": {
               "common:class": [
-                { "@level": "0", "@classId": "A", "#text": "Agriculture" },
-                { "@level": "1", "@classId": "01", "#text": "Crop production" },
-                { "@level": "2", "@classId": "011", "#text": "Crops" },
-                { "@level": "3", "@classId": "0111", "#text": "Cereals" },
+                {
+                  "@level": "0",
+                  "@classId": "A",
+                  "#text": "Agriculture, forestry and fishing",
+                },
+                {
+                  "@level": "1",
+                  "@classId": "01",
+                  "#text":
+                    "Crop and animal production, hunting and related service activities",
+                },
+                {
+                  "@level": "2",
+                  "@classId": "011",
+                  "#text": "Growing of non-perennial crops",
+                },
+                {
+                  "@level": "3",
+                  "@classId": "0111",
+                  "#text":
+                    "Growing of cereals (except rice), leguminous crops and oil seeds",
+                },
               ],
             },
           },

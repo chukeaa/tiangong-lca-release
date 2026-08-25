@@ -64,7 +64,18 @@ test("active package commands and automation are pnpm-only", () => {
 
   const ci = readText(".github/workflows/ci.yml");
   assert.match(ci, /node-version:\s*["']24\.19\.0["']/);
-  assert.match(ci, /pnpm\/action-setup@v4/);
+  assert.match(
+    ci,
+    /actions\/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6/,
+  );
+  assert.match(
+    ci,
+    /pnpm\/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4/,
+  );
+  assert.match(
+    ci,
+    /actions\/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6/,
+  );
   assert.match(ci, /version:\s*11\.23\.0/);
   assert.match(ci, /cache:\s*pnpm/);
   assert.match(ci, /pnpm install --frozen-lockfile/);

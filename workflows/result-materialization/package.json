@@ -4,22 +4,18 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": "24.19.0"
   },
   "bin": {
     "release-result-materialization": "./cli.mjs"
   },
   "scripts": {
-    "test": "node --test",
-    "format:check": "prettier --check ."
+    "test": "node --test"
   },
   "dependencies": {
-    "@tiangong-lca/tidas-sdk": "0.1.46",
+    "@tiangong-lca/tidas-sdk": "0.2.0",
     "canonicalize": "4.0.0",
-    "uuid": "14.0.1",
+    "uuid": "14.0.2",
     "yauzl": "3.4.0"
-  },
-  "devDependencies": {
-    "prettier": "3.6.2"
   }
 }

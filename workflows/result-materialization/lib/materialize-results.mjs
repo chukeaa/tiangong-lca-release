@@ -203,7 +203,7 @@ export async function materializeResults({
         completeness: "complete-for-selection",
         datasetCount: descriptors.length,
         versionChanges: countChanges(descriptors),
-        validator: "@tiangong-lca/tidas-sdk@0.1.46",
+        validator: "@tiangong-lca/tidas-sdk@0.2.0",
       }),
       { flag: "wx" },
     );
