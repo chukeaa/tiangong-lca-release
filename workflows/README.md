@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Reframed candidate preparation and publication as separate top-level Workflow boundaries."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Reviewed the workflow index after completing Candidate-bound Publication execution and independent readback."
 related:
   - ../README.md
   - AGENTS.md
@@ -24,13 +24,13 @@ related:
 
 本目录是 Release 项目的主要入口，不是脚本集合。
 
-| Workflow                                                   | 解决的问题                                                 | 主要输出                                                          |
-| ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载        | Closure evidence、Calculation Bundle                              |
-| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel                | Canonical datasets、identity/version plan、manifest               |
-| [Release Candidate](release-candidate/README.md)           | 准备闭合输入，验证、打包并冻结不可变 Candidate             | Release Intake、Package Plan、Scope Decision、Candidate           |
-| [Dataset Transformation](dataset-transformation/README.md) | 对 Candidate 中的精确数据执行后续定义的可追溯再加工        | Transformation evidence、transformed canonical datasets           |
-| [Publication](publication/README.md)                       | 消费不可变 Candidate，经过精确授权后写入平台并确认发布终态 | Publish Plan、approval、publication receipt、independent readback |
+| Workflow                                                   | 解决的问题                                                 | 主要输出                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载        | Closure evidence、Calculation Bundle                        |
+| [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel                | Canonical datasets、identity/version plan、manifest         |
+| [Release Candidate](release-candidate/README.md)           | 准备闭合输入，验证、打包并冻结不可变 Candidate             | Release Intake、Package Plan、Scope Decision、Candidate     |
+| [Dataset Transformation](dataset-transformation/README.md) | 对 Candidate 中的精确数据执行后续定义的可追溯再加工        | Transformation evidence、transformed canonical datasets     |
+| [Publication](publication/README.md)                       | 消费不可变 Candidate，经过精确授权后写入平台并确认发布终态 | Draft/Executable Plan、Approval、Execution/Readback Receipt |
 
 默认主线是 `Calculation -> Result Materialization -> Release Candidate`。Candidate 完成后进入 Publication 做全量或选择性的依赖闭合范围规划，或进入 Dataset Transformation 再加工并生成新 Candidate。任何分支都不得原地修改已有 Candidate。
 

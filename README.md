@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Separated immutable Release Candidate construction from future authorized Publication and positioned Dataset Transformation as an optional Candidate refinement loop."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Completed Candidate-bound Publication planning, approval, resumable platform execution, and independent readback while retaining Dataset Transformation as a separate refinement loop."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -143,21 +143,26 @@ Dataset Transformation 是 Candidate 完成后的可选再加工入口。它消�
 
 Publication 负责消费不可变 Release Candidate，在精确选择和授权后改变 TianGong LCA 平台上的发布状态，并独立确认终态。
 
-当前已经实现本地 Publication planning：
+当前已经实现完整 Publication 闭环：
 
 - 用户选择发布 Unit Process、Result、Both 或精确 datasets；
 - Publication 从 Candidate v2 的 hash-bound catalog 计算 forward closure 和 exclude 的 transitive reverse pruning；
-- request、resolution 和 prepared Publish Plan 原子写入，且明确 `publicationAuthorized=false`；
-- target inspection、approval、remote execution 和 independent readback 继续 fail closed；
+- request、resolution 和 Draft Plan 原子写入，且明确 `publicationAuthorized=false`；
+- 从 Candidate TIDAS ZIP 只物化 dependency-safe effective set；
+- actor-scoped target inspection 按 UUID + Version + canonical content + state 分类；
+- 用户用 exact Executable Plan SHA-256 形成带过期时间的 Approval；
+- missing row 创建后发布、matching draft 只切状态、matching published 幂等跳过；
+- 执行使用哈希链事件安全恢复，并以独立远程回读生成最终 Receipt。
 
-后续远程发布方向是：
+远程发布规则是：
 
 - 平台已存在精确 UUID + Version 的数据时，发布动作改变其生命周期状态；
 - 平台不存在该主键时，发布动作写入精确 Candidate 数据并进入发布态；
 - 发布计划必须区分用户选择的 roots 与保证引用完整性所需的有效发布集合；
-- 精确状态码、事务、写入 adapter、审批 artifact 和恢复规则留待后续设计。
+- 当前 semantic `published` 映射到平台 `state_code=100`；未来切换到例如 `120` 时必须同步升级平台 adapter；
+- 平台未提供跨多个 Edge Function 请求的全局事务，因此 Workflow 明确采用幂等、可恢复执行，不虚构 atomic promotion。
 
-Publication 不修改 Candidate；纯范围选择只生成 hash-bound Publish Plan。内容变化必须返回 Release Candidate、Dataset Transformation 或更早上游生成新 Candidate。
+Publication 不修改 Candidate；纯范围选择生成 hash-bound Draft/Executable Plan 和精确 payload。内容变化必须返回 Release Candidate、Dataset Transformation 或更早上游生成新 Candidate。
 
 详见 [Publication Workflow](workflows/publication/README.md)。
 
@@ -165,7 +170,7 @@ Publication 不修改 Candidate；纯范围选择只生成 hash-bound Publish Pl
 
 ### 直接发布
 
-Publication 以 Candidate v2 为不可变输入。用户确认 component、精确 scope 和 target intent，Workflow 生成未授权 Publish Plan。
+Publication 以 Candidate v2 为不可变输入。用户确认 component、精确 scope 和 target intent，Workflow 生成未授权 Draft Plan；目标检查后，用户再确认 exact Executable Plan hash。
 
 ### 选择性发布
 
@@ -177,7 +182,9 @@ Candidate
   -> forward dependency expansion
   -> transitive reverse pruning for exclusions
   -> reference-complete effective set
-  -> prepared Publish Plan
+  -> exact payload + Target Snapshot
+  -> approved Executable Plan
+  -> resumable execution + independent readback
 ```
 
 剔除集合必须递归包含所有因此失去完整性的关联数据。原 Candidate、package 和上游 materialization 均保持不变。
@@ -201,4 +208,4 @@ Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它�
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
 - Dataset Transformation 当前只有高层边界，没有已确认的加工规则或执行入口。
-- Publication 已实现 Candidate v2 catalog、本地范围解析、未授权 Publish Plan、CLI、回复模板和 fail-closed 测试；远程状态码、写入、审批与回读尚未实现。
+- Publication 已实现 Candidate v2 catalog、范围解析、精确 payload、目标检查、hash-bound Approval、可恢复远程发布、独立回读、严格 schemas、CLI、回复模板和 fail-closed 测试；当前执行 adapter 支持平台发布状态码 `100`。

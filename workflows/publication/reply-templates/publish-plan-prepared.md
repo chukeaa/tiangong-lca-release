@@ -1,7 +1,7 @@
-# Publish Plan 已准备
+# Publication Draft Plan 已准备
 
 ```markdown
-✅ Publication 的本地范围解析和 Publish Plan 已准备完成；Candidate 未被修改。
+✅ Publication 范围已完成依赖闭包与反向剪枝；Candidate 未被修改。
 
 - Candidate：`{{candidate}}`
 - 发布组件：`{{component}}`
@@ -11,20 +11,13 @@
 - 自动剪枝数据：`{{prunedDatasetCount}}`
 - 最终发布数据：`{{effectiveDatasetCount}}`
 - Effective Set SHA-256：`{{effectiveSetHash}}`
-- Publish Plan SHA-256：`{{publishPlanSha256}}`
+- Draft Plan SHA-256：`{{publicationDraftPlanSha256}}`
 - 发布授权：否（`{{publicationAuthorized}}`）
-- 远程执行可用：否（`{{remoteExecutionAvailable}}`）
 - Scope Request：`{{artifacts.scopeRequest}}`
 - Scope Resolution：`{{artifacts.scopeResolution}}`
-- Publish Plan：`{{artifacts.publishPlan}}`
+- Draft Plan：`{{artifacts.publicationDraftPlan}}`
 
-检查范围解析：
+下一步物化精确选中载荷：
 
 `{{nextActions.0.command}}`
-
-检查未授权 Publish Plan：
-
-`{{nextActions.1.command}}`
-
-当前只完成确定性的本地规划。目标检查、状态码映射、审批、事务写入和独立回读尚未授权或执行。
 ```

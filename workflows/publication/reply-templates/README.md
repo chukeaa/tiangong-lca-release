@@ -22,7 +22,10 @@ related:
 # Publication 回复模板
 
 - 只使用 CLI 返回的真实事实替换占位符；
-- Publish Plan 准备成功不表示已经审批、写入或发布；
+- Draft Plan 或 Executable Plan 准备成功不表示已经审批、写入或发布；
 - 回复必须披露自动补齐的依赖和因排除而递归剪枝的数据数量；
 - 不输出 credential、内部 locator 或未确认的远程状态；
-- 远程执行入口尚不可用时必须明确说明，不提供伪命令。
+- Approval 回复必须展示 exact Executable Plan 和 Approval SHA-256；
+- Execution 回复必须披露独立回读仍待完成，并给出 Receipt/events；
+- 只有 Readback Receipt `status=verified` 时才能回复 Publication 已完成；
+- 失败回复使用 CLI 提供的恢复入口，不建议删除或覆盖 execution event。

@@ -182,7 +182,7 @@ export async function preparePublicationPlan({
     referenceComplete: true,
   };
   const plan = {
-    schemaVersion: "tiangong.release.publish-plan.v1",
+    schemaVersion: "tiangong.release.publication-draft-plan.v1",
     status: "prepared_unapproved",
     publicationAuthorized: false,
     candidate: {
@@ -203,14 +203,12 @@ export async function preparePublicationPlan({
     },
     target: {
       id: request.targetId,
-      inspectionStatus: "pending_contract",
+      inspectionStatus: "pending",
       fingerprint: null,
       publishedState: { semantic: "published", code: null },
     },
     execution: {
-      status: "unavailable",
-      reason:
-        "target_state_transaction_approval_and_readback_contracts_pending",
+      status: "requires_target_inspection_and_approval",
     },
   };
 
@@ -228,7 +226,7 @@ export async function preparePublicationPlan({
       { flag: "wx" },
     );
     await writeFile(
-      path.join(staging, "publish-plan.json"),
+      path.join(staging, "publication-draft-plan.json"),
       canonicalJson(plan),
       { flag: "wx" },
     );
@@ -242,7 +240,7 @@ export async function preparePublicationPlan({
     request,
     resolution,
     plan,
-    publishPlanSha256: hashJson(plan),
+    publicationDraftPlanSha256: hashJson(plan),
   };
 }
 

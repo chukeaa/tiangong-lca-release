@@ -7,15 +7,15 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当用户准备从不可变 Release Candidate 选择本次发布范围时
-  - 当需要生成依赖闭合、尚未授权的 Publish Plan 时
+  - 当用户准备从不可变 Release Candidate 选择并发布 Unit Process、Result 或 Both 时
+  - 当需要执行目标检查、精确批准、平台发布或独立回读时
 whenToUpdate:
   - 当发布选择、目标差异、状态转换、写入、审批、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: d34113a7087e90f52e367f1cd02e166e367dc629
-lastReviewedNote: "Implemented deterministic Candidate-bound scope planning while keeping remote target mutation fail closed."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Implemented the complete Candidate-bound Publication flow from scope selection through independent readback."
 related:
   - AGENTS.md
   - ../release-candidate/README.md
@@ -24,126 +24,165 @@ related:
 
 # Publication Workflow
 
-Publication 消费不可变 Release Candidate，负责本次发布范围、目标检查、精确授权、平台写入和独立回读。当前已实现确定性的本地范围规划；远程目标检查、审批和执行仍保持 fail closed。
+Publication 消费不可变 Release Candidate v2，在不修改 Candidate 的前提下完成选择、精确载荷物化、目标检查、明确批准、远程发布和独立回读。
 
 ```text
 Release Candidate v2
-  -> Publication Scope Request
-  -> dependency expansion + reverse pruning
-  -> Publication Scope Resolution
-  -> prepared, unauthorized Publish Plan
-  -> future Target Inspection
-  -> future Approval
-  -> future Execute + Independent Readback
+  -> Scope Request + dependency-safe Resolution
+  -> Publication Draft Plan (未授权)
+  -> exact selected TIDAS payload
+  -> actor-scoped Target Snapshot
+  -> Publication Executable Plan (未授权)
+  -> exact plan-hash Approval
+  -> resumable create/state-transition execution
+  -> independent content/state readback
 ```
 
-## 当前已实现
+Dataset Transformation 不属于本 Workflow。任何 Process/LifeCycleModel 内容修改、规则聚合、UUID/Version 改变或重新计算，都必须先产生新的 Candidate，再进入 Publication。
 
-Workflow-local CLI：
+## 发布语义
+
+用户首先选择 `unit-process`、`result` 或 `both`，并可用 exact identity 缩小范围。
+
+- exact identity 格式：`<datasetType>:<uuid>@<version>`；
+- `--include` 替代 component 默认 roots，并自动补齐 forward dependencies；
+- `--exclude` 剔除指定数据，同时递归剔除所有因此引用不完整的 reverse dependents；
+- 最终集合必须非空、完全来自 Candidate，且 required references 完整；
+- 纯选择不会形成新 Candidate。
+
+目标平台按 UUID + Version + canonical content hash 分类：
+
+- 不存在：创建精确 Candidate 数据，然后切换到发布态；
+- 已存在且内容相同、尚未发布：不覆盖内容，只切换状态；
+- 已存在且内容相同、已经发布：幂等 no-op；
+- 已存在但内容不同、当前 actor 无发布权、或处于不可直接发布状态：在批准前 fail closed。
+
+当前平台 `app_dataset_publish` 固定写入 `state_code=100`。Workflow 把它绑定为 `{semantic: "published", code: 100}`；未来平台迁移到例如 `120` 时必须升级状态 adapter 和对应测试，不能只改文档或批准文件。
+
+## CLI 完整流程
+
+安装并查看帮助：
 
 ```bash
 npm --prefix workflows/publication ci
-node workflows/publication/cli.mjs plan prepare --help
+node workflows/publication/cli.mjs --help
 ```
 
-`plan prepare`：
-
-- 重新验证 Candidate manifest、Package Plan、canonical dataset index、Publication catalog 和四个 ZIP 的 hash/size；
-- 接受 `unit-process`、`result` 或 `both` component；
-- 可用重复的 `--include <datasetType:uuid@version>` 指定精确发布 roots；
-- 可用重复的 `--exclude <datasetType:uuid@version>` 指定剔除对象；
-- 从 roots 递归补齐所有 required forward dependencies；
-- 从显式排除对象递归剪枝所有会因此引用不完整的 reverse dependents；
-- 移除剪枝后不再从存活 roots 可达的数据；
-- 对未知 identity、component mismatch、包或 catalog 漂移、缺失引用和空结果 fail closed；
-- 原子写出三个不可变本地产物。
-
-```text
-publication-scope-request.json
-publication-scope-resolution.json
-publish-plan.json
-```
-
-Publish Plan 始终记录：
-
-```json
-{
-  "status": "prepared_unapproved",
-  "publicationAuthorized": false,
-  "target": {
-    "inspectionStatus": "pending_contract",
-    "publishedState": { "semantic": "published", "code": null }
-  },
-  "execution": { "status": "unavailable" }
-}
-```
-
-这表示范围规划完成，不表示批准、上传、写入或发布完成。
-
-## 范围语义
-
-Candidate 保持原样；Publication Plan 只引用其中的精确数据子集。
-
-- 未提供 `--include` 时，component 的全部 roots 是请求 roots；
-- 提供 `--include` 时，它替代 component 默认 roots；
-- forward dependency expansion 自动加入解释所选 roots 所需的精确数据；
-- 显式排除一个数据集时，所有直接或间接依赖它的已选数据集都被剪枝；
-- 最终集合必须非空且 required references 完整；
-- request、resolution 和 effective set 都以 canonical hash 绑定 Candidate。
-
-纯选择、补齐和剪枝不产生新 Candidate。以下动作会改变数据内容，必须返回 Dataset Transformation、Result Materialization 或 Release Candidate：
-
-- 修改 Process/LifecycleModel 字段或数值；
-- 聚合、重算或改变 provider/quantitative reference；
-- 改变 UUID、Version 或 dataset bytes；
-- 修复 Candidate 数据；
-- 重新生成新的分发包。
-
-## Candidate handoff
-
-Release Candidate v2 新增 hash-bound `publication-catalog.json`。它在 Candidate 构建仍持有 canonical bytes 时生成，记录：
-
-- 每个 dataset 的 exact identity、role、path 和内容 hash；
-- required closure references；
-- Unit Process 和 Result component 的 roots/effective set；
-- catalog set hash 和 canonical index hash。
-
-Publication 不依赖上游 mutable 路径，也不从 ZIP 文件名或 `latest` 猜测闭包。旧 Candidate v1 没有此证据，必须重新构建为 v2 才能进入 `plan prepare`。
-
-## 下一阶段待设计
-
-本轮尚不定义或执行：
-
-- target snapshot/fingerprint 的 actor-scoped 读取协议；
-- UUID + Version 已存在且内容一致、缺失、内容冲突的分类 adapter；
-- 实际 published state code；领域契约只使用语义状态 `published`；
-- approval artifact、批准人和撤销/过期规则；
-- staging、事务、原子 promotion、幂等和恢复；
-- 正式 Publication Receipt 和 independent readback；
-- 任何远程写入或状态转换。
-
-下一阶段必须先冻结 Target Inspection 与冲突分类契约，再让 prepared Publish Plan 晋升为可审批执行计划。
-
-## 示例
+### 1. 准备范围
 
 ```bash
 node workflows/publication/cli.mjs plan prepare \
   --candidate .release/candidates/<candidate> \
   --component both \
   --target tiangong-lca-platform \
-  --out-dir .release/publication/plans/<plan> \
+  --out-dir .release/publication/<run>/plan \
   --json
 ```
 
-选择一个 Result root 并排除一个精确依赖：
+可重复使用 `--include` / `--exclude`。输出：
+
+```text
+publication-scope-request.json
+publication-scope-resolution.json
+publication-draft-plan.json
+```
+
+这里使用 `publication-draft-plan.v1`，避免与平台已有、用于四个 Release ZIP 的 `tiangong.release.publish-plan.v1` 发生 schema 名称碰撞。
+
+### 2. 物化精确载荷
 
 ```bash
-node workflows/publication/cli.mjs plan prepare \
+node workflows/publication/cli.mjs payload materialize \
   --candidate .release/candidates/<candidate> \
-  --component result \
-  --target tiangong-lca-platform \
-  --include lifecyclemodel:<uuid>@01.00.000 \
-  --exclude process:<uuid>@01.00.000 \
-  --out-dir .release/publication/plans/<plan> \
+  --plan-dir .release/publication/<run>/plan \
+  --out-dir .release/publication/<run>/payload \
   --json
 ```
+
+该命令重新验证 Candidate 与两个 TIDAS ZIP，只提取 resolution 中的精确成员；相同数据同时出现在 Unit/Result ZIP 时必须具有完全相同 bytes。输出 `publication-payload-manifest.json` 和 `datasets/`，被剪枝的数据不会进入载荷。
+
+### 3. 检查目标并形成可执行计划
+
+远程命令只接受 actor-scoped session：
+
+```text
+TIANGONG_LCA_API_BASE_URL
+TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY
+TIANGONG_LCA_ACCESS_TOKEN 或 TIANGONG_LCA_API_KEY
+```
+
+禁止使用 service-role secret。
+
+```bash
+node workflows/publication/cli.mjs target inspect \
+  --plan-dir .release/publication/<run>/plan \
+  --payload-dir .release/publication/<run>/payload \
+  --published-state-code 100 \
+  --out-dir .release/publication/<run>/inspection \
+  --json
+```
+
+输出 `publication-target-snapshot.json` 和 `publication-executable-plan.json`。Snapshot 绑定 actor、目标 endpoint 指纹、每个 UUID + Version 的内容/状态分类和整体 fingerprint；Executable Plan 仍记录 `publicationAuthorized=false`。
+
+### 4. 批准精确计划
+
+```bash
+node workflows/publication/cli.mjs approval create \
+  --inspection-dir .release/publication/<run>/inspection \
+  --confirm <executable-plan-sha256> \
+  --approved-by <stable-actor-id> \
+  --expires-at 2026-08-25T10:00:00Z \
+  --reason "approved release scope" \
+  --out-dir .release/publication/<run>/approval \
+  --json
+```
+
+`--confirm` 必须逐字符等于 CLI 返回的 Executable Plan SHA-256。Approval 绑定 Draft Plan、payload、target snapshot、fingerprint、状态 mapping、批准人和过期时间；任一上游 artifact 漂移都会失效。
+
+### 5. 执行发布
+
+```bash
+node workflows/publication/cli.mjs publish execute \
+  --approval-dir .release/publication/<run>/approval \
+  --payload-dir .release/publication/<run>/payload \
+  --out-dir .release/publication/<run>/execution \
+  --json
+```
+
+执行前会重新检查目标。第一次执行要求和批准快照一致；恢复执行允许已经由同一执行产生、内容正确的 draft/published row。执行使用平台 `app_dataset_create`、`save_lifecycle_model_bundle` 和 `app_dataset_publish`，每个 identity 完成后重新读取内容和状态。
+
+平台没有跨多个 Edge Function 请求的一次性事务，因此 Workflow 不声称全局 atomic。它使用：
+
+- 固定 Approval/Plan/Payload hash；
+- `publication-execution-intent.json` 防止目录被其他计划复用；
+- `events/000001.json...` 哈希链记录 started/success/failure；
+- 每次恢复重新读取远端，只跳过已经验证完成的 identity；
+- `publication-execution-receipt.json` 只在全部 identities 完成后生成。
+
+如果失败，保留同一个 `--out-dir` 重试即可。CLI 会报告已完成和失败 identity，不会扩大范围或删除远端数据。
+
+### 6. 独立回读
+
+```bash
+node workflows/publication/cli.mjs readback verify \
+  --execution-dir .release/publication/<run>/execution \
+  --payload-dir .release/publication/<run>/payload \
+  --out-dir .release/publication/<run>/readback \
+  --json
+```
+
+该命令发起一轮新的 exact REST 查询，不复用 execute 的响应。每个 UUID + Version 都必须同时满足 canonical content hash 和 published state code；全部通过后写出不可变 `publication-readback-receipt.json`，此时 Publication 才完整结束。
+
+## 权限和可见性边界
+
+- `app_dataset_publish` 当前只允许 dataset owner 直接发布；目标检查会对可见 draft 校验 owner。
+- Actor-scoped REST 可能看不到其他用户的私有同键数据。此时检查会把它视为 absent，创建时平台唯一约束仍会 fail closed；已经完成的其他 identity 会保留在执行事件中并可恢复，不做破坏性回滚。
+- 当前状态 adapter 只执行 code `100`；传入其他 code 可以用于检查/计划，但 execute 会在任何写入前拒绝，直到平台写接口正式支持该 code。
+- Transport `ok` 不代表完成；只有独立 Readback Receipt 的 `status=verified` 表示 Publication 完成。
+
+## 主要契约
+
+- Scope Request：F2 用户选择投影；
+- Scope Resolution、Payload Manifest、Target Snapshot：F3 稳定、hash-bound 证据；
+- Draft Plan、Executable Plan、Approval、Execution Intent/Event/Receipt、Readback Receipt：F4 严格审计与授权边界；
+- 所有计划、批准和终态 receipt 都不可原地覆盖；Execution event 只追加。

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lca.tiangong.earth/release/publish-plan.v1.schema.json",
-  "title": "Prepared Publish Plan",
+  "$id": "https://lca.tiangong.earth/release/publication-draft-plan.v1.schema.json",
+  "title": "Publication Draft Plan",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,7 +14,9 @@
     "execution"
   ],
   "properties": {
-    "schemaVersion": { "const": "tiangong.release.publish-plan.v1" },
+    "schemaVersion": {
+      "const": "tiangong.release.publication-draft-plan.v1"
+    },
     "status": { "const": "prepared_unapproved" },
     "publicationAuthorized": { "const": false },
     "candidate": {
@@ -66,7 +68,7 @@
           "maxLength": 256,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
         },
-        "inspectionStatus": { "const": "pending_contract" },
+        "inspectionStatus": { "const": "pending" },
         "fingerprint": { "type": "null" },
         "publishedState": {
           "type": "object",
@@ -82,12 +84,9 @@
     "execution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "reason"],
+      "required": ["status"],
       "properties": {
-        "status": { "const": "unavailable" },
-        "reason": {
-          "const": "target_state_transaction_approval_and_readback_contracts_pending"
-        }
+        "status": { "const": "requires_target_inspection_and_approval" }
       }
     }
   },

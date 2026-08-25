@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-execution-receipt.v1.schema.json",
+  "title": "Publication Execution Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "approvalSha256",
+    "executablePlanSha256",
+    "payloadManifestSha256",
+    "targetId",
+    "publishedState",
+    "completedAt",
+    "datasetCount",
+    "completedKeys",
+    "eventCount",
+    "eventLogHash",
+    "independentReadbackVerified"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.publication-execution-receipt.v1"
+    },
+    "status": { "const": "published" },
+    "approvalSha256": { "$ref": "#/$defs/hash" },
+    "executablePlanSha256": { "$ref": "#/$defs/hash" },
+    "payloadManifestSha256": { "$ref": "#/$defs/hash" },
+    "targetId": { "type": "string", "minLength": 1 },
+    "publishedState": { "$ref": "#/$defs/state" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "datasetCount": { "type": "integer", "minimum": 1 },
+    "completedKeys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "eventCount": { "type": "integer", "minimum": 1 },
+    "eventLogHash": { "$ref": "#/$defs/hash" },
+    "independentReadbackVerified": { "const": false }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "code"],
+      "properties": {
+        "semantic": { "const": "published" },
+        "code": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

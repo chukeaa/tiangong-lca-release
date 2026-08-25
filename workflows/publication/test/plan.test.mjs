@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
+import { materializePublicationPayload } from "../lib/payload.mjs";
 import { preparePublicationPlan } from "../lib/plan.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -49,11 +50,17 @@ test("Publication prepares a deterministic full plan without mutating Candidate"
     component: "both",
     targetId: "tiangong-lca-platform",
   });
-  assert.equal(first.publishPlanSha256, second.publishPlanSha256);
+  assert.equal(
+    first.publicationDraftPlanSha256,
+    second.publicationDraftPlanSha256,
+  );
   assert.equal(first.resolution.effectiveDatasetCount, 6);
   assert.equal(first.resolution.referenceComplete, true);
   assert.equal(first.plan.publicationAuthorized, false);
-  assert.equal(first.plan.execution.status, "unavailable");
+  assert.equal(
+    first.plan.execution.status,
+    "requires_target_inspection_and_approval",
+  );
   assert.deepEqual(
     await readFile(path.join(fixture.candidate, "release-candidate.json")),
     candidateBefore,
@@ -235,9 +242,8 @@ test("Publication CLI emits bounded JSON and the workflow-local reply template",
   ]);
   assert.equal(stderr, "");
   const payload = JSON.parse(stdout);
-  assert.equal(payload.outcome, "publish_plan_prepared");
+  assert.equal(payload.outcome, "publication_draft_plan_prepared");
   assert.equal(payload.publicationAuthorized, false);
-  assert.equal(payload.remoteExecutionAvailable, false);
   assert.equal(payload.replyTemplate.id, "publish-plan-prepared");
   assert.equal(payload.effectiveDatasetCount, 4);
   const template = await readFile(
@@ -245,6 +251,39 @@ test("Publication CLI emits bounded JSON and the workflow-local reply template",
     "utf8",
   );
   assert.match(template, /\{\{artifacts\.scopeResolution\}\}/u);
+});
+
+test("Publication materializes only the dependency-safe selected TIDAS payload", async (t) => {
+  const fixture = await createCandidateFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const plan = await preparePublicationPlan({
+    candidateDir: fixture.candidate,
+    outDir: path.join(fixture.root, "payload-plan"),
+    component: "result",
+    targetId: "tiangong-lca-platform",
+    include: [KEYS.model],
+  });
+  const result = await materializePublicationPayload({
+    candidateDir: fixture.candidate,
+    planDir: plan.path,
+    outDir: path.join(fixture.root, "payload"),
+  });
+  assert.equal(result.manifest.datasetCount, 4);
+  assert.deepEqual(
+    result.manifest.datasets.map(({ key: value }) => value),
+    [KEYS.flowA, KEYS.model, KEYS.result, KEYS.unitA].sort(),
+  );
+  assert.equal(
+    result.manifest.datasets.find(({ key: value }) => value === KEYS.result)
+      .modelId,
+    IDS.model,
+  );
+  await assert.rejects(
+    readFile(
+      path.join(result.path, "datasets", `flows/${IDS.flowB}_${VERSION}.json`),
+    ),
+    ({ code }) => code === "ENOENT",
+  );
 });
 
 test("Publication CLI failures remain local and map to the failure template", async () => {
@@ -359,6 +398,27 @@ async function createCandidateFixture() {
     ),
   };
   const packagePlan = { schemaVersion: "tiangong.release.package-plan.v1" };
+  const packageRoots = {
+    "unit.tidas.zip": path.join(root, "unit-package-root"),
+    "result.tidas.zip": path.join(root, "result-package-root"),
+  };
+  for (const [name, packageRoot] of Object.entries(packageRoots)) {
+    const component = name.startsWith("unit") ? "unit_process" : "result";
+    for (const entry of datasets.filter(({ components }) =>
+      components.includes(component),
+    )) {
+      const file = path.join(packageRoot, entry.path);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, canonicalJson({ content: entry.key }));
+    }
+    await execFileAsync(
+      "zip",
+      ["-q", "-r", path.join(packagesDir, name), "."],
+      {
+        cwd: packageRoot,
+      },
+    );
+  }
   const packages = [];
   for (const name of [
     "unit.tidas.zip",
@@ -366,8 +426,10 @@ async function createCandidateFixture() {
     "result.tidas.zip",
     "result.ilcd.zip",
   ]) {
-    const bytes = Buffer.from(`fixture:${name}`);
-    await writeFile(path.join(packagesDir, name), bytes);
+    const file = path.join(packagesDir, name);
+    if (!name.endsWith(".tidas.zip"))
+      await writeFile(file, Buffer.from(`fixture:${name}`));
+    const bytes = await readFile(file);
     packages.push({
       path: `packages/${name}`,
       mediaType: "application/zip",
@@ -423,6 +485,8 @@ async function createCandidateFixture() {
 }
 
 function dataset(keyValue, datasetType, role, uuid, targets, components) {
+  const document = { content: keyValue };
+  const bytes = Buffer.from(canonicalJson(document));
   return {
     key: keyValue,
     datasetType,
@@ -430,8 +494,8 @@ function dataset(keyValue, datasetType, role, uuid, targets, components) {
     uuid,
     version: VERSION,
     path: `${datasetType}s/${uuid}_${VERSION}.json`,
-    sha256: hashJson({ key: keyValue }),
-    canonicalContentHash: hashJson({ content: keyValue }),
+    sha256: sha256Bytes(bytes),
+    canonicalContentHash: hashJson(document),
     references: targets.map((target, index) => ({
       target,
       location: `references/${index}`,

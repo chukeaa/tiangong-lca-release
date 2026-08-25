@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Separated immutable Candidate construction from future authorized Publication and added Candidate-derived refinement boundaries."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Reviewed shared workflow boundaries for complete authorized Publication and retained Candidate-derived refinement as a separate deferred workflow."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -46,7 +46,7 @@ related:
 - 大型产物写入文件或对象存储；stdout 只返回有界摘要和引用。
 - 远程状态由外部系统权威持有；本地只保存观察、引用和证据。
 - Release Candidate 一经成功冻结即不可原地修改；Publication 可以通过新 plan 选择引用完整的子集，数据再加工或 Candidate bytes 变化必须生成绑定父 Candidate hash 的新 Candidate。
-- Publication 只消费已经冻结并验证的 Candidate，不得改变数据内容；范围解析产生独立 request/resolution/plan artifacts。
+- Publication 只消费已经冻结并验证的 Candidate，不得改变数据内容；范围解析、payload、target snapshot、Approval、execution events/receipt 和 independent readback 都产生独立 hash-bound artifacts。
 
 ## 人工决定
 
