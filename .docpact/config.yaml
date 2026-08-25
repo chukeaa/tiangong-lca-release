@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "1a9c21f4e66b4a3a8e949dde88404cc9fc562e98"
+lastReviewedCommit: "8a4babcecb152a4205de314183c2e7ba6becf41d"
 
 catalog:
   repos:
@@ -27,6 +27,10 @@ ownership:
           - .gitignore
           - .env.example
           - package.json
+          - pnpm-workspace.yaml
+          - pnpm-lock.yaml
+          - .npmrc
+          - .node-version
           - .github/workflows/ci.yml
       ownerRepo: release
     - id: shared-workflow-contract
@@ -69,15 +73,18 @@ coverage:
     - .docpact/**
     - .gitignore
     - .env.example
+    - .node-version
+    - .npmrc
     - workflows/**
     - package.json
+    - pnpm-workspace.yaml
     - .github/workflows/ci.yml
   exclude:
     - .git/**
     - .docpact/runs/**
     - node_modules/**
     - .release/**
-    - package-lock.json
+    - pnpm-lock.yaml
     - "*.log"
 
 freshness:
@@ -115,6 +122,10 @@ routing:
     validation-and-automation:
       paths:
         - package.json
+        - pnpm-workspace.yaml
+        - pnpm-lock.yaml
+        - .npmrc
+        - .node-version
         - .github/workflows/ci.yml
         - .docpact/config.yaml
     repo-docs:
@@ -287,6 +298,14 @@ rules:
         kind: generated-runtime-exclusion
       - path: package.json
         kind: build-contract
+      - path: pnpm-workspace.yaml
+        kind: workspace-contract
+      - path: pnpm-lock.yaml
+        kind: dependency-lock
+      - path: .npmrc
+        kind: package-manager-policy
+      - path: .node-version
+        kind: runtime-pin
       - path: .github/workflows/ci.yml
         kind: automation
     requiredDocs:
@@ -296,4 +315,4 @@ rules:
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: The documentation baseline and repository-level validation entrypoints must stay aligned.
+    reason: The exact runtime, pnpm workspace, dependency lock, documentation baseline, and repository-level validation entrypoints must stay aligned.

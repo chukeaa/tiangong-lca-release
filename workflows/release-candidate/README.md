@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/release-candidate/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Focused the Workflow on immutable Candidate construction and separated future Publication."
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Preserved immutable Candidate construction while moving local dependencies to the root pnpm workspace."
 related:
   - AGENTS.md
   - ../../README.md
@@ -107,8 +107,8 @@ Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 首个本地 Release Intake 与 Package route 已实现为 Workflow-local 薄 CLI：
 
 ```bash
+pnpm install --frozen-lockfile
 cd workflows/release-candidate
-npm install
 
 node cli.mjs cache status --json
 

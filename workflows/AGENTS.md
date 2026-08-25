@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Reviewed shared workflow boundaries for complete authorized Publication and retained Candidate-derived refinement as a separate deferred workflow."
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Kept all Workflow boundaries intact while moving their JavaScript packages to one exact Node/pnpm workspace and one lockfile."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -38,6 +38,7 @@ related:
 
 ## 共享执行原则
 
+- 所有已实现的 JavaScript/MJS Workflow 都属于根 pnpm workspace；只在仓库根执行 `pnpm install --frozen-lockfile`，不得恢复 Workflow-local lockfile 或嵌套 npm 安装树。
 - 先 `inspect`，再提出可执行动作；不默认从第一步开始。
 - 精确资源 ID、版本、hash 和 target 优先于名称或 `latest`。
 - 已有证据只有在覆盖范围、依赖和有效期匹配时才能复用。

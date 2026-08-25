@@ -14,8 +14,8 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Implemented the complete Candidate-bound Publication flow from scope selection through independent readback."
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Retained the complete Candidate-bound Publication flow while moving installation to the root pnpm workspace."
 related:
   - AGENTS.md
   - ../release-candidate/README.md
@@ -64,7 +64,7 @@ Dataset Transformation 不属于本 Workflow。任何 Process/LifeCycleModel 内
 安装并查看帮助：
 
 ```bash
-npm --prefix workflows/publication ci
+pnpm install --frozen-lockfile
 node workflows/publication/cli.mjs --help
 ```
 

@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Required exact lineage evidence for Release impact analysis while keeping Materialization immutable."
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Pinned local validation to the root pnpm workspace and the released TIDAS SDK 0.2.0 while retaining immutable Materialization semantics."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -26,7 +26,7 @@ related:
 
 ## 本地验证
 
-运行 `npm --prefix workflows/result-materialization test` 验证本 Workflow；仓库根目录的 `npm test` 已包含该命令。
+从仓库根运行 `pnpm --filter @tiangong-lca/release-result-materialization-workflow test` 验证本 Workflow；`pnpm test` 已包含全部 Workflow case。Process 与 LifeCycleModel 必须由真实 `@tiangong-lca/tidas-sdk@0.2.0` schema 验证，生产依赖图不得带入 TypeScript/compiler/codegen。
 
 ## Agent 的职责
 

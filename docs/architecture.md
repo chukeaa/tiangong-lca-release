@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Extended the Candidate branch through complete hash-bound Publication approval, resumable execution, and independent readback."
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Confirmed the Workflow topology while consolidating all JavaScript packages under one exact Node/pnpm workspace and upgrading the Materialization validator to TIDAS SDK 0.2.0."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -44,6 +44,8 @@ Repository
 │   └── publication/
 ├── docs/
 ├── package.json
+├── pnpm-workspace.yaml
+├── pnpm-lock.yaml
 └── .github/workflows/
 ```
 
@@ -178,6 +180,8 @@ Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 
 ## 实现边界
 
 - 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
+- 全仓运行时固定为 Node `24.19.0` 和 pnpm `11.23.0`，五个 package 共用根 workspace 与唯一 lock；
+- 当前实现保持纯 JavaScript/MJS，生产依赖图不得因 SDK 或工具链迁移重新引入 TypeScript、compiler 或 schema codegen；
 - 外部 provider schema 只在 adapter 边界解析；
 - Workflow 文档拥有行为语义，adapter 不拥有业务路线；
 - 确定性计算、验证和打包不得由 Agent 模拟；

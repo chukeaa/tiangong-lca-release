@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Documented how exact Materialization lineage supports Release exclusion impact without mutating outputs."
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Documented root pnpm installation and the unmocked TIDAS SDK 0.2.0 validation baseline without changing Workflow semantics."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -119,8 +119,8 @@ CLI 默认使用 `.release/` 下的内容寻址路径，不再要求用户手写
 第一阶段已经提供 workflow-local 薄 CLI，不增加 `tiangong-release` 顶层命令：
 
 ```bash
+pnpm install --frozen-lockfile
 cd workflows/result-materialization
-npm install
 
 # 一次性导入本地 Calculation Bundle；支持 evidence ZIP 或解压目录
 node cli.mjs intake \
@@ -145,6 +145,8 @@ node cli.mjs materialize \
   --first-generation \
   --json
 ```
+
+依赖只从仓库根唯一 `pnpm-lock.yaml` 安装。Process 和 LifeCycleModel 的 schema 门禁使用发布版 `@tiangong-lca/tidas-sdk@0.2.0`；本 Workflow 保持纯 JavaScript/MJS，不携带 TypeScript compiler 或 schema codegen 运行时。
 
 大批量任务使用同一个 materialization engine 的薄 `nohup` 包装：
 

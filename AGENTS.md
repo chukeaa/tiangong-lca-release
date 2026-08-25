@@ -20,10 +20,14 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - package.json
+  - pnpm-workspace.yaml
+  - pnpm-lock.yaml
+  - .npmrc
+  - .node-version
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Reviewed repository ownership and security boundaries for complete Candidate-bound Publication execution; Dataset Transformation remains deferred."
+lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedNote: "Pinned the pure-JavaScript repository to one Node 24.19.0 and pnpm 11.23.0 workspace, upgraded Result Materialization to the released TIDAS SDK 0.2.0, and retained all Workflow and security boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -106,14 +110,15 @@ related:
 
 ## Runtime 与分支事实
 
-- Node：`>=24 <25`
-- package manager：`npm`
+- Node：精确 `24.19.0`
+- package manager：精确 `pnpm@11.23.0`，五个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`
+- 运行时：纯 JavaScript/MJS；不得为了工具链命名对齐引入 TypeScript、compiler 或 codegen
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-55`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#55`
+- 当前工作分支：`feature/issue-57`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#57`
 - 本地运行产物根目录：`.release/`，必须 gitignored
-- 当前文档基线验证门：`npm run prepush:gate`
+- 当前仓库验证门：`pnpm run prepush:gate`
 
 ## 文档规则
 
