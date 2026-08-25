@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const PACKAGE_DIRECTORIES = [
-  ".",
-  "workflows/calculation",
-  "workflows/result-materialization",
-  "workflows/release-candidate",
-  "workflows/publication",
+const EXPECTED_WORKSPACE_PACKAGES = [
+  "@tiangong-lca/release",
+  "@tiangong-lca/release-result-materialization-workflow",
+  "@tiangong-lca/release-workflow-calculation",
+  "@tiangong-lca/release-workflow-candidate",
+  "@tiangong-lca/release-workflow-publication",
 ];
 const RETIRED_PRODUCTION_PACKAGES = new Set([
   "typescript",
@@ -19,20 +18,23 @@ const RETIRED_PRODUCTION_PACKAGES = new Set([
 ]);
 
 test("the installed production graph uses SDK 0.2.0 without retired compiler/codegen", () => {
+  const result = spawnSync(
+    "pnpm",
+    ["list", "--recursive", "--prod", "--depth", "Infinity", "--json"],
+    {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const roots = JSON.parse(result.stdout);
+  assert.deepEqual(
+    roots.map(({ name }) => name).sort(),
+    EXPECTED_WORKSPACE_PACKAGES,
+  );
+
   const installed = [];
-  for (const directory of PACKAGE_DIRECTORIES) {
-    const result = spawnSync(
-      "pnpm",
-      ["list", "--prod", "--depth", "Infinity", "--json"],
-      {
-        cwd: path.join(REPOSITORY_ROOT, directory),
-        encoding: "utf8",
-      },
-    );
-    assert.equal(result.status, 0, result.stderr);
-    for (const root of JSON.parse(result.stdout))
-      collectDependencies(root, installed);
-  }
+  for (const root of roots) collectDependencies(root, installed);
 
   const retired = installed
     .filter((dependency) => RETIRED_PRODUCTION_PACKAGES.has(dependency.name))
