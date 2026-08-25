@@ -20,7 +20,7 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
 lastReviewedNote: "Completed Candidate-bound Publication planning, approval, resumable platform execution, and independent readback while retaining Dataset Transformation as a separate refinement loop."
 related:
   - AGENTS.md

@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/release-candidate/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
+lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
 lastReviewedNote: "Focused the Workflow on immutable Candidate construction and moved remote publication to a separate deferred boundary."
 related:
   - README.md

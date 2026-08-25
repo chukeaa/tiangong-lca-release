@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
 lastReviewedNote: "Established complete Candidate-bound planning, approval, resumable execution, and independent readback contracts."
 related:
   - README.md
