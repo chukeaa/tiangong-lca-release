@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const GRAPH_AUDIT = fileURLToPath(
+  new URL("./production-dependency-graph.test.mjs", import.meta.url),
+);
+
+test("the graph audit executes the current pnpm JavaScript entry without a shell", () => {
+  const source = readFileSync(GRAPH_AUDIT, "utf8");
+  assert.match(source, /process\.env\.npm_execpath/);
+  assert.match(source, /spawnSync\(\s*process\.execPath,/s);
+  assert.match(source, /shell:\s*false/);
+  assert.doesNotMatch(source, /spawnSync\(\s*["'`]pnpm(?:\.cmd)?["'`]/s);
+});
+
+test("the graph audit fails closed outside a pnpm-run contract", () => {
+  const environment = { ...process.env };
+  delete environment.npm_execpath;
+  const result = spawnSync(process.execPath, ["--test", GRAPH_AUDIT], {
+    encoding: "utf8",
+    env: environment,
+    shell: false,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /pnpm execution contract is unavailable: npm_execpath is missing/,
+  );
+});
