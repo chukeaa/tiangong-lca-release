@@ -500,6 +500,32 @@ test("package build assembles local closure and delegates four-package build", a
   assert.equal(result.candidate.profile, PACKAGE_PROFILE);
   assert.equal(result.candidate.releaseVersion, RELEASE_VERSION);
   assert.equal(result.candidate.publicationAuthorized, false);
+  assert.equal(
+    result.candidate.schemaVersion,
+    "tiangong.release.release-candidate.v2",
+  );
+  assert.equal(
+    result.candidate.publicationCatalog.path,
+    "publication-catalog.json",
+  );
+  const publicationCatalog = JSON.parse(
+    await readFile(
+      path.join(fixture.output, "publication-catalog.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    publicationCatalog.schemaVersion,
+    "tiangong.release.candidate-publication-catalog.v1",
+  );
+  assert.equal(
+    publicationCatalog.canonicalDatasetIndexSha256,
+    result.candidate.canonicalDatasetIndexSha256,
+  );
+  assert.equal(
+    hashJson(publicationCatalog),
+    result.candidate.publicationCatalog.sha256,
+  );
   assert.equal(result.candidate.packages.length, 4);
   assert.equal(
     JSON.parse(
@@ -1219,13 +1245,13 @@ test("Release cache reply template renders the exact next command field", async 
   assert.doesNotMatch(body, /\{\{nextActions\}\}/u);
 });
 
-test("Release Candidate reply template exposes all three post-candidate paths", async () => {
+test("Release Candidate reply template exposes Publication planning and Transformation", async () => {
   const template = replyTemplateFor("package build", { ok: true });
   const body = await readFile(
     path.resolve(REPOSITORY_ROOT, template.path),
     "utf8",
   );
-  for (const index of [0, 1, 2])
+  for (const index of [0, 1])
     assert.match(
       body,
       new RegExp(`\\{\\{nextDecision\\.choices\\.${index}\\.label\\}\\}`, "u"),

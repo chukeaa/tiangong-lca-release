@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-approval.v1.schema.json",
+  "title": "Publication Approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "publicationAuthorized",
+    "targetId",
+    "executablePlanSha256",
+    "publicationDraftPlanSha256",
+    "payloadManifestSha256",
+    "targetSnapshotSha256",
+    "targetFingerprint",
+    "publishedState",
+    "approvedBy",
+    "approvedAt",
+    "expiresAt",
+    "reason"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.publication-approval.v1" },
+    "status": { "const": "approved" },
+    "publicationAuthorized": { "const": true },
+    "targetId": { "type": "string", "minLength": 1 },
+    "executablePlanSha256": { "$ref": "#/$defs/hash" },
+    "publicationDraftPlanSha256": { "$ref": "#/$defs/hash" },
+    "payloadManifestSha256": { "$ref": "#/$defs/hash" },
+    "targetSnapshotSha256": { "$ref": "#/$defs/hash" },
+    "targetFingerprint": { "$ref": "#/$defs/hash" },
+    "publishedState": { "$ref": "#/$defs/state" },
+    "approvedBy": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "approvedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "reason": { "type": ["string", "null"], "maxLength": 1000 }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "code"],
+      "properties": {
+        "semantic": { "const": "published" },
+        "code": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

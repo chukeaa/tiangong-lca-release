@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-execution-intent.v1.schema.json",
+  "title": "Publication Execution Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "approvalSha256",
+    "executablePlanSha256",
+    "payloadManifestSha256",
+    "targetId",
+    "publishedState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.publication-execution-intent.v1"
+    },
+    "approvalSha256": { "$ref": "#/$defs/hash" },
+    "executablePlanSha256": { "$ref": "#/$defs/hash" },
+    "payloadManifestSha256": { "$ref": "#/$defs/hash" },
+    "targetId": { "type": "string", "minLength": 1 },
+    "publishedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "code"],
+      "properties": {
+        "semantic": { "const": "published" },
+        "code": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

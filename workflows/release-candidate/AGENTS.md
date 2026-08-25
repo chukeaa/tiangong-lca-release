@@ -32,7 +32,7 @@ related:
 - 从权威 impact report 生成供用户审核的 Excel 工作簿，逐页做视觉检查，并在回复中同时提供 JSON 和 Excel；审核表准备好之前不得请求排除确认。
 - 把修复、完整集合排除或停止决定绑定到精确 impact-report hash；只有完整集合排除被明确确认后才允许构建新的 scope-filtered Candidate。
 - 汇总候选、验证证据和 plan hash 供用户决定。
-- Candidate 成功后展示 direct publication、dependency-closed scope refinement 和 Dataset Transformation 三条后继路径。
+- Candidate 成功后展示 Publication planning 和 Dataset Transformation 两个后继方向。
 
 ## 可自动执行的动作
 
@@ -59,13 +59,14 @@ related:
 - Package Plan 不记录机器绝对路径；它只绑定 manifest/index/bundle hashes 和 canonical input summary，保证换目录重放不改变计划语义。
 - Release 只遍历当前契约明确声明的 LCIA Method -> Flow 依赖；通用引用闭合、TIDAS/eILCD validation、conversion、round-trip 和四包构建必须委托 `tidas-tools release build-packages`，不得在本 Workflow 重写。
 - 委托前必须对所选 `TIDAS_BIN` 执行 `version` 与 `validate --describe` 握手，并精确要求已治理的 `tidas v0.2.0` 与 `document-validation-batch.v1`；不得用 PATH 中的旧二进制静默降级。
-- Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告，并显式记录 `publicationAuthorized=false`。
+- Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告、hash-bound `publication-catalog.json`，并显式记录 `publicationAuthorized=false`。
+- Candidate v2 的 Publication catalog 必须从当前 canonical bytes 确定性提取 exact required references，绑定 canonical index hash，并冻结 Unit Process/Result roots 与 component closure；不得从 ZIP 名称推断。
 - 四个分发包必须使用显式 release version 和产品级数据库名称；内部 profile ID 只保留在机器证据中。每个最终 ZIP 必须在候选冻结前重新列举、隔离解压，并分别通过 TIDAS 或 eILCD validation。
 - 用户未提供 release version 时，Agent 必须使用 CLI 返回的推荐版本和专用回复模板请求确认；确认前不得启动构建。不得把年月推荐值或 mutable `latest` 当作用户已确认。
 - 输出目录不可覆盖。只有四包回读校验全部通过才能原子提交可见 Candidate；包已经生成但 qualification 失败时，必须把 ZIP、结构化失败清单、已有验证报告和逐包回读目录保留为唯一 sibling failed build，并明确 `candidateCreated=false`、`publicationAuthorized=false`。它是诊断产物，不是 Candidate，也不得被发布。
 - `tidas release build-packages --format json` 非零退出时，必须把有界 stdout 解析为结构化 operation report 并写入 failed-build diagnostics；只有 stdout 不是有效 JSON 时才保留有界文本尾部。不得只保留 stderr 而丢失字段级 validation evidence。
 - CLI 的人类输出必须包含有界 `Summary / Next / Reply using template`；JSON 输出必须保持单对象、可解析，并携带 `outcome`、`completeness`、artifact 引用、`nextActions[]` 和 `replyTemplate`。
-- Candidate 成功结果还必须携带结构化 `nextDecision`，明确列出 Publication、依赖闭合的 scope refinement 和 Dataset Transformation 三条路径，并披露尚未实现的入口，不得生成伪命令。
+- Candidate 成功结果还必须携带结构化 `nextDecision`，明确列出可执行的 Publication planning 和尚待设计的 Dataset Transformation，并只返回真实入口。
 - cache refresh 的 CLI 输出和错误不得包含连接串、S3 secret 或 presigned URL。成功结果可以披露 execution mode 与 SSH host，但不能披露临时 object locator。
 - CLI 返回的自身命令和跨 Result Materialization 命令必须使用由 `import.meta.url` 生成的绝对入口，确保从任意 cwd 可复制执行。Release Intake 准备成功后应返回确定的 Candidate 输出目录，不把 `<CANDIDATE_DIR>` 留给 Agent 猜测。
 - CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
@@ -99,4 +100,4 @@ Release Candidate 只有在以下条件同时成立时完成：
 - 所有要求的 TIDAS/eILCD、closure、round-trip 和最终 ZIP readback validation 通过；
 - Candidate 原子冻结且明确记录 `publicationAuthorized=false`；
 - 证据和恢复信息已保存；
-- 下一步明确指向原 Candidate 的 Publication、依赖闭合的范围收缩，或 Dataset Transformation。
+- 下一步明确指向原 Candidate 的 Publication planning 或 Dataset Transformation。

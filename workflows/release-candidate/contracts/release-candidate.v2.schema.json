@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/release-candidate.v2.schema.json",
+  "title": "Local Release Candidate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "publicationAuthorized",
+    "releaseVersion",
+    "profile",
+    "packagePlanSha256",
+    "canonicalDatasetIndexSha256",
+    "publicationCatalog",
+    "packages",
+    "packageSetHash",
+    "validation",
+    "scopeDecisionSha256"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "tiangong.release.release-candidate.v2" },
+    "status": { "const": "local_candidate" },
+    "publicationAuthorized": { "const": false },
+    "releaseVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "profile": { "const": "standalone-lifecyclemodel-result-full-closure.v1" },
+    "packagePlanSha256": { "$ref": "#/$defs/hash" },
+    "canonicalDatasetIndexSha256": { "$ref": "#/$defs/hash" },
+    "publicationCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "const": "publication-catalog.json" },
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "mediaType", "byteSize", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^packages/.+\\.zip$" },
+          "mediaType": { "const": "application/zip" },
+          "byteSize": { "type": "integer", "minimum": 1 },
+          "sha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "packageSetHash": { "$ref": "#/$defs/hash" },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delegatedTo",
+        "outcome",
+        "reportPath",
+        "archiveReadbackReportPath"
+      ],
+      "properties": {
+        "delegatedTo": { "const": "tidas-tools" },
+        "outcome": { "const": "passed" },
+        "reportPath": { "const": "tidas-release-report.json" },
+        "archiveReadbackReportPath": {
+          "const": "package-verification-report.json"
+        }
+      }
+    },
+    "scopeDecisionSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

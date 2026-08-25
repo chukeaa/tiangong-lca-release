@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-execution-event.v1.schema.json",
+  "title": "Publication Execution Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordedAt",
+    "key",
+    "action",
+    "outcome",
+    "stateCode",
+    "canonicalContentHash",
+    "remoteCommands",
+    "error",
+    "sequence",
+    "previousEventSha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.publication-execution-event.v1"
+    },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "key": { "type": "string", "minLength": 1 },
+    "action": {
+      "enum": [
+        "create_then_publish",
+        "publish_existing",
+        "already_published_noop"
+      ]
+    },
+    "outcome": {
+      "enum": ["started", "published", "already_published", "failed"]
+    },
+    "stateCode": { "type": ["integer", "null"] },
+    "canonicalContentHash": {
+      "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    },
+    "remoteCommands": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "error": { "type": ["object", "null"] },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "previousEventSha256": {
+      "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

@@ -22,8 +22,8 @@ checkPaths:
   - package.json
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Separated Release Candidate construction from Publication and positioned Dataset Transformation as a deferred Candidate refinement loop."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Reviewed repository ownership and security boundaries for complete Candidate-bound Publication execution; Dataset Transformation remains deferred."
 related:
   - README.md
   - .docpact/config.yaml
@@ -57,9 +57,9 @@ related:
 
 - `workflows/calculation`：ResultSet、Closure、计算任务和 Calculation Bundle；
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
-- `workflows/release-candidate`：Release Intake、Package Plan、validation、scope refinement 和不可变 Candidate；
+- `workflows/release-candidate`：Release Intake、Package Plan、validation、失败修复范围决定和不可变 Candidate v2 handoff；
 - `workflows/dataset-transformation`：Candidate-derived 再加工边界，具体规则与执行器尚未设计；
-- `workflows/publication`：精确授权后的平台写入、状态转换和独立回读边界，具体规则与执行器尚未设计。
+- `workflows/publication`：Candidate-bound 范围解析、精确 payload、target inspection、hash-bound Approval、可恢复平台写入、状态转换和独立回读；当前平台 adapter 发布到 state code `100`。
 
 完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 和 Candidate qualification 属于 Release Candidate。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。Publication 不得在远程执行期间改变 Candidate 内容。
 
@@ -101,8 +101,8 @@ related:
 - 不把派生数据自动写入普通 authoring tables。
 - 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
 - 未经精确内容和 target 审批不得远程发布。
-- Release Candidate 一经冻结不得原地改写；dataset-level 范围收缩或再加工必须绑定父 Candidate 并产生新 Candidate。
-- Dataset Transformation 和 Publication 在各自规则及执行入口完成单独设计前保持 fail closed，不得根据根文档自行拼装远程写入或数值加工。
+- Release Candidate 一经冻结不得原地改写；Publication 可以用 hash-bound plan 选择引用完整的子集，但数据内容、identity、version 或 package 变化必须产生新 Candidate。
+- Dataset Transformation 在具体规则与入口完成设计前保持 fail closed。Publication 远程执行只能使用其 Workflow 已冻结的 actor-scoped、exact-plan-hash 和 independent-readback 契约，不得从根文档另行拼装写入。
 
 ## Runtime 与分支事实
 
@@ -110,8 +110,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-53`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#53`
+- 当前工作分支：`feature/issue-55`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#55`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
@@ -127,7 +127,7 @@ related:
 ## 当前完成条件
 
 - 旧 runtime 和耦合配置已删除；
-- 根 README 清楚表达项目目标、五个 Workflow 和 Candidate 后的三条路径；
+- 根 README 清楚表达项目目标、五个 Workflow 和 Candidate 后的 Publication/Transformation 两个方向；
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
 - Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
@@ -135,5 +135,5 @@ related:
 - Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release Candidate 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
 - Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
 - preserved failed build 可生成完整 exclusion impact report；范围排除必须由 hash-bound decision 明确确认，并通过新的 Package Plan 重跑全部 validator，不能绕过错误或修改失败 Candidate；
-- Dataset Transformation 和 Publication 当前只定义高层边界，不声称已有加工或远程发布实现；
+- Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；Dataset Transformation 不声称已有执行入口；
 - 当前变更通过仓库门禁并形成独立 Git commit。

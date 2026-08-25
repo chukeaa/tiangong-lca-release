@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/candidate-publication-catalog.v1.schema.json",
+  "title": "Candidate Publication Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "canonicalDatasetIndexSha256",
+    "datasetCount",
+    "components",
+    "datasets",
+    "catalogSetHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.candidate-publication-catalog.v1"
+    },
+    "canonicalDatasetIndexSha256": { "$ref": "#/$defs/hash" },
+    "datasetCount": { "type": "integer", "minimum": 1 },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unitProcess", "result"],
+      "properties": {
+        "unitProcess": { "$ref": "#/$defs/component" },
+        "result": { "$ref": "#/$defs/component" }
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "catalogSetHash": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*:[0-9a-f-]{36}@[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "roots", "datasets"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "roots": { "type": "array", "items": { "$ref": "#/$defs/key" } },
+        "datasets": { "type": "array", "items": { "$ref": "#/$defs/key" } }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "location", "role"],
+      "properties": {
+        "target": { "$ref": "#/$defs/key" },
+        "location": { "type": "string" },
+        "role": { "const": "closure_dependency" }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "datasetType",
+        "role",
+        "uuid",
+        "version",
+        "path",
+        "sha256",
+        "canonicalContentHash",
+        "references",
+        "components"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "datasetType": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "uuid": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "canonicalContentHash": { "$ref": "#/$defs/hash" },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" }
+        },
+        "components": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["unit_process", "result"] }
+        }
+      }
+    }
+  }
+}

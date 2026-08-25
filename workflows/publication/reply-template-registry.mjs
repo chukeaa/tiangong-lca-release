@@ -1,0 +1,98 @@
+const ROOT = "workflows/publication/reply-templates";
+
+const templates = Object.freeze({
+  "plan prepare": [
+    "publish-plan-prepared",
+    "publish-plan-prepared.md",
+    [
+      "candidate",
+      "component",
+      "targetId",
+      "requestedRootCount",
+      "dependencyAdditionCount",
+      "prunedDatasetCount",
+      "effectiveDatasetCount",
+      "effectiveSetHash",
+      "publicationDraftPlanSha256",
+      "publicationAuthorized",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "payload materialize": [
+    "publication-payload-materialized",
+    "publication-payload-materialized.md",
+    [
+      "datasetCount",
+      "datasetSetHash",
+      "payloadManifestSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "target inspect": [
+    "publication-target-inspected",
+    "publication-target-inspected.md",
+    [
+      "datasetCount",
+      "targetFingerprint",
+      "publishedState",
+      "executablePlanSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "approval create": [
+    "publication-approved",
+    "publication-approved.md",
+    [
+      "executablePlanSha256",
+      "approvalSha256",
+      "approvedBy",
+      "expiresAt",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "publish execute": [
+    "publication-executed",
+    "publication-executed.md",
+    [
+      "datasetCount",
+      "completedKeys",
+      "executionReceiptSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "readback verify": [
+    "publication-readback-verified",
+    "publication-readback-verified.md",
+    [
+      "datasetCount",
+      "verifiedSetHash",
+      "readbackReceiptSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+});
+
+export function replyTemplateFor(command, { ok } = {}) {
+  const entry = ok
+    ? templates[command]
+    : [
+        "publication-command-failed",
+        "publication-command-failed.md",
+        ["command", "error", "nextActions"],
+      ];
+  if (!entry) return undefined;
+  const [id, filename, requiredFacts] = entry;
+  return {
+    id,
+    path: `${ROOT}/${filename}`,
+    format: "markdown",
+    placeholderSyntax: "{{...}}",
+    requiredFacts,
+  };
+}

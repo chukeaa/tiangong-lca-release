@@ -16,6 +16,7 @@ import path from "node:path";
 import { canonicalJson, fail, hashJson, sha256Bytes } from "./common.mjs";
 import { loadScopeDecision } from "./exclusion-impact.mjs";
 import { readNdjson } from "./records.mjs";
+import { buildPublicationCatalog } from "./publication-catalog.mjs";
 import { loadReleaseIntake } from "./release-intake.mjs";
 
 export const PACKAGE_PROFILE =
@@ -157,6 +158,15 @@ export async function buildPackageCandidate({
       indexPath,
       path.join(candidateStaging, "canonical-dataset-index.json"),
     );
+    const publicationCatalog = await buildPublicationCatalog({
+      canonicalRoot,
+      index: assembledIndex,
+    });
+    await writeFile(
+      path.join(candidateStaging, "publication-catalog.json"),
+      canonicalJson(publicationCatalog),
+      { flag: "wx" },
+    );
     const packagesDir = path.join(candidateStaging, "packages");
     const verificationWorkspace = path.join(
       candidateStaging,
@@ -203,13 +213,17 @@ export async function buildPackageCandidate({
         `Expected exactly four ZIP packages, received ${packages.length}`,
       );
     const candidate = {
-      schemaVersion: "tiangong.release.release-candidate.v1",
+      schemaVersion: "tiangong.release.release-candidate.v2",
       status: "local_candidate",
       publicationAuthorized: false,
       releaseVersion,
       profile: PACKAGE_PROFILE,
       packagePlanSha256: hashJson(plan),
       canonicalDatasetIndexSha256: hashJson(assembledIndex),
+      publicationCatalog: {
+        path: "publication-catalog.json",
+        sha256: hashJson(publicationCatalog),
+      },
       packages,
       packageSetHash: hashJson(
         packages.map(({ path: itemPath, sha256, byteSize }) => ({

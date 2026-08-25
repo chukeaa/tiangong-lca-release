@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Separated immutable Candidate construction from future Publication and added Candidate-derived scope and transformation loops."
+lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
+lastReviewedNote: "Extended the Candidate branch through complete hash-bound Publication approval, resumable execution, and independent readback."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -72,17 +72,15 @@ Canonical Dataset Collection
       Release Candidate
 ```
 
-Candidate 冻结后形成三个恢复方向：
+Candidate 冻结后形成两个恢复方向：
 
 ```text
 Release Candidate
   |
   +--> Publication
-  |      direct publish of an immutable Candidate/component
-  |
-  +--> Scope refinement
-  |      dependency + reverse-impact analysis
-  |      -> Scope Decision -> new Package Plan -> new Candidate
+  |      component/exact scope -> forward closure + reverse pruning
+  |      -> exact payload -> Target Snapshot -> approved Executable Plan
+  |      -> resumable execution -> independent readback
   |
   +--> Dataset Transformation
          exact Candidate data -> transformed canonical data
@@ -126,6 +124,11 @@ Workflow 拥有意图整理、动作选择、本地证据和恢复上下文。�
 - Semantic Draft：用户意图、字段建议和未决问题；
 - Frozen Spec：可执行的 Transformation、Package 或 Candidate 输入规格；
 - Release Candidate：通过完整资格验证、`publicationAuthorized=false` 的不可变发布输入；
+- Candidate Publication Catalog：Candidate v2 内 hash-bound 的 exact identity/reference/component handoff；
+- Publication Scope Resolution：Publication 对 request 的确定性闭包与剪枝证据；
+- Publication Draft Plan：绑定 Candidate/scope/target intent、尚未授权且不可原地修改的本地计划；
+- Publication Executable Plan：绑定 payload、Target Snapshot、状态 mapping 和每个 exact operation 的待批准计划；
+- Publication Approval / Execution / Readback：F4 授权、哈希链执行和独立终态证据；
 - Decision Evidence：绑定精确 subject hash、target 和决定人的范围或授权证据。
 
 Remote Resource 的状态由外部系统权威持有。本地 artifact 由内容 hash 标识。Draft 可以修改；Frozen Spec、Candidate 和已执行产物不得原地改写。
@@ -142,9 +145,9 @@ Release Candidate Workflow 拥有：
 - exclusion impact report、人工审核视图和 scope decision；
 - 派生 Candidate 的完整重建与验证。
 
-Candidate 内容发生 dataset-level 变化时，必须创建新 Package Plan 和新 Candidate。原 Candidate 不被部分删除、覆盖或重新解释。
+Candidate dataset bytes、identity、version 或 package 内容发生变化时，必须创建新 Package Plan 和新 Candidate。原 Candidate 不被删除、覆盖或重新解释。
 
-从完整 Candidate 选择已经独立闭合的 Unit Process、Result 或 Both component，可以由未来 Publish Plan 表达；选择或排除包内具体 dataset 则先返回 Candidate Workflow。
+Candidate v2 在构建时生成 `publication-catalog.json`，把 canonical index、exact references、Unit Process/Result roots 和 component closure 绑定到 manifest。Publication 可以引用 component 或精确 dataset 子集，不修改 Candidate。
 
 ## Dataset Transformation 边界
 
@@ -154,9 +157,9 @@ Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 
 
 ## Publication 边界
 
-Publication 只消费不可变 Candidate。当前确认的产品方向是让用户选择 Unit Process、Result 或 Both，并对目标平台执行精确的已存在状态转换或缺失数据写入。具体 state code、事务、审批 artifact、adapter 和恢复语义尚未设计。
+Publication 只消费不可变 Candidate v2。它支持 Unit Process、Result、Both 和 exact include/exclude，计算 forward closure、transitive reverse pruning 和 reference-complete effective set，并只物化选中 TIDAS payload。
 
-在 Publication 契约和实现完成前，任何远程发布动作都保持 fail closed。Publication 不拥有内容变换、依赖猜测、Candidate 过滤或包重建。
+Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 state 分类；用户只批准 exact Executable Plan hash。执行使用现有平台 dataset commands，对缺失 row 创建、对 matching draft 转换状态、对 matching published 幂等跳过，并用哈希链 event 在部分失败后恢复。平台未提供跨多个 Edge 请求的全局事务，因此该边界明确是 resumable/idempotent，不声称 atomic promotion。只有新一轮 exact remote queries 生成的 Readback Receipt 才证明完成。Publication 不拥有内容变换或包重建。
 
 ## 恢复模型
 
@@ -180,11 +183,11 @@ Publication 只消费不可变 Candidate。当前确认的产品方向是让用�
 - 确定性计算、验证和打包不得由 Agent 模拟；
 - 共享代码只提取已被多个 Workflow 实际复用的机制；
 - 不为目录对称创建空运行时抽象；
-- Publication 与 Dataset Transformation 在详细设计完成前只保留文档边界，不添加推测性执行代码。
+- Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter 和状态 mapping；Dataset Transformation 在详细设计完成前只保留文档边界，不添加推测性执行代码。
 
 ## 当前实现基线
 
 - Calculation 已实现 ResultSet、Closure/Calculation 提交、任务查询和数据库/S3 Calculation Bundle 数据面。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核和 Candidate qualification。
-- Dataset Transformation 和 Publication 当前尚无执行入口。
+- Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读、CLI 和测试；Dataset Transformation 当前尚无执行入口。

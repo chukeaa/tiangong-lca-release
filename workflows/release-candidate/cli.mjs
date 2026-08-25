@@ -28,6 +28,10 @@ const MATERIALIZATION_CLI_PATH = fileURLToPath(
   new URL("../result-materialization/cli.mjs", import.meta.url),
 );
 const MATERIALIZATION_COMMAND = `node ${shellQuote(MATERIALIZATION_CLI_PATH)}`;
+const PUBLICATION_CLI_PATH = fileURLToPath(
+  new URL("../publication/cli.mjs", import.meta.url),
+);
+const PUBLICATION_COMMAND = `node ${shellQuote(PUBLICATION_CLI_PATH)}`;
 const REPOSITORY_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const DEFAULT_FLOW_CACHE_DIR = path.join(REPOSITORY_ROOT, DEFAULT_FLOW_CACHE);
@@ -133,7 +137,7 @@ Examples:
     --out-dir .release/release/impact/<analysis-name> --json
 
 JSON results include outcome, completeness, artifact paths, nextActions, and a workflow-local replyTemplate.
-Successful Candidate builds also include nextDecision with Publication, scope refinement, and Dataset Transformation choices.
+Successful Candidate builds include nextDecision with Publication planning and Dataset Transformation choices.
 `;
 
 async function main() {
@@ -275,6 +279,7 @@ async function main() {
         result.path,
         "canonical-dataset-index.json",
       ),
+      publicationCatalog: path.join(result.path, "publication-catalog.json"),
       tidasReport: path.join(result.path, "tidas-release-report.json"),
       packageVerification: path.join(
         result.path,
@@ -290,20 +295,13 @@ async function main() {
       prompt: "Choose the next path for this immutable Candidate.",
       choices: [
         {
-          id: "publish_candidate",
-          label: "Publish this Candidate",
+          id: "plan_publication_scope",
+          label: "Plan Publication",
           workflow: "publication",
-          availability: "design_required",
+          availability: "available",
           description:
-            "Enter the separate Publication Workflow; its detailed plan, authorization, and remote execution contract is not implemented yet.",
-        },
-        {
-          id: "refine_candidate_scope",
-          label: "Refine Candidate scope",
-          workflow: "release-candidate",
-          availability: "entry_pending",
-          description:
-            "Select or exclude exact datasets, compute the complete dependency and reverse-impact set, and build a new Candidate.",
+            "Enter Publication to choose Unit Process, Result, Both, or exact datasets and prepare a dependency-closed, unauthorized Publish Plan without changing this Candidate.",
+          command: `${PUBLICATION_COMMAND} plan prepare --help`,
         },
         {
           id: "transform_candidate_data",

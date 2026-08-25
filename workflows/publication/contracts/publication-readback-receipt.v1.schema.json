@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/publication-readback-receipt.v1.schema.json",
+  "title": "Publication Readback Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "independentlyQueried",
+    "executionReceiptSha256",
+    "executablePlanSha256",
+    "approvalSha256",
+    "payloadManifestSha256",
+    "targetId",
+    "publishedState",
+    "verifiedAt",
+    "datasetCount",
+    "verifiedSetHash",
+    "rows"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.publication-readback-receipt.v1"
+    },
+    "status": { "const": "verified" },
+    "independentlyQueried": { "const": true },
+    "executionReceiptSha256": { "$ref": "#/$defs/hash" },
+    "executablePlanSha256": { "$ref": "#/$defs/hash" },
+    "approvalSha256": { "$ref": "#/$defs/hash" },
+    "payloadManifestSha256": { "$ref": "#/$defs/hash" },
+    "targetId": { "type": "string", "minLength": 1 },
+    "publishedState": { "$ref": "#/$defs/state" },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "datasetCount": { "type": "integer", "minimum": 1 },
+    "verifiedSetHash": { "$ref": "#/$defs/hash" },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/row" }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "code"],
+      "properties": {
+        "semantic": { "const": "published" },
+        "code": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "table",
+        "uuid",
+        "version",
+        "expectedCanonicalContentHash",
+        "observedCanonicalContentHash",
+        "expectedStateCode",
+        "observedStateCode",
+        "verified"
+      ],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "table": { "type": "string", "minLength": 1 },
+        "uuid": { "type": "string", "format": "uuid" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+        },
+        "expectedCanonicalContentHash": { "$ref": "#/$defs/hash" },
+        "observedCanonicalContentHash": { "$ref": "#/$defs/hash" },
+        "expectedStateCode": { "type": "integer", "minimum": 0 },
+        "observedStateCode": { "type": "integer", "minimum": 0 },
+        "verified": { "const": true }
+      }
+    }
+  }
+}
