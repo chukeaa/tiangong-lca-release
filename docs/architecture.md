@@ -157,9 +157,11 @@ Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 
 
 ## Publication 边界
 
-Publication 只消费不可变 Candidate v2。它支持 Unit Process、Result、Both 和 exact include/exclude，计算 forward closure、transitive reverse pruning 和 reference-complete effective set，并只物化选中 TIDAS payload。
+Publication 的 Candidate dataset recipe 只消费不可变 Candidate v2。它支持 Unit Process、Result、Both 和 exact include/exclude，计算 forward closure、transitive reverse pruning 和 reference-complete effective set，并只物化选中 TIDAS payload。
 
 Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 state 分类；用户只批准 exact Executable Plan hash。执行使用现有平台 dataset commands，对缺失 row 创建、对 matching draft 转换状态、对 matching published 幂等跳过，并用哈希链 event 在部分失败后恢复。平台未提供跨多个 Edge 请求的全局事务，因此该边界明确是 resumable/idempotent，不声称 atomic promotion。只有新一轮 exact remote queries 生成的 Readback Receipt 才证明完成。Publication 不拥有内容变换或包重建。
+
+Publication 内另有独立的 Portal LCIA projection recipe。它从 ready V3 package 和 Worker prepared projection 开始，只调用 Database-owned actor RPC。Package prepare 冻结 package/projection/artifact hash、Process-set 与 current-publication precondition，由 Database 计算 exact `publishPlanHash`；第一个 confirmation 执行幂等 package publish 和独立 projection-prepare readback。第二个 confirmation 执行 projection finalize，新的 readback 必须通过与匿名 RLS 相同的完整 public-visibility predicate。Revoke 绑定 exact Finalization Receipt 和 projection content hash，并以 revoked readback 收敛。Package publish 与 projection finalize 没有跨 RPC 事务，中间状态由 Receipt 保留且 Portal 数值可以 unavailable。该 recipe 不进入 Candidate dataset payload/create/publish 路径，不访问 private artifact 数据面，Plan/Receipt 只保留 locator-free identity/hash/count/timestamp、前置条件和 endpoint fingerprint。
 
 ## 恢复模型
 
@@ -183,11 +185,11 @@ Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 
 - 确定性计算、验证和打包不得由 Agent 模拟；
 - 共享代码只提取已被多个 Workflow 实际复用的机制；
 - 不为目录对称创建空运行时抽象；
-- Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter 和状态 mapping；Dataset Transformation 在详细设计完成前只保留文档边界，不添加推测性执行代码。
+- Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter、状态 mapping，以及 Database-owned Portal LCIA V3 package publish 和 projection finalize/readback/revoke 契约；Dataset Transformation 在详细设计完成前只保留文档边界，不添加推测性执行代码。
 
 ## 当前实现基线
 
 - Calculation 已实现 ResultSet、Closure/Calculation 提交、任务查询和数据库/S3 Calculation Bundle 数据面。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核和 Candidate qualification。
-- Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读、CLI 和测试；Dataset Transformation 当前尚无执行入口。
+- Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读，以及 opt-in Portal LCIA V3 package plan/publish、projection prepare/finalize/verify/revoke、CLI 和测试；Dataset Transformation 当前尚无执行入口。

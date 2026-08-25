@@ -28,4 +28,9 @@ related:
 - Approval 回复必须展示 exact Executable Plan 和 Approval SHA-256；
 - Execution 回复必须披露独立回读仍待完成，并给出 Receipt/events；
 - 只有 Readback Receipt `status=verified` 时才能回复 Publication 已完成；
+- Portal LCIA projection Plan 只是未授权计划，只有 exact Plan SHA-256 确认后才能 finalize；
+- Portal LCIA V3 package publish 与 projection finalize 是两个独立 exact-confirmation 边界；Package Receipt 必须披露 projection 仍 pending 和可能的 unavailable 间隔；
+- Projection Finalization Receipt 明确保留 `independentReadbackVerified=false`，只有独立 Readback Receipt 才能声称公开投影闭环完成；
+- Projection revoke 必须展示精确 Finalization Receipt SHA-256，且只有独立回读为 `revoked` 后才能声称已停止公开；
+- Package/revoke reused 或 response-loss Receipt 必须展示 `reasonPersistence`，不把本次请求理由冒充远端已持久化理由；
 - 失败回复使用 CLI 提供的恢复入口，不建议删除或覆盖 execution event。

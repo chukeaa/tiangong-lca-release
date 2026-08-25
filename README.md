@@ -153,6 +153,7 @@ Publication 负责消费不可变 Release Candidate，在精确选择和授权�
 - 用户用 exact Executable Plan SHA-256 形成带过期时间的 Approval；
 - missing row 创建后发布、matching draft 只切状态、matching published 幂等跳过；
 - 执行使用哈希链事件安全恢复，并以独立远程回读生成最终 Receipt。
+- 对具备 Worker prepared projection 的 ready V3 LCIA package，显式 opt-in recipe 先确认 Database-computed exact package publish plan，再确认 projection finalize，并通过独立 public-visibility readback 或精确 revoke 收敛终态。
 
 远程发布规则是：
 
@@ -163,6 +164,8 @@ Publication 负责消费不可变 Release Candidate，在精确选择和授权�
 - 平台未提供跨多个 Edge Function 请求的全局事务，因此 Workflow 明确采用幂等、可恢复执行，不虚构 atomic promotion。
 
 Publication 不修改 Candidate；纯范围选择生成 hash-bound Draft/Executable Plan 和精确 payload。内容变化必须返回 Release Candidate、Dataset Transformation 或更早上游生成新 Candidate。
+
+Portal LCIA projection recipe 与 Candidate dataset publication 相互独立：前者不创建/发布 TIDAS dataset，不读取 private LCIA artifact，只发布 exact V3 LCIA result package，并把 Worker 已准备、Database 重新核对的 typed numeric projection 绑定到该 publication。Package publish 与 projection finalize 是两个独立 confirmation/receipt 边界，中间可能短暂 unavailable，不伪造原子切换。现有 artifact、signed-download 和 Candidate Publication 行为保持不变。
 
 详见 [Publication Workflow](workflows/publication/README.md)。
 
@@ -208,4 +211,4 @@ Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它�
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
 - Dataset Transformation 当前只有高层边界，没有已确认的加工规则或执行入口。
-- Publication 已实现 Candidate v2 catalog、范围解析、精确 payload、目标检查、hash-bound Approval、可恢复远程发布、独立回读、严格 schemas、CLI、回复模板和 fail-closed 测试；当前执行 adapter 支持平台发布状态码 `100`。
+- Publication 已实现 Candidate v2 catalog、范围解析、精确 payload、目标检查、hash-bound Approval、可恢复远程发布、独立回读，以及显式 opt-in 的 Portal LCIA V3 package plan/publish 和 projection prepare/finalize/verify/revoke；两条路径各自使用严格 schemas、CLI、回复模板和 fail-closed 测试，Candidate 执行 adapter 继续只支持平台发布状态码 `100`。
