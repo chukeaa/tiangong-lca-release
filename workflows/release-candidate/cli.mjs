@@ -57,6 +57,8 @@ const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
 const HELP = `release-package <command> [options]
 
+Release Candidate workflow-local CLI. It prepares and validates immutable local Candidates; it does not publish them.
+
 Commands:
   cache status        Check whether the shared Elementary Flow cache is usable
   cache refresh       Explicitly replace the shared cache; remote Worker EC2 execution is the default
@@ -131,6 +133,7 @@ Examples:
     --out-dir .release/release/impact/<analysis-name> --json
 
 JSON results include outcome, completeness, artifact paths, nextActions, and a workflow-local replyTemplate.
+Successful Candidate builds also include nextDecision with Publication, scope refinement, and Dataset Transformation choices.
 `;
 
 async function main() {
@@ -281,6 +284,36 @@ async function main() {
       scopeDecision: options["scope-decision"]
         ? path.resolve(options["scope-decision"])
         : undefined,
+    },
+    nextDecision: {
+      required: true,
+      prompt: "Choose the next path for this immutable Candidate.",
+      choices: [
+        {
+          id: "publish_candidate",
+          label: "Publish this Candidate",
+          workflow: "publication",
+          availability: "design_required",
+          description:
+            "Enter the separate Publication Workflow; its detailed plan, authorization, and remote execution contract is not implemented yet.",
+        },
+        {
+          id: "refine_candidate_scope",
+          label: "Refine Candidate scope",
+          workflow: "release-candidate",
+          availability: "entry_pending",
+          description:
+            "Select or exclude exact datasets, compute the complete dependency and reverse-impact set, and build a new Candidate.",
+        },
+        {
+          id: "transform_candidate_data",
+          label: "Transform Candidate data",
+          workflow: "dataset-transformation",
+          availability: "design_required",
+          description:
+            "Send exact Candidate datasets into the deferred Dataset Transformation Workflow and create a new Candidate from the transformed outputs.",
+        },
+      ],
     },
     nextActions: [
       {
@@ -692,6 +725,10 @@ function respond(options, value) {
     process.stdout.write(`- Package set SHA-256: ${value.packageSetHash}\n`);
     process.stdout.write(`- Publication authorized: no\n\nNext:\n`);
     process.stdout.write(`- ${value.nextActions[0].command}\n\n`);
+    process.stdout.write("Choose one Candidate path:\n");
+    for (const choice of value.nextDecision.choices)
+      process.stdout.write(`- ${choice.label}: ${choice.description}\n`);
+    process.stdout.write("\n");
     process.stdout.write(`Reply using template:\n`);
     process.stdout.write(`- ${value.replyTemplate.path}\n`);
   }

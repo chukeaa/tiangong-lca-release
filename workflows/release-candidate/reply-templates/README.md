@@ -12,9 +12,9 @@ whenToUse:
 whenToUpdate:
   - 当 Release CLI outcome、错误恢复方式或 replyTemplate registry 变化时
 checkPaths:
-  - workflows/release/reply-templates/**
-  - workflows/release/reply-template-registry.mjs
-  - workflows/release/cli.mjs
+  - workflows/release-candidate/reply-templates/**
+  - workflows/release-candidate/reply-template-registry.mjs
+  - workflows/release-candidate/cli.mjs
 related:
   - ../README.md
   - ../AGENTS.md

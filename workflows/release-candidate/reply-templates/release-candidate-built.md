@@ -13,9 +13,15 @@
 - TIDAS 验证报告：`{{artifacts.tidasReport}}`
 - 最终 ZIP 回读验证报告：`{{artifacts.packageVerification}}`
 
-下一步先检查候选内容：
+先检查候选内容：
 
 `{{nextActions.0.command}}`
+
+然后请选择一个后续方向：
+
+1. **{{nextDecision.choices.0.label}}**：{{nextDecision.choices.0.description}}
+2. **{{nextDecision.choices.1.label}}**：{{nextDecision.choices.1.description}}
+3. **{{nextDecision.choices.2.label}}**：{{nextDecision.choices.2.description}}
 
 该动作只生成了本地产物，没有上传、批准或发布任何内容。
 ```

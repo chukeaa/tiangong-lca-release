@@ -1219,6 +1219,20 @@ test("Release cache reply template renders the exact next command field", async 
   assert.doesNotMatch(body, /\{\{nextActions\}\}/u);
 });
 
+test("Release Candidate reply template exposes all three post-candidate paths", async () => {
+  const template = replyTemplateFor("package build", { ok: true });
+  const body = await readFile(
+    path.resolve(REPOSITORY_ROOT, template.path),
+    "utf8",
+  );
+  for (const index of [0, 1, 2])
+    assert.match(
+      body,
+      new RegExp(`\\{\\{nextDecision\\.choices\\.${index}\\.label\\}\\}`, "u"),
+    );
+  assert.ok(template.requiredFacts.includes("nextDecision"));
+});
+
 async function writeFixturePackages({ packagesDir }) {
   await mkdir(packagesDir, { recursive: true });
   for (const name of [

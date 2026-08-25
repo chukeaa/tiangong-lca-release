@@ -1,5 +1,5 @@
 ---
-title: Release Workflow
+title: Release Candidate Workflow
 docType: workflow
 scope: workflow
 status: active
@@ -7,38 +7,37 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当用户需要组织、验证、打包、审批或发布冻结的数据产品时
+  - 当用户需要组织、验证、打包或重新收敛不可变 Release Candidate 时
 whenToUpdate:
-  - 当包的语义、候选构建、审批、发布或回读边界变化时
+  - 当 intake、包的语义、候选构建、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
-  - workflows/release/**
-lastReviewedAt: 2026-08-24
+  - workflows/release-candidate/**
+lastReviewedAt: 2026-08-25
 lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Reviewed one-pass package artifact evidence collection; package semantics remain unchanged."
+lastReviewedNote: "Focused the Workflow on immutable Candidate construction and separated future Publication."
 related:
   - AGENTS.md
   - ../../README.md
 ---
 
-# Release Workflow
+# Release Candidate Workflow
 
 ## 目标
 
-把精确、冻结并具备必要证据的输入组织成可审查的 Release Candidate，在人工授权后完成远程发布，并用独立回读证明远程字节与本地候选一致。
+把精确、冻结并具备必要证据的输入组织成不可变、可审查、尚未授权发布的 Release Candidate。
 
-这个 Workflow 不负责产生原始计算结果、组装 Result Process/LifecycleModel，也不修复源数据。
+这个 Workflow 不负责产生原始计算结果、组装 Result Process/LifecycleModel、修改 Candidate 数据或执行远程发布。
 
 ## 可以从哪里开始
 
 - Result Materialization Workflow 生成并验证的 canonical dataset collection；
 - 对应的 dataset index、materialization manifest 和 validation report；
 - 作为审计附件的 Calculation Bundle 或 Transformation Manifest；
-- 已有 Package Plan 或尚未发布的 Release Candidate；
-- 已发布但尚未完成独立 readback 的 release run。
+- 已有 Package Plan、preserved failed build 或尚未发布的 Release Candidate。
 
 ## 输入契约
 
-Release 先从冻结的 Materialization Intake 和 materialization 输出准备独立的 Release Intake，再由 Package build 只消费这个 Release Intake。两个 Intake 语义不同：前者证明结果生成时使用的输入，后者补齐独立分发所需的依赖；任何阶段都不得原地修改已冻结 manifest。
+Release Candidate Workflow 先从冻结的 Materialization Intake 和 materialization 输出准备独立的 Release Intake，再由 Package build 只消费这个 Release Intake。两个 Intake 语义不同：前者证明结果生成时使用的输入，后者补齐独立分发所需的依赖；任何阶段都不得原地修改已冻结 manifest。
 
 输入至少包括：
 
@@ -82,9 +81,7 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
   -> semantic round-trip / package closure / cross-package consistency
   -> deterministic package build
   -> Release Candidate
-  -> 人工确认精确 target + plan hash
-  -> prepare / upload / finalize / approve / publish
-  -> independent readback
+  -> direct Publication / scope refinement / Dataset Transformation
 ```
 
 如果 Package build 或 qualification 发现数据错误，当前 Candidate 路线立即停止并保留 failed build。恢复路线是：
@@ -110,7 +107,7 @@ Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 首个本地 Release Intake 与 Package route 已实现为 Workflow-local 薄 CLI：
 
 ```bash
-cd workflows/release
+cd workflows/release-candidate
 npm install
 
 node cli.mjs cache status --json
@@ -220,7 +217,7 @@ CLI 会自动加载 Release 仓根目录 ignored `.env` 中已有的 `CONN` 和 
   -> 任一失败：保留 failed build，不创建 Candidate
 ```
 
-Release 只实现当前产品契约明确要求的 LCIA Method characterisation Flow 扩展，不复制通用闭包遍历。完整引用闭合、TIDAS/eILCD validation、schema-ordered conversion 和 semantic round-trip 仍由 `tidas-tools` 权威实现。Node 层验证交接证据、准备 Release Intake、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
+Release Candidate Workflow 只实现当前产品契约明确要求的 LCIA Method characterisation Flow 扩展，不复制通用闭包遍历。完整引用闭合、TIDAS/eILCD validation、schema-ordered conversion 和 semantic round-trip 仍由 `tidas-tools` 权威实现。Node 层验证交接证据、准备 Release Intake、组装本地 canonical input、执行有界 subprocess、核对四个 ZIP 并保存候选证据。
 
 当前只支持 `standalone-lifecyclemodel-result-full-closure.v1`。Result Process-only materialization 会以 `package_profile_unsupported` 停止；只有未来 `tidas-tools` 增加并验证对应 profile 后才扩展。
 
@@ -234,7 +231,7 @@ Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只
 
 客户端 Agent 随后执行 `failure review`，用其 workspace dependency runtime 中的 `@oai/artifact-tool` 生成七个工作表的 `exclusion-impact-review.xlsx`，检查 Summary 的值与公式、扫描公式错误并逐页渲染验证。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单和验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
 
-用户确认排除时，`failure decide` 将原始 failed build、Release Intake、Materialization、source intake、issue spool、完整排除集合和 resulting dataset count 绑定到不可变决定。后续 `package build --scope-decision` 会重新核对全部 hash，按 canonical path 构造新的发布输入并重新委托完整验证。原 failed build、Materialization 和源数据保持不变；范围决定不构成批准、上传或发布授权。
+用户确认排除时，`failure decide` 将原始 failed build、Release Intake、Materialization、source intake、issue spool、完整排除集合和 resulting dataset count 绑定到不可变决定。后续 `package build --scope-decision` 会重新核对全部 hash，按 canonical path 构造新的 Candidate 输入并重新委托完整验证。原 failed build、Materialization 和源数据保持不变；范围决定不构成批准、上传或发布授权。
 
 如果 `tidas release build-packages --format json` 在构建阶段非零退出，Workflow 会把有界 stdout 解析为结构化 operation report 并保存在 `failed-package-build.json` 的 `failure.diagnostics.operationReport`；stdout 不是有效 JSON 时才保存有界 `stdoutTail`。这样字段级 validation issues 不会因 stderr 为空或只含摘要而丢失。
 
@@ -253,26 +250,22 @@ packages/                              # exactly four deterministic ZIPs
   TiangongLCA-<version>-ResultDatabase.ilcd.zip
 ```
 
-## 人工审批
+## Candidate 完成后的选择
 
-审批必须绑定：
+Candidate 成功冻结后必须展示三个互斥的当前方向：
 
-- 精确 Release Candidate；
-- package hash 集合；
-- release manifest 和 publish plan hash；
-- target ID 和 target fingerprint；
-- 决定人、理由和可选有效期。
+1. 原 Candidate 进入 Publication Workflow；
+2. 选择或剔除具体 dataset 时，在本 Workflow 内执行依赖与反向影响分析、冻结 scope decision、重跑全部验证并生成新 Candidate；
+3. 选择精确 Candidate 数据进入 Dataset Transformation，完成再加工后生成新 Candidate。
 
-查看候选、表示建议、作出决定、授权发布和执行发布是不同动作。
+按 Unit Process、Result 或 Both 选择已经独立闭合的 Candidate component，不改变 component 内容，可以留给未来 Publish Plan。任何 dataset-level 过滤都会改变内容和 hash，必须先形成新 Candidate。
 
 ## 失败与恢复
 
 - 本地验证失败返回到拥有错误输入或 recipe 的最早节点。
 - 包已生成但 TIDAS/eILCD qualification 失败时，先检查 CLI 返回的 `failed-package-build.json` 和保留包，不要盲目重跑；修正数据后使用新的 Candidate 输出路径重新构建。
-- 上传或发布失败只在同一不可变 candidate 和幂等 identity 上恢复。
-- 发布成功但 readback 失败时，状态不能标记为完成。
-- 远程 metadata、package bytes 或 target 漂移时 fail closed。
-- 一个通过的正式发布不能通过重跑旧打包步骤被静默改变。
+- scope decision、父 Candidate 或上游 hash 漂移时 fail closed。
+- 一个通过资格验证的 Candidate 不能通过重跑或下游 Workflow 被静默改变。
 
 ## 不属于本 Workflow
 
@@ -280,11 +273,14 @@ packages/                              # exactly four deterministic ZIPs
 - Worker 求解；
 - 未冻结的语义探索；
 - 生成或修改 Result Process、LifecycleModel、identity 或 dataset version；
+- Candidate-derived 数据加工；
 - 把派生数据写回 authoring tables；
-- 使用 service-role 或直接 SQL 发布。
+- Publish Plan、正式发布授权、平台写入、状态转换和独立远程回读。
 
-## 后续待确认点
+后两类分别属于 Dataset Transformation 和 Publication Workflow。
 
-1. 首版正式 Release 是否必须同时生成 TIDAS 和 ILCD？
-2. Subset package 是否只允许本地下载，禁止成为全局公共 release？
-3. Release 是否只接受完整通过的 materialization，还是允许把部分 candidate 保留为永不发布的本地预览？
+## 后续增强点
+
+1. 把现有 validation-failure exclusion 路径泛化为用户主动 dataset-level scope refinement，同时保持相同依赖闭合门禁。
+2. 为派生 Candidate 增加显式 `parentCandidateHash` 与 scope/Transformation evidence binding。
+3. 在 Publication 规则确定后，让 Candidate CLI 输出结构化但无副作用的 Publication handoff。

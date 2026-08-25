@@ -21,7 +21,7 @@ lastReviewedNote: "Reframed the workflow around the domain relationship between 
 related:
   - ../README.md
   - ../AGENTS.md
-  - ../../release/README.md
+  - ../../release-candidate/README.md
 ---
 
 # Result Process 与 LifecycleModel 的关系与生成原则
@@ -30,7 +30,7 @@ related:
 
 计算完成后，我们已经知道某个过程的清单结果和环境影响结果，但这些结果还只是 Calculation Bundle 中的数值。Result Materialization 要把它们转成可以独立保存、引用和发布的 TIDAS 数据集。
 
-这一步只在本地生成数据集。它不上传数据库，也不发布版本；上传、组包、审批和发布属于后续 Release Workflow。
+这一步只在本地生成数据集。它不上传数据库，也不发布版本；组包与 Candidate 冻结属于后续 Release Candidate Workflow，远程发布属于 Publication Workflow。
 
 用户在开始时只需要回答三个问题：
 
@@ -224,6 +224,6 @@ Result Process 内容：LCI + LCIA
 - 不重新求解 LCI 或 LCIA；
 - 不根据 mutable `latest` 补全引用；
 - 不把无法解释的 provider 关系静默丢弃；
-- 先在本地生成、验证并冻结，再交给 Release Workflow 上传和发布。
+- 先在本地生成、验证并冻结，再交给 Release Candidate Workflow 组包；远程发布由 Publication Workflow 单独负责。
 
 CLI 参数、请求结构、Result Catalog、文件目录、hash、版本分配和验证命令等工程契约见 [Result Materialization Workflow](../README.md)。Agent 执行顺序和阻塞条件见 [Workflow Agent Guide](../AGENTS.md)。

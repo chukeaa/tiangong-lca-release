@@ -229,7 +229,7 @@ Release-owned ResultSet 引用、target fingerprint 和观察时间，不包含�
 - 把 Calculation Bundle 组装为 Result Process 或 LifecycleModel；
 - 正式数据包发布。
 
-三项分别进入 Dataset Transformation、Result Materialization 和 Release Workflow。
+三项分别进入 Dataset Transformation、Result Materialization 和 Release Candidate Workflow。
 
 ## 待确认点
 

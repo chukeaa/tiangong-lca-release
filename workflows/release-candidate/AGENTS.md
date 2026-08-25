@@ -1,5 +1,5 @@
 ---
-title: Release Workflow Agent Contract
+title: Release Candidate Workflow Agent Contract
 docType: contract
 scope: workflow
 status: active
@@ -7,42 +7,40 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当 Agent 设计、实现或运行 Release Workflow 时
+  - 当 Agent 设计、实现或运行 Release Candidate Workflow 时
 whenToUpdate:
-  - 当 package、candidate、approval、publication 或 readback 契约变化时
+  - 当 intake、package、candidate qualification、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
-  - workflows/release/**
-lastReviewedAt: 2026-08-24
+  - workflows/release-candidate/**
+lastReviewedAt: 2026-08-25
 lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Reviewed one-pass package artifact evidence collection; release workflow responsibilities remain unchanged."
+lastReviewedNote: "Focused the Workflow on immutable Candidate construction and moved remote publication to a separate deferred boundary."
 related:
   - README.md
   - ../AGENTS.md
 ---
 
-# Release Workflow Agent Contract
+# Release Candidate Workflow Agent Contract
 
 ## Agent 的职责
 
 - 解析精确输入和已有 candidate 状态。
-- 根据用户目标提出 package recipe，不擅自扩大发布内容。
+- 根据用户目标提出 package recipe，不擅自扩大 Candidate 内容。
 - 验证 Result Materialization 输出与 frozen dataset bytes 的精确绑定。
 - 调用确定性 validator、converter 和 packager。
 - 当本地 package validation 发现数据错误时，使用冻结的 issue spool、精确 dataset identity、Calculation graph 和 Materialization lineage 生成完整排除影响报告；不得把报错数据直接称为孤儿。
 - 从权威 impact report 生成供用户审核的 Excel 工作簿，逐页做视觉检查，并在回复中同时提供 JSON 和 Excel；审核表准备好之前不得请求排除确认。
 - 把修复、完整集合排除或停止决定绑定到精确 impact-report hash；只有完整集合排除被明确确认后才允许构建新的 scope-filtered Candidate。
-- 汇总候选、验证证据、target 和 plan hash 供用户决定。
-- 只在精确批准后执行远程发布。
-- 发布后独立下载并验证全部正式产物。
+- 汇总候选、验证证据和 plan hash 供用户决定。
+- Candidate 成功后展示 direct publication、dependency-closed scope refinement 和 Dataset Transformation 三条后继路径。
 
 ## 可自动执行的动作
 
-- 只读检查输入、manifest 和既有发布状态；
+- 只读检查输入、manifest 和既有 Candidate 状态；
 - 构建本地 Package Plan；
 - 运行不产生远程副作用的验证和打包；
 - 生成有界 candidate report；
 - 对 preserved failed build 执行只读影响分析，并生成不改变权威证据的本地 Excel 审核视图；
-- 在用户已授权发布后继续同一 run 的 readback。
 
 ## 当前本地 Package 契约
 
@@ -67,6 +65,7 @@ related:
 - 输出目录不可覆盖。只有四包回读校验全部通过才能原子提交可见 Candidate；包已经生成但 qualification 失败时，必须把 ZIP、结构化失败清单、已有验证报告和逐包回读目录保留为唯一 sibling failed build，并明确 `candidateCreated=false`、`publicationAuthorized=false`。它是诊断产物，不是 Candidate，也不得被发布。
 - `tidas release build-packages --format json` 非零退出时，必须把有界 stdout 解析为结构化 operation report 并写入 failed-build diagnostics；只有 stdout 不是有效 JSON 时才保留有界文本尾部。不得只保留 stderr 而丢失字段级 validation evidence。
 - CLI 的人类输出必须包含有界 `Summary / Next / Reply using template`；JSON 输出必须保持单对象、可解析，并携带 `outcome`、`completeness`、artifact 引用、`nextActions[]` 和 `replyTemplate`。
+- Candidate 成功结果还必须携带结构化 `nextDecision`，明确列出 Publication、依赖闭合的 scope refinement 和 Dataset Transformation 三条路径，并披露尚未实现的入口，不得生成伪命令。
 - cache refresh 的 CLI 输出和错误不得包含连接串、S3 secret 或 presigned URL。成功结果可以披露 execution mode 与 SSH host，但不能披露临时 object locator。
 - CLI 返回的自身命令和跨 Result Materialization 命令必须使用由 `import.meta.url` 生成的绝对入口，确保从任意 cwd 可复制执行。Release Intake 准备成功后应返回确定的 Candidate 输出目录，不把 `<CANDIDATE_DIR>` 留给 Agent 猜测。
 - CLI 必须拒绝未知和重复参数。失败使用非零退出码，并区分人类可读 stderr 与 `--json` 结构化 stderr。
@@ -75,12 +74,9 @@ related:
 
 ## 必须明确确认的动作
 
-- 选择最终发布内容和 package recipe；
+- 选择最终 Candidate 内容和 package recipe；
 - 确认排除影响报告中的完整数据集集合及其 hash；
 - 冻结 Release Candidate；
-- 绑定 target fingerprint 和 publish plan hash 的批准；
-- prepare、upload、approve、publish 等任何远程写入；
-- supersede、unpublish 或撤回行为。
 
 ## 硬边界
 
@@ -88,21 +84,19 @@ related:
 - 不解码、打印、持久化或放入命令参数的用户凭据。
 - 不从 mutable `latest` 补齐 graph、exchange、provider、method 或 version。
 - 不在 Package build 中生成或修改 Result Process、LifecycleModel、identity 或 dataset version。
-- 不发布 partial closure 或未通过必要验证的 package。
+- 不把 partial closure 或未通过必要验证的 package 冻结为 Candidate。
 - 不把 validation error 降级为 warning，不提供忽略错误继续打包的开关，也不把 mutable `latest` 作为替换候选自动应用。
 - 不直接从失败 Candidate 删除文件；排除只能生成新的 immutable scope decision、Package Plan 和 Candidate。
-- 不把本地 approval receipt 当作可转移的远程授权 token。
-- 不把 upload success 当作 publication success。
-- 不把 publication success 当作 readback verification success。
+- 不执行 prepare、upload、approve、publish、supersede、unpublish 或撤回等远程发布动作；这些动作属于 Publication Workflow。
+- 不在 Dataset Transformation 或 Publication 中原地修改本 Workflow 冻结的 Candidate。
 - 不因缺失外部能力修改其他仓库。
 
 ## 完成条件
 
-正式发布只有在以下条件同时成立时完成：
+Release Candidate 只有在以下条件同时成立时完成：
 
-- 精确 candidate 获得有效批准；
-- 远程 publication 返回匹配 receipt；
-- 全部 package 独立下载；
-- byte size 和 SHA-256 与本地 candidate 一致；
-- 终态查询确认 readback verified；
-- 证据和恢复信息已保存。
+- 精确输入、Package Plan 和 dataset bytes 绑定一致；
+- 所有要求的 TIDAS/eILCD、closure、round-trip 和最终 ZIP readback validation 通过；
+- Candidate 原子冻结且明确记录 `publicationAuthorized=false`；
+- 证据和恢复信息已保存；
+- 下一步明确指向原 Candidate 的 Publication、依赖闭合的范围收缩，或 Dataset Transformation。

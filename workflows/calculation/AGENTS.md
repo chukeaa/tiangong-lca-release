@@ -12,8 +12,8 @@ whenToUpdate:
   - 当入口解析、远程命令、证据绑定、恢复或确认规则变化时
 checkPaths:
   - workflows/calculation/**
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: 0f88e33b66ef6a92249e29a78feede7269b03e3d
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 6c8a25b20830794c855549a4866456a5a0c6e3ea
 lastReviewedNote: "Required provider-compatible ResultSet adapters and a stable Release-owned internal reference."
 related:
   - README.md
