@@ -76,16 +76,133 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "projection prepare": [
+    "portal-lcia-projection-plan-prepared",
+    "portal-lcia-projection-plan-prepared.md",
+    [
+      "projectionId",
+      "packageId",
+      "lciaResultPublicationId",
+      "packageVersion",
+      "packageResultHash",
+      "projectionContentHash",
+      "processCount",
+      "impactCount",
+      "valueCount",
+      "projectionPlanSha256",
+      "projectionFinalizationAuthorized",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "projection package-plan": [
+    "portal-lcia-package-publication-plan-prepared",
+    "portal-lcia-package-publication-plan-prepared.md",
+    [
+      "packageId",
+      "packageVersion",
+      "packageResultHash",
+      "projectionId",
+      "projectionContentHash",
+      "processCount",
+      "impactCount",
+      "valueCount",
+      "databasePublishPlanHash",
+      "displayDefaultImpactCategory",
+      "requestedReason",
+      "currentPublicationPrecondition",
+      "packagePublicationPlanSha256",
+      "packagePublicationAuthorized",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "projection package-publish": [
+    "portal-lcia-package-published",
+    "portal-lcia-package-published.md",
+    [
+      "publicationId",
+      "packageId",
+      "packageVersion",
+      "packageResultHash",
+      "projectionId",
+      "projectionContentHash",
+      "processCount",
+      "impactCount",
+      "valueCount",
+      "disposition",
+      "reasonPersistence",
+      "packagePublicationReceiptSha256",
+      "independentlyReadBack",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "projection finalize": [
+    "portal-lcia-projection-finalized",
+    "portal-lcia-projection-finalized.md",
+    [
+      "projectionPublicationId",
+      "lciaResultPublicationId",
+      "projectionContentHash",
+      "evidenceHash",
+      "disposition",
+      "finalizationReceiptSha256",
+      "independentReadbackVerified",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "projection verify": [
+    "portal-lcia-projection-readback-verified",
+    "portal-lcia-projection-readback-verified.md",
+    [
+      "projectionPublicationId",
+      "lciaResultPublicationId",
+      "projectionContentHash",
+      "evidenceHash",
+      "processCount",
+      "impactCount",
+      "valueCount",
+      "isCurrent",
+      "isPubliclyVisible",
+      "readbackReceiptSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
+  "projection revoke": [
+    "portal-lcia-projection-revoked",
+    "portal-lcia-projection-revoked.md",
+    [
+      "projectionPublicationId",
+      "lciaResultPublicationId",
+      "projectionContentHash",
+      "disposition",
+      "reasonPersistence",
+      "isCurrent",
+      "isPubliclyVisible",
+      "revocationReceiptSha256",
+      "artifacts",
+      "nextActions",
+    ],
+  ],
 });
 
 export function replyTemplateFor(command, { ok } = {}) {
   const entry = ok
     ? templates[command]
-    : [
-        "publication-command-failed",
-        "publication-command-failed.md",
-        ["command", "error", "nextActions"],
-      ];
+    : command.startsWith("projection ")
+      ? [
+          "portal-lcia-projection-command-failed",
+          "portal-lcia-projection-command-failed.md",
+          ["command", "error", "nextActions"],
+        ]
+      : [
+          "publication-command-failed",
+          "publication-command-failed.md",
+          ["command", "error", "nextActions"],
+        ];
   if (!entry) return undefined;
   const [id, filename, requiredFacts] = entry;
   return {

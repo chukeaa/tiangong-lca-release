@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-package-publication-receipt.v1.schema.json",
+  "title": "Portal LCIA Package Publication Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "packagePublicationAuthorized",
+    "independentlyReadBack",
+    "disposition",
+    "responseLossReconciled",
+    "publishResponseReused",
+    "packagePublicationPlanSha256",
+    "databasePublishPlanHash",
+    "freshPrepareEvidenceSha256",
+    "freshPrepareMatched",
+    "freshPreparePublishPlanHash",
+    "freshPrepareCurrentPublication",
+    "publishResponseSha256",
+    "prepareReadbackSha256",
+    "targetEndpointFingerprint",
+    "executedByActorUserId",
+    "publicationId",
+    "packageId",
+    "previousPublicationId",
+    "isCurrent",
+    "packageVersion",
+    "packageResultHash",
+    "buildWorkerJobId",
+    "projectionContractVersion",
+    "hashContractVersion",
+    "inputManifestHash",
+    "closureCertificateHash",
+    "snapshotHash",
+    "projectionId",
+    "projectionContentHash",
+    "processCount",
+    "impactCount",
+    "valueCount",
+    "processAxisHash",
+    "impactAxisHash",
+    "valueGridHash",
+    "relationHash",
+    "bundleContentHash",
+    "bundleManifestSha256",
+    "lciaChunkSetSha256",
+    "resultArtifactSha256",
+    "queryArtifactSha256",
+    "currentProcessSetHash",
+    "currentPublicationPrecondition",
+    "displayDefaultImpactCategory",
+    "requestedReason",
+    "reasonPersistence",
+    "publishedAt",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-package-publication-receipt.v1"
+    },
+    "status": { "const": "current" },
+    "packagePublicationAuthorized": { "const": true },
+    "independentlyReadBack": { "const": true },
+    "disposition": {
+      "enum": ["published", "reused", "reconciled_after_response_loss"]
+    },
+    "responseLossReconciled": { "type": "boolean" },
+    "publishResponseReused": { "type": "boolean" },
+    "packagePublicationPlanSha256": { "$ref": "#/$defs/hash" },
+    "databasePublishPlanHash": { "$ref": "#/$defs/hash" },
+    "freshPrepareEvidenceSha256": { "$ref": "#/$defs/hash" },
+    "freshPrepareMatched": { "type": "boolean" },
+    "freshPreparePublishPlanHash": { "$ref": "#/$defs/hash" },
+    "freshPrepareCurrentPublication": {
+      "anyOf": [{ "$ref": "#/$defs/currentPublication" }, { "type": "null" }]
+    },
+    "publishResponseSha256": { "$ref": "#/$defs/hash" },
+    "prepareReadbackSha256": { "$ref": "#/$defs/hash" },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "executedByActorUserId": { "$ref": "#/$defs/uuid" },
+    "publicationId": { "$ref": "#/$defs/uuid" },
+    "packageId": { "$ref": "#/$defs/uuid" },
+    "previousPublicationId": {
+      "anyOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+    },
+    "isCurrent": { "const": true },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "packageResultHash": { "$ref": "#/$defs/hash" },
+    "buildWorkerJobId": { "$ref": "#/$defs/uuid" },
+    "projectionContractVersion": { "const": "portal.lcia-projection.v1" },
+    "hashContractVersion": {
+      "const": "portal.lcia-projection.int32be-frame-sha256.v1"
+    },
+    "inputManifestHash": { "$ref": "#/$defs/hash" },
+    "closureCertificateHash": { "$ref": "#/$defs/hash" },
+    "snapshotHash": { "$ref": "#/$defs/hash" },
+    "projectionId": { "$ref": "#/$defs/uuid" },
+    "projectionContentHash": { "$ref": "#/$defs/hash" },
+    "processCount": { "$ref": "#/$defs/count" },
+    "impactCount": { "$ref": "#/$defs/count" },
+    "valueCount": { "$ref": "#/$defs/count" },
+    "processAxisHash": { "$ref": "#/$defs/hash" },
+    "impactAxisHash": { "$ref": "#/$defs/hash" },
+    "valueGridHash": { "$ref": "#/$defs/hash" },
+    "relationHash": { "$ref": "#/$defs/hash" },
+    "bundleContentHash": { "$ref": "#/$defs/hash" },
+    "bundleManifestSha256": { "$ref": "#/$defs/hash" },
+    "lciaChunkSetSha256": { "$ref": "#/$defs/hash" },
+    "resultArtifactSha256": { "$ref": "#/$defs/hash" },
+    "queryArtifactSha256": { "$ref": "#/$defs/hash" },
+    "currentProcessSetHash": { "$ref": "#/$defs/hash" },
+    "currentPublicationPrecondition": {
+      "anyOf": [{ "$ref": "#/$defs/currentPublication" }, { "type": "null" }]
+    },
+    "displayDefaultImpactCategory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "requestedReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "reasonPersistence": {
+      "enum": [
+        "recorded",
+        "not_rewritten_on_reuse",
+        "unknown_after_response_loss"
+      ]
+    },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "count": { "type": "integer", "minimum": 1 },
+    "currentPublication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicationId",
+        "packageId",
+        "packageVersion",
+        "publishedAt"
+      ],
+      "properties": {
+        "publicationId": { "$ref": "#/$defs/uuid" },
+        "packageId": { "$ref": "#/$defs/uuid" },
+        "packageVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

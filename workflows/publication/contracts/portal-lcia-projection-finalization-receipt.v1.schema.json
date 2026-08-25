@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-projection-finalization-receipt.v1.schema.json",
+  "title": "Portal LCIA Projection Finalization Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "projectionFinalizationAuthorized",
+    "independentReadbackVerified",
+    "disposition",
+    "projectionPlanSha256",
+    "freshPrepareEvidenceSha256",
+    "reconciliationReadbackSha256",
+    "targetEndpointFingerprint",
+    "finalizedByActorUserId",
+    "projectionPublicationId",
+    "projectionId",
+    "lciaResultPublicationId",
+    "packageId",
+    "packageVersion",
+    "packageResultHash",
+    "projectionContentHash",
+    "evidenceHash",
+    "processCount",
+    "impactCount",
+    "valueCount",
+    "sourcePublishedAt",
+    "idempotencyKey",
+    "finalizedAt",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-projection-finalization-receipt.v1"
+    },
+    "status": { "const": "finalized" },
+    "projectionFinalizationAuthorized": { "const": true },
+    "independentReadbackVerified": { "const": false },
+    "disposition": {
+      "enum": ["created", "reused", "reconciled_after_response_loss"]
+    },
+    "projectionPlanSha256": { "$ref": "#/$defs/hash" },
+    "freshPrepareEvidenceSha256": { "$ref": "#/$defs/hash" },
+    "reconciliationReadbackSha256": {
+      "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "finalizedByActorUserId": { "$ref": "#/$defs/uuid" },
+    "projectionPublicationId": { "$ref": "#/$defs/uuid" },
+    "projectionId": { "$ref": "#/$defs/uuid" },
+    "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
+    "packageId": { "$ref": "#/$defs/uuid" },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "packageResultHash": { "$ref": "#/$defs/hash" },
+    "projectionContentHash": { "$ref": "#/$defs/hash" },
+    "evidenceHash": { "$ref": "#/$defs/hash" },
+    "processCount": { "$ref": "#/$defs/count" },
+    "impactCount": { "$ref": "#/$defs/count" },
+    "valueCount": { "$ref": "#/$defs/count" },
+    "sourcePublishedAt": { "type": "string", "format": "date-time" },
+    "idempotencyKey": {
+      "type": "string",
+      "pattern": "^portal-lcia-finalize-v1:[0-9a-f]{64}$"
+    },
+    "finalizedAt": { "type": "string", "format": "date-time" },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "count": { "type": "integer", "minimum": 1 }
+  }
+}

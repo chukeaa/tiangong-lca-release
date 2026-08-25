@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-projection-revocation-receipt.v1.schema.json",
+  "title": "Portal LCIA Projection Revocation Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "independentlyQueried",
+    "isCurrent",
+    "isPubliclyVisible",
+    "disposition",
+    "projectionPlanSha256",
+    "finalizationReceiptSha256",
+    "revokeResponseSha256",
+    "revocationReadbackSha256",
+    "targetEndpointFingerprint",
+    "revokedByActorUserId",
+    "projectionPublicationId",
+    "projectionId",
+    "lciaResultPublicationId",
+    "packageId",
+    "packageVersion",
+    "projectionContentHash",
+    "evidenceHash",
+    "requestedReason",
+    "reasonPersistence",
+    "revokedAt",
+    "verifiedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-projection-revocation-receipt.v1"
+    },
+    "status": { "const": "revoked" },
+    "independentlyQueried": { "const": true },
+    "isCurrent": { "const": false },
+    "isPubliclyVisible": { "const": false },
+    "disposition": {
+      "enum": ["revoked", "reused", "reconciled_after_response_loss"]
+    },
+    "projectionPlanSha256": { "$ref": "#/$defs/hash" },
+    "finalizationReceiptSha256": { "$ref": "#/$defs/hash" },
+    "revokeResponseSha256": {
+      "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    },
+    "revocationReadbackSha256": { "$ref": "#/$defs/hash" },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "revokedByActorUserId": { "$ref": "#/$defs/uuid" },
+    "projectionPublicationId": { "$ref": "#/$defs/uuid" },
+    "projectionId": { "$ref": "#/$defs/uuid" },
+    "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
+    "packageId": { "$ref": "#/$defs/uuid" },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "projectionContentHash": { "$ref": "#/$defs/hash" },
+    "evidenceHash": { "$ref": "#/$defs/hash" },
+    "requestedReason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "reasonPersistence": {
+      "enum": [
+        "recorded",
+        "not_rewritten_on_reuse",
+        "unknown_after_response_loss"
+      ]
+    },
+    "revokedAt": { "type": "string", "format": "date-time" },
+    "verifiedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" }
+  }
+}

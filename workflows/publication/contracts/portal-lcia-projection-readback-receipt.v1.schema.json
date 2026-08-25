@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-projection-readback-receipt.v1.schema.json",
+  "title": "Portal LCIA Projection Readback Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "independentlyQueried",
+    "isCurrent",
+    "isPubliclyVisible",
+    "projectionPlanSha256",
+    "finalizationReceiptSha256",
+    "targetEndpointFingerprint",
+    "verifiedByActorUserId",
+    "projectionPublicationId",
+    "projectionId",
+    "lciaResultPublicationId",
+    "packageId",
+    "packageVersion",
+    "projectionContentHash",
+    "evidenceHash",
+    "processCount",
+    "impactCount",
+    "valueCount",
+    "sourcePublishedAt",
+    "finalizedAt",
+    "verifiedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-projection-readback-receipt.v1"
+    },
+    "status": { "const": "verified" },
+    "independentlyQueried": { "const": true },
+    "isCurrent": { "const": true },
+    "isPubliclyVisible": { "const": true },
+    "projectionPlanSha256": { "$ref": "#/$defs/hash" },
+    "finalizationReceiptSha256": { "$ref": "#/$defs/hash" },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "verifiedByActorUserId": { "$ref": "#/$defs/uuid" },
+    "projectionPublicationId": { "$ref": "#/$defs/uuid" },
+    "projectionId": { "$ref": "#/$defs/uuid" },
+    "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
+    "packageId": { "$ref": "#/$defs/uuid" },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "projectionContentHash": { "$ref": "#/$defs/hash" },
+    "evidenceHash": { "$ref": "#/$defs/hash" },
+    "processCount": { "$ref": "#/$defs/count" },
+    "impactCount": { "$ref": "#/$defs/count" },
+    "valueCount": { "$ref": "#/$defs/count" },
+    "sourcePublishedAt": { "type": "string", "format": "date-time" },
+    "finalizedAt": { "type": "string", "format": "date-time" },
+    "verifiedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "count": { "type": "integer", "minimum": 1 }
+  }
+}
