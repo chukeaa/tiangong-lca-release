@@ -19,6 +19,7 @@ checkPaths:
   - .docpact/config.yaml
   - docs/architecture.md
   - workflows/**
+  - test/**
   - package.json
   - pnpm-workspace.yaml
   - pnpm-lock.yaml
@@ -26,7 +27,7 @@ checkPaths:
   - .node-version
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
+lastReviewedCommit: 47ff8247e2f22b0e45f3032baa6fac9ad1847d8f
 lastReviewedNote: "Pinned the pure-JavaScript repository to one Node 24.19.0 and pnpm 11.23.0 workspace, upgraded Result Materialization to the released TIDAS SDK 0.2.0, and retained all Workflow and security boundaries."
 related:
   - README.md

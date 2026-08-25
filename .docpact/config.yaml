@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "8a4babcecb152a4205de314183c2e7ba6becf41d"
+lastReviewedCommit: "47ff8247e2f22b0e45f3032baa6fac9ad1847d8f"
 
 catalog:
   repos:
@@ -31,6 +31,7 @@ ownership:
           - pnpm-lock.yaml
           - .npmrc
           - .node-version
+          - test/**
           - .github/workflows/ci.yml
       ownerRepo: release
     - id: shared-workflow-contract
@@ -75,6 +76,7 @@ coverage:
     - .env.example
     - .node-version
     - .npmrc
+    - test/**
     - workflows/**
     - package.json
     - pnpm-workspace.yaml
@@ -126,6 +128,7 @@ routing:
         - pnpm-lock.yaml
         - .npmrc
         - .node-version
+        - test/**
         - .github/workflows/ci.yml
         - .docpact/config.yaml
     repo-docs:
@@ -306,6 +309,8 @@ rules:
         kind: package-manager-policy
       - path: .node-version
         kind: runtime-pin
+      - path: test/**
+        kind: repository-validation-contract
       - path: .github/workflows/ci.yml
         kind: automation
     requiredDocs:
