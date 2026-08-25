@@ -203,7 +203,7 @@ Agent 不需要从路径反向解析身份；输出和 manifest 必须显式提�
 - 不改变 materialization key、dataset identity 或 version；
 - JSON 输出设置 `pathPolicy: explicit-output.v1`；
 - 同时返回 `recommendedCanonicalPath`，便于 Agent 说明当前产物不在默认 workspace；
-- Release Workflow 接收它之前仍按 manifest/hash 验证，不因路径是用户指定就降低门禁。
+- Release Candidate Workflow 接收它之前仍按 manifest/hash 验证，不因路径是用户指定就降低门禁。
 
 推荐日常工作使用默认路径或 `--artifact-root`，不推荐为每次运行手写 `--out-dir`。
 

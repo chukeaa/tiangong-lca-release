@@ -21,9 +21,9 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-24
+lastReviewedAt: 2026-08-25
 lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Reviewed one-pass package artifact evidence collection; repository ownership and completion boundaries remain unchanged."
+lastReviewedNote: "Separated Release Candidate construction from Publication and positioned Dataset Transformation as a deferred Candidate refinement loop."
 related:
   - README.md
   - .docpact/config.yaml
@@ -33,7 +33,7 @@ related:
 
 # Repository Contract
 
-`tiangong-lca-release` 是面向人和 Agent 的本地数据产品工作台。它通过根目录 Workflow 组织 Calculation、Dataset Transformation、Result Materialization 和 Release，调用其他系统已经存在的能力，但不要求修改其他仓库。
+`tiangong-lca-release` 是面向人和 Agent 的本地数据产品工作台。它通过根目录 Workflow 组织 Calculation、Result Materialization、Release Candidate、Dataset Transformation 和 Publication，调用其他系统已经存在的能力，但不要求修改其他仓库。
 
 ## 当前实施基线
 
@@ -44,7 +44,7 @@ related:
 ## 加载顺序
 
 1. `AGENTS.md`：仓库所有权、硬边界和确认状态；
-2. `README.md`：项目目标、四个 Workflow 和待确认点；
+2. `README.md`：项目目标、五个 Workflow 和待确认点；
 3. `.docpact/config.yaml`：机器可读 ownership、routing、coverage 和 rules；
 4. `workflows/AGENTS.md`：所有 Workflow 的共享契约；
 5. 目标 `workflows/<name>/AGENTS.md`；
@@ -53,14 +53,15 @@ related:
 
 ## Workflow 结构
 
-本仓库当前有四个顶层 Workflow：
+本仓库当前有五个顶层 Workflow：
 
 - `workflows/calculation`：ResultSet、Closure、计算任务和 Calculation Bundle；
-- `workflows/dataset-transformation`：模型空间组合、结果聚合和字段声明；
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
-- `workflows/release`：package、candidate、approval、publish 和 readback。
+- `workflows/release-candidate`：Release Intake、Package Plan、validation、scope refinement 和不可变 Candidate；
+- `workflows/dataset-transformation`：Candidate-derived 再加工边界，具体规则与执行器尚未设计；
+- `workflows/publication`：精确授权后的平台写入、状态转换和独立回读边界，具体规则与执行器尚未设计。
 
-完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 属于 Release。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。
+完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 和 Candidate qualification 属于 Release Candidate。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。Publication 不得在远程执行期间改变 Candidate 内容。
 
 ## 所有权
 
@@ -69,9 +70,9 @@ related:
 - 根目录 Workflow 的说明、Agent 契约、产物、恢复和实现；
 - 本地工作上下文、外部资源引用和 artifact lineage；
 - Agent 对用户意图的整理、候选方案和待确认问题；
-- 确定性 Transformation/Package spec 的本地实现；
+- 后续确认后的确定性 Transformation spec，以及当前 Package spec 的本地实现；
 - Result Process、LifecycleModel、identity/version 和 canonical dataset collection 的确定性 materialization；
-- Release Candidate、精确审批、发布编排和独立回读；
+- Release Candidate、后续精确审批、发布编排和独立回读；
 - `tiangong-release` 操作入口及其有界 JSON 输出。
 - 面向批量、非常规数据处理的受控数据库/S3 数据面 adapter，包括参数化只读查询、本地 artifact 传输、完整性验证，以及后续明确授权的 staging 写入。
 - Release-owned 缓存格式、远端只读导出编排、临时 S3 传输校验和本地原子安装；Worker EC2 只作为受管执行位置，不把缓存语义转交给 Worker 仓库。
@@ -100,6 +101,8 @@ related:
 - 不把派生数据自动写入普通 authoring tables。
 - 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
 - 未经精确内容和 target 审批不得远程发布。
+- Release Candidate 一经冻结不得原地改写；dataset-level 范围收缩或再加工必须绑定父 Candidate 并产生新 Candidate。
+- Dataset Transformation 和 Publication 在各自规则及执行入口完成单独设计前保持 fail closed，不得根据根文档自行拼装远程写入或数值加工。
 
 ## Runtime 与分支事实
 
@@ -107,8 +110,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-51`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#51`
+- 当前工作分支：`feature/issue-53`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#53`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
@@ -124,12 +127,13 @@ related:
 ## 当前完成条件
 
 - 旧 runtime 和耦合配置已删除；
-- 根 README 清楚表达项目目标和四个 Workflow；
+- 根 README 清楚表达项目目标、五个 Workflow 和 Candidate 后的三条路径；
 - 每个 Workflow 有 README 和 AGENTS；
 - Docpact 能覆盖和路由 `workflows/**`；
 - Calculation 的 ResultSet create/list/get、Closure/计算提交、数据库/S3 Bundle list/get/download 和 Worker 日志委托保持 workflow-local，确认、provider compatibility、参数化只读 SQL、artifact 完整性、内部最小引用、恢复和错误路径测试通过；
 - Result Materialization 通过一个 workflow-local `materialize` 入口冻结 scope、最终对象和 Result Process 内容层；Result-only 不扩展 provider，LifecycleModel 在内部完成 Result Catalog 与 Model 收敛，并对多 exact axes 的 Result lineage 冲突 fail closed；
-- Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
+- Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release Candidate 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
 - Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
 - preserved failed build 可生成完整 exclusion impact report；范围排除必须由 hash-bound decision 明确确认，并通过新的 Package Plan 重跑全部 validator，不能绕过错误或修改失败 Candidate；
+- Dataset Transformation 和 Publication 当前只定义高层边界，不声称已有加工或远程发布实现；
 - 当前变更通过仓库门禁并形成独立 Git commit。

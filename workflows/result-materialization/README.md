@@ -44,7 +44,7 @@ related:
 - Calculation 产生数值、图证据和 Calculation Bundle；
 - Transformation 改变模型或结果的业务语义；
 - Result Materialization 把冻结语义投影为标准数据集；
-- Release 消费已经 materialize 的数据集，负责打包和发布。
+- Release Candidate 消费已经 materialize 的数据集，负责验证、打包和冻结 Candidate；Publication 单独负责远程发布。
 
 Materialization 失败时，可以修复 recipe、字段或引用并重新生成，不需要重新计算或进入远程发布。
 
@@ -263,11 +263,11 @@ Materialization Manifest 至少绑定：
 - 人工发布审批和远程写入；
 - 把生成数据自动写回 authoring tables。
 
-后两类分别属于 Release Workflow；业务语义变换属于 Dataset Transformation Workflow。
+ZIP/分发包构建属于 Release Candidate Workflow；人工发布审批和远程写入属于 Publication Workflow；业务语义变换属于 Dataset Transformation Workflow。
 
 ## 后续增强点
 
 1. 使用真实完整 Calculation Bundle 做大范围 replay、性能和内存基准。
 2. 根据真实 replay 继续验证 LCI-only 与 LCI + LCIA 的 lineage/version policy。
 3. 增加 metadata completion decision artifact，而不是对无法继承的字段做隐式猜测。
-4. 把完成的 `materialization-manifest.json` 接入 Release Workflow 的打包与发布入口。
+4. 把完成的 `materialization-manifest.json` 接入 Release Candidate Workflow 的候选构建入口。

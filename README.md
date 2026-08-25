@@ -7,11 +7,11 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当需要理解 Release 项目的当前目标、工作流边界和确认状态时
-  - 当需要决定一项工作属于 Calculation、Dataset Transformation、Result Materialization 还是 Release Workflow 时
-  - 当准备实现、运行或审查任一 Release Workflow 时
+  - 当需要理解 Release 项目的当前目标、Workflow 边界和确认状态时
+  - 当需要决定一项工作属于 Calculation、Result Materialization、Release Candidate、Dataset Transformation 还是 Publication 时
+  - 当准备实现、运行或审查任一 Workflow 时
 whenToUpdate:
-  - 当项目目标、工作流划分、跨工作流关系或确认结论变化时
+  - 当项目目标、Workflow 划分、跨 Workflow 关系或确认结论变化时
   - 当新增、删除或重新定义根目录 workflows 子目录时
 checkPaths:
   - README.md
@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-24
+lastReviewedAt: 2026-08-25
 lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Reviewed one-pass package artifact evidence collection; workflow boundaries remain unchanged."
+lastReviewedNote: "Separated immutable Release Candidate construction from future authorized Publication and positioned Dataset Transformation as an optional Candidate refinement loop."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -30,226 +30,172 @@ related:
 
 # TianGong LCA Release
 
-`tiangong-lca-release` 是一个面向人和 Agent 的本地数据产品工作台。
+`tiangong-lca-release` 是一个面向人和 Agent 的本地数据产品工作台。它组织计算、标准数据集生成、Candidate 构建、可选再加工和正式发布，同时保存每一步使用的精确输入、用户决定、验证证据、输出产物和恢复入口。
 
-它帮助用户从任意已有节点继续工作，组织完整性验证、计算、数据集变换、打包和正式发布，同时保留每一步使用的精确输入、用户决定、验证证据、输出产物和恢复入口。
+这个项目不是前端、计算引擎或数据库服务。它调用其他系统已经提供的能力，但不修改其他仓库，也不从 mutable `latest` 猜测 identity、version、graph 或 method。
 
-这个项目不是另一个前端、计算引擎或数据库服务。它不要求修改 TianGong LCA 的其他仓库，而是把其他系统已经提供的能力视为外部能力，通过适合其负载的稳定边界调用：业务控制动作使用 actor-scoped API，批量元数据使用参数化数据库数据面，大型 artifacts 使用 S3 数据面。
-
-## 当前基线状态
-
-四个根 Workflow 的结构已经确认。旧 20-stage runtime 的 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已直接删除，不保留 legacy 副本。
-
-当前仓库以四个 Workflow 为活动基线。Calculation 已拥有 workflow-local ResultSet
-create/list/get、Closure Check 与计算任务提交、数据库优先的任务状态查询、数据库/S3 Calculation Bundle list/get/download 数据面，以及委托根 workspace_ops 查询 Worker job 日志的薄入口；外部响应经兼容 adapter 转为 Release-owned 最小引用。其余能力继续按照
-Calculation、Dataset Transformation、Result Materialization、Release 的顺序逐个确认和实现。
-每个 Workflow 的实现、schemas、fixtures 和测试都保留在自己的目录中。
-Calculation 可直接使用仓库 `.env` 中的用户 API key bootstrap 交换进程内短期 session，无需人工复制 access token。
-Calculation 当前默认 profile 是 `global_eligible`、完整的 25 个 reviewed LCIA identity，以及独立的 Climate change/GWP 默认展示类别 `6209b35f-9447-40b5-b68c-a1099e3674a0`；命令输出会披露默认值的采用情况。
-Calculation 的每个已实现 CLI 节点还会返回 workflow-local、可直接填值的 Markdown 回复模板，使用克制的状态 emoji 帮助 Agent 区分已提交、已完成、委托查询和远程结果未知等用户回复语义。
-Calculation CLI 的 help 和恢复动作使用自定位的绝对入口，复制执行不依赖客户端当前工作目录；README 仍提供仓库根目录和 workflow 目录两种便携写法。
-Release 先生成独立且不可变的 Release Intake，按精确版本补齐 LCIA Method 表征因子引用但 Materialization Intake 未携带的 Flow，再由 Package CLI 消费该 Intake；两个动作都返回 workflow-local 回复模板、结构化恢复动作和精确 artifact 路径，并明确本地准备与 Candidate build 均不构成发布授权。
-Release 的 Elementary Flow 共享缓存刷新默认在受管 Worker EC2 上执行只读 snapshot 导出，经同 project Supabase Storage 的一小时临时对象下载、完整校验和立即删除后原子安装；本地直连刷新只保留为显式 fallback。
-Release package validation 失败后会保留 non-candidate failed build，并可从精确 issue spool、Calculation graph、Materialization lineage 和 canonical references 生成不可变 exclusion impact report；影响图沿用 TIDAS 引用角色语义，`referenceToPrecedingDataSetVersion` 只保留为历史 lineage，不参与包内可达性或排除冲突。客户端 Agent 还会从该权威 JSON 生成并逐页验证包含完整剔除清单的 Excel 审核表。任何排除都必须先审阅完整影响集合并确认报告 hash，再生成新的 Package Plan 并重跑全部验证；修复精确上游版本始终是推荐动作，错误不得被降级或静默忽略。
-异步计算以 Worker Job ID 作为最低提交身份；Result Package 尚未生成时保持正常 `job_only` 状态，不误报远程结果未知。
-创建 ResultSet 未提供名称时，Calculation 会推荐 Asia/Shanghai `ResultSet-YYYYMMDD-HHmm` 并等待显式确认，不静默创建。
-
-在任何 Workflow 明确授权之前：
-
-- 不开始新的远程发布；
-- 不修改 Next、Worker、Database、Edge、CLI、tidas-tools 或其他仓库；
-- 不恢复旧 20-stage 代码作为默认实现。
-
-## 项目的四个 Workflow
+## 当前 Workflow 结构
 
 ```text
 workflows/
 ├── calculation/
-├── dataset-transformation/
 ├── result-materialization/
-└── release/
+├── release-candidate/
+├── dataset-transformation/
+└── publication/
 ```
 
-### 1. Calculation Workflow
-
-负责从“我要做一次计算”到“计算结果已经可靠地下载到本地”的完整过程。
-
-它包括：
-
-- 创建一个有名称的远程 ResultSet，或接入已有 ResultSet；
-- 从已有 Closure Check、计算任务、结果包或 Calculation Bundle 继续；
-- 向用户确认数据范围和 LCIA 方法集；
-- 启动并跟踪线上完整性验证；
-- 展示验证报告、阻塞项和可恢复动作；
-- 在有效完整性证据的基础上启动计算；
-- 跟踪计算任务并下载、校验 Calculation Bundle；
-- 把远程资源身份和本地产物关联到同一个本地工作上下文。
-
-完整性验证不是独立的顶层 Workflow。它是 Calculation Workflow 中可以单独进入、重试和复用的关键节点。
-
-详见 [Calculation Workflow](workflows/calculation/README.md)。
-
-### 2. Dataset Transformation Workflow
-
-负责从已有数据集或计算结果生成新的派生数据。
-
-它包括：
-
-- 选择精确的数据集、版本或计算产物；
-- 让 Agent 帮助用户表达变换目的、权重依据和字段填写意图；
-- 区分模型空间组合与结果空间聚合；
-- 形成可审查的变换草案；
-- 在所有语义问题解决后冻结确定性执行规格；
-- 通过确定性实现执行数值和文档变换；
-- 生成新的 Dataset Collection、LifecycleModel、Result Process 或其他明确产物；
-- 保存输入、权重、字段来源、验证结果和派生血缘。
-
-第一类重点案例是“选择若干数据集，按明确权重组合为一个新数据集，并声明 Process 或 LifecycleModel 字段如何填写”。
-
-详见 [Dataset Transformation Workflow](workflows/dataset-transformation/README.md)。
-
-### 3. Result Materialization Workflow
-
-负责把 Calculation Bundle 或派生结果确定性地组装为标准 LCA 数据集。
-
-它包括：
-
-- 依次选择精确 Process 范围、最终对象（Result Process 或 LifecycleModel），以及本次生成的 Result Process 内容层（LCI 或 LCI + LCIA）；
-- Result Process 只处理所选 roots；LifecycleModel 在一次动作中从 direct edges 派生依赖、冻结 Result Catalog 并生成最终 Model；
-- 逐条生成 Result Process，统一冻结 Result UUID/version Catalog；
-- 使用根 Unit Process、direct provider Result Processes 和精确 connections 逐条生成 resolved one-hop LifecycleModel；
-- 读取上一版 manifest 并分阶段求解 Result/Model dataset version；
-- 同一稳定 Result UUID lineage 下按 exact source revision 生成并引用独立 dataset versions；
-- 保持 calculation-time quantitative-reference signed pivot，并为旧 Bundle 使用已校验 exact source closure 的有界兼容；
-- 渲染精确 identity/version 引用；
-- 对大批量任务使用共享只读 Context、有界并发和逐条落盘，并通过薄 `nohup` Job 暴露内存、CPU、吞吐、ETA 和磁盘余量；
-- LifecycleModel 路线在同一个 staging collection 内完成 Result/Model 组装，验证后只进行一次原子提交；
-- 默认把 intake 和 materialization 写入 `.release/result-materialization/` 下由 Calculation、Bundle content hash 与冻结 materialization key 决定的内容寻址路径；完整一致的已有产物经验证后复用，残缺或漂移则 fail closed；
-- 验证 TIDAS schema、引用闭合、Result 数值一致性和 one-hop Model 重构一致性；one-hop 数值比较使用同 direction/unit 组内尺度与 `1e-10 + 1e-8 × groupScale` 冻结容差，超界差异继续 fail closed；
-- 输出 canonical dataset collection、dataset index 和 materialization manifest。
-- Release Workflow 已可从完整 LifecycleModel materialization 和匹配 intake 组装本地支持闭合，调用 `tidas-tools` 生成四个确定性 TIDAS/eILCD ZIP，并冻结未授权发布的 Release Candidate。
-
-LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 不是三个顶层 Workflow，而是同一个 Materialization Workflow 下共享身份、版本和引用约束的 recipe。LifecycleModel 本身不保存 LCI/LCIA 数值，只引用本次生成的精确 Result Process。
-
-详见 [Result Materialization Workflow](workflows/result-materialization/README.md)。
-
-### 4. Release Workflow
-
-负责把已经冻结并通过必要验证的数据产品组织为正式发布候选，并完成发布与独立回读。
-
-它包括：
-
-- 选择已经 materialize 并验证的 canonical dataset collection；
-- 决定包中包含哪些 dataset roots、result layers、closure 和 formats；
-- 生成可审查的 Package Plan 和 Release Candidate；
-- 对验证错误生成完整影响报告，让用户选择修复、确认完整集合排除或停止；
-- 执行 TIDAS/ILCD 验证、格式转换、语义 round-trip 和确定性打包；
-- 将人工决定绑定到精确 plan hash 和 target fingerprint；
-- 通过 actor-scoped 外部接口执行上传和发布；
-- 独立下载已发布产物并验证字节数、SHA-256 和终态。
-
-Packaging 不是独立的顶层 Workflow。它属于 Release Workflow 中发布之前的候选构建与验证阶段。
-
-详见 [Release Workflow](workflows/release/README.md)。
-
-## 四个 Workflow 如何组合
+当前默认主线是：
 
 ```text
 Calculation
-  ResultSet -> Closure Evidence -> Calculation Bundle
-                                      |
-                                      +-------------------+
-                                                          |
-Dataset Transformation                                    |
-  Dataset / Calculation Bundle -> Derived Dataset --------+
-                                                          |
-Result Materialization                                    |
-  Frozen result/model -> Canonical Dataset Collection ----+
-                                                          |
-Release                                                   |
-  Frozen inputs -> Package Plan -> Candidate -> Publish <-+
+  -> Result Materialization
+  -> Release Candidate
 ```
 
-它们没有一个共享的全局 stage number，也不要求每次从头执行。
+Release Candidate 完成后提供三个明确选择：
 
-每个 Workflow 都必须能够：
+```text
+Release Candidate
+  ├─ direct publish -> Publication
+  ├─ scope refinement -> dependency impact -> new Candidate -> Publication
+  └─ data refinement -> Dataset Transformation -> new Candidate
+```
 
-1. 识别用户给出的已有资源；
-2. 判断哪些证据仍然有效；
-3. 展示当前允许的动作和阻塞原因；
-4. 只执行用户授权的当前动作；
-5. 保存足够信息，使另一位人或 Agent 可以从该节点继续。
+Candidate、范围决定和变换产物都不可原地改写。任何改变 Candidate 内容的动作必须产生新 Candidate，并绑定父 Candidate 与决定或变换证据。
 
-## Workflow 不是纯脚本目录
+## 1. Calculation Workflow
 
-每个 `workflows/<name>/` 是一个完整的 Agent 工作包，至少包含：
+Calculation 负责从计算意图或已有远程资源继续工作，直到所需 Calculation Bundle 已可靠下载到本地。
 
-- `README.md`：面向用户的目标、路线、产物和待确认问题；
-- `AGENTS.md`：面向 Agent 的操作契约、权限边界、证据要求和完成条件；
-- 后续按实际需要添加的契约、模板、示例、验证器和执行代码。
+它负责：
 
-Workflow 的说明和边界先于实现。代码属于某个 Workflow，但 Workflow 不等于代码文件夹。
+- 创建或接入 ResultSet；
+- 确认 scope 和 LCIA 方法集；
+- 启动、跟踪 Closure Check 和计算任务；
+- 展示报告、阻塞项和可恢复动作；
+- 下载并校验 Calculation Bundle；
+- 绑定远程资源 identity 与本地产物证据。
 
-## 与其他仓库的解耦原则
+完整性验证属于 Calculation 内部的可恢复节点，不是独立顶层 Workflow。
 
-本项目允许调用其他系统已经提供的能力，但不修改它们：
+详见 [Calculation Workflow](workflows/calculation/README.md)。
 
-| 外部能力                     | 本项目如何使用                                           |
-| ---------------------------- | -------------------------------------------------------- |
-| ResultSet、Closure、计算任务 | 通过现有 actor-scoped API 或命令调用                     |
-| Worker 计算                  | 只提交任务、查询状态和读取产物，不实现或修改 Worker      |
-| TIDAS/ILCD 验证与转换        | 调用已有可执行工具，不导入其他仓库源码                   |
-| Database / Edge              | Edge 承担控制面；数据库承担受控批量查询和 staging 数据面 |
-| Object Storage               | 通过受控 S3 数据面传输大型 immutable artifacts           |
-| 公共发布                     | 通过已有 actor-scoped 发布入口，不使用 service-role      |
+## 2. Result Materialization Workflow
 
-数据库/S3 数据面 credential 只能存在于 ignored `.env` 或受保护环境中；查询必须参数化、有界，CLI 不输出连接串、secret、内部 locator 或 signed URL。Canonical 写入仍必须经过明确 Workflow 契约、用户授权以及 staging → validation → promotion 边界。
+Result Materialization 负责把 Calculation Bundle 或其他已经冻结并验证的结果，确定性地组装为标准 LCA 数据集。
 
-如果某项所需能力当前没有稳定入口，对应 Workflow 必须报告 `capability_unavailable`，而不是悄悄修改其他仓库或绕过权限边界。
+它负责：
 
-## 人与 Agent 的分工
+- 冻结 scope、最终对象和 Result Process 内容层；
+- 生成 LCI 或 LCI + LCIA Result Process；
+- 生成引用精确 Result Process 的 resolved one-hop LifecycleModel；
+- 求解并冻结 identity/version；
+- 验证 TIDAS schema、引用闭合、数值一致性和 Model 重构；
+- 输出 canonical dataset collection、dataset index 和 materialization manifest。
 
-Agent 可以：
+LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 是本 Workflow 下的 recipe，不是额外顶层 Workflow。
 
-- 识别入口和已有产物；
-- 整理范围、候选路线和缺失信息；
-- 生成 Transformation 或 Package 草案；
-- 调用确定性工具；
-- 汇总验证证据和下一步选择。
+详见 [Result Materialization Workflow](workflows/result-materialization/README.md)。
 
-Agent 不能替代用户决定：
+## 3. Release Candidate Workflow
 
-- ResultSet 名称和数据范围；
-- 是否启动线上完整性验证或计算；
-- 加权依据、功能单位和重要字段语义；
-- Release Candidate 的精确内容；
-- 正式发布授权。
+Release Candidate 负责把已经 materialize 并验证的数据组织为不可变、可审查、尚未授权发布的 Candidate。
 
-数值计算、格式验证、hash 校验和打包必须由确定性实现完成，不能由语言模型直接生成结果数字。
+它负责：
 
-## 已确认的结构
+- 从冻结上游准备 Release Intake；
+- 补齐独立分发所需的精确支持数据；
+- 冻结 Package Plan；
+- 执行 TIDAS/eILCD 验证、转换、语义 round-trip 和确定性打包；
+- 对失败构建生成完整影响报告和人工审核视图；
+- 将范围排除绑定到精确影响报告 hash；
+- 通过新的 Package Plan 重跑全部验证；
+- 冻结 `publicationAuthorized=false` 的 Release Candidate。
 
-1. 顶层保留 `calculation`、`dataset-transformation`、`result-materialization`、`release` 四个 Workflow。
-2. 完整性验证属于 Calculation Workflow，但允许从 Closure Check 节点单独进入。
-3. LCI Result Process、LCI + LCIA Result Process 和 LifecycleModel 属于 Result Materialization 下的 recipe，不拆成三个顶层 Workflow。
-4. Packaging 属于 Release Workflow，不作为第五个顶层 Workflow。
-5. Materialization 中源 Unit Process、LifecycleModel 和 Result Process 保持不同身份，不把 LCI/LCIA 写回原始 Unit Process。
-6. Release 只消费已经 materialize 的 canonical datasets，不在打包过程中临时生成 Process/Model。
-7. 其他仓库保持不变；缺少能力时本项目明确停止并报告，而不是跨仓补实现。
-8. LifecycleModel 首版采用 resolved one-hop aggregated-background：根 instance 引用 `U(P)`，每条有效 direct provider edge 引用对应聚合 `R(Q)`，resulting Process 引用 `R(P)`。
-9. 同一 Result UUID lineage 可包含多个 exact source Process revisions；每个 revision 使用独立 dataset version，Model 引用 calculation axis 对应的精确版本。
-10. Quantitative reference 保持 Worker 的 raw direction/amount 与 signed normalization pivot；旧 Bundle 只从本地已校验 exact source closure 回推，不访问 mutable 远端状态。
-11. Release validation error 永远阻断当前 Candidate；排除必须绑定完整反向影响闭包和 exact report hash，并通过新的 Package Plan 重新执行完整验证。
+Packaging 和 Candidate qualification 都属于本 Workflow。生成 ZIP 不等于 Candidate 已通过资格验证，Candidate 构建成功也不等于已经获得发布授权。
 
-## 仍需确认的细节
+Candidate 完成后必须展示三个后续方向：
 
-1. Dataset Transformation 的默认产物是否只保留在本地工作区，不直接写回线上 authoring tables。
-2. 加权组合默认优先生成 LifecycleModel 或 Derived Result，还是每次都由用户选择输出类型。
-3. Release 首版 formats、package recipes、subset 限制和本地预览边界。
+1. 原 Candidate 直接进入 Publication；
+2. 选择依赖闭合的子范围，生成并验证新的 Candidate；
+3. 选择精确 Candidate 数据进入 Dataset Transformation，再生成新 Candidate。
 
-## 开发状态
+按 Unit Process、Result 或 Both 选择已经独立闭合的 Candidate component，可以留到 Publication Plan；任何 dataset-level 的排除都会改变内容和 hash，必须先回到本 Workflow 生成新 Candidate。
 
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#51`
-- 当前分支：`feature/issue-51`
-- 当前阶段：优化大型 Release 包的流式 artifact evidence 收集
-- 运行时状态：Calculation 已拥有 ResultSet、Closure/计算提交、任务查询、Bundle 数据面和 Worker 日志委托；Result Materialization 已拥有本地 Result Process/LifecycleModel 生成、验证、薄后台 Job 入口，以及 canonical intake/materialization artifact 路径
+详见 [Release Candidate Workflow](workflows/release-candidate/README.md)。
+
+## 4. Dataset Transformation Workflow
+
+Dataset Transformation 是 Candidate 完成后的可选再加工入口。它消费 Candidate 中精确选择且经过 hash 验证的数据，产生带完整父 Candidate 与变换血缘的新数据，再进入 Candidate 构建。
+
+当前只确认以下边界：
+
+- 不原地修改 Candidate；
+- 输入必须绑定父 Candidate hash 和精确 dataset identity/version/hash；
+- 加工规则必须在后续设计中先形成可审查草案，再冻结为确定性规格；
+- 输出必须经过必要验证并生成新 Candidate；
+- 如果变换使原计算结果失效，必须返回 Calculation/Result Materialization，不能复用旧 Result evidence。
+
+具体支持的修改、聚合规则、字段策略、验证和执行入口尚未设计，本阶段不预设。
+
+详见 [Dataset Transformation Workflow](workflows/dataset-transformation/README.md)。
+
+## 5. Publication Workflow
+
+Publication 负责消费不可变 Release Candidate，在精确选择和授权后改变 TianGong LCA 平台上的发布状态，并独立确认终态。
+
+当前确认的发布方向是：
+
+- 用户选择发布 Unit Process、Result 或 Both；
+- 平台已存在精确 UUID + Version 的数据时，发布动作改变其生命周期状态；
+- 平台不存在该主键时，发布动作写入精确 Candidate 数据并进入发布态；
+- 发布计划必须区分用户选择的 roots 与保证引用完整性所需的有效发布集合；
+- 精确状态码、事务、写入 adapter、审批 artifact 和恢复规则留待后续设计。
+
+Publication 不得在执行阶段临时修改 Candidate 内容、删除数据集或补猜依赖。内容变化必须先返回 Release Candidate 或 Dataset Transformation 生成新 Candidate。
+
+详见 [Publication Workflow](workflows/publication/README.md)。
+
+## Candidate 的三条后续路径
+
+### 直接发布
+
+Publication 以原 Candidate 为不可变输入。用户仍需确认发布类型、精确 target 和后续定义的 Publish Plan。
+
+### 选择性发布
+
+如果只选择已经独立闭合的 Candidate component，Publication Plan 可以选择该 component。如果选择或剔除包内具体数据集，则必须：
+
+```text
+Candidate
+  -> scope selection
+  -> dependency and reverse-impact analysis
+  -> scope decision
+  -> new Package Plan
+  -> full validation
+  -> new Candidate
+```
+
+剔除集合必须包含所有因此失去完整性的关联数据。原 Candidate、失败构建和上游 materialization 均保持不变。
+
+### 再加工
+
+Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它。加工完成后根据结果有效性返回 Release Candidate，或返回 Calculation/Result Materialization 重新产生结果证据。
+
+## 共享边界
+
+- Workflow 可以从已有精确资源或 artifact 继续，不要求从第一步重跑。
+- 远程副作用、耗时计算、Candidate 范围、变换语义和正式发布都需要明确用户决定。
+- 数值计算、格式验证、hash 和打包必须由确定性实现完成，不能由语言模型直接生成。
+- 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
+- 其他系统能力不存在时报告 `capability_unavailable`，不扩大修改范围。
+- Candidate 构建与 Publication 是不同权限边界；本地验证成功不能替代远程发布授权或独立回读。
+
+## 当前实施状态
+
+- Calculation 已实现 workflow-local ResultSet、Closure、计算任务、Bundle 数据面和 Worker 日志委托入口。
+- Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
+- Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
+- Dataset Transformation 当前只有高层边界，没有已确认的加工规则或执行入口。
+- Publication 当前只有高层边界，没有已确认的状态码、写入契约或执行入口。

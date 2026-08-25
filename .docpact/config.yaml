@@ -1,6 +1,6 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-24"
+lastReviewedAt: "2026-08-25"
 lastReviewedCommit: "ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a"
 
 catalog:
@@ -50,10 +50,15 @@ ownership:
         include:
           - workflows/result-materialization/**
       ownerRepo: release
-    - id: release-publication-workflow
+    - id: release-candidate-workflow
       paths:
         include:
-          - workflows/release/**
+          - workflows/release-candidate/**
+      ownerRepo: release
+    - id: publication-workflow
+      paths:
+        include:
+          - workflows/publication/**
       ownerRepo: release
 
 coverage:
@@ -97,10 +102,15 @@ routing:
         - workflows/AGENTS.md
         - workflows/result-materialization/**
         - README.md
-    release-workflow:
+    release-candidate-workflow:
       paths:
         - workflows/AGENTS.md
-        - workflows/release/**
+        - workflows/release-candidate/**
+        - README.md
+    publication-workflow:
+      paths:
+        - workflows/AGENTS.md
+        - workflows/publication/**
         - README.md
     validation-and-automation:
       paths:
@@ -226,7 +236,7 @@ rules:
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Transformation intent, frozen execution, field declarations, deterministic validation, and output boundaries must stay coherent.
+    reason: Candidate-derived transformation boundaries, deferred design status, and return paths must stay coherent.
   - id: result-materialization-workflow-contract
     scope: repo
     repo: release
@@ -241,20 +251,34 @@ rules:
       - path: README.md
         mode: review_or_update
     reason: Result Process, LifecycleModel, identity/version planning, canonical dataset output, and validation behavior must stay coherent.
-  - id: release-publication-workflow-contract
+  - id: release-candidate-workflow-contract
     scope: repo
     repo: release
     triggers:
-      - path: workflows/release/**
-        kind: release-workflow
+      - path: workflows/release-candidate/**
+        kind: release-candidate-workflow
     requiredDocs:
-      - path: workflows/release/AGENTS.md
+      - path: workflows/release-candidate/AGENTS.md
         mode: review_or_update
-      - path: workflows/release/README.md
+      - path: workflows/release-candidate/README.md
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Package, candidate, approval, publication, and independent readback behavior must stay coherent.
+    reason: Candidate intake, package planning, validation, scope refinement, and immutable Candidate behavior must stay coherent.
+  - id: publication-workflow-contract
+    scope: repo
+    repo: release
+    triggers:
+      - path: workflows/publication/**
+        kind: publication-workflow
+    requiredDocs:
+      - path: workflows/publication/AGENTS.md
+        mode: review_or_update
+      - path: workflows/publication/README.md
+        mode: review_or_update
+      - path: README.md
+        mode: review_or_update
+    reason: Publication remains a distinct, explicitly authorized remote mutation boundary while detailed rules are deferred.
   - id: release-validation-contract
     scope: repo
     repo: release

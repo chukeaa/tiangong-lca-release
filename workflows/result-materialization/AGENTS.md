@@ -37,7 +37,7 @@ related:
 - 调用确定性 identity、version、materializer 和 validator 实现。
 - 先冻结 Result Catalog，再使用精确 provider Result references 组合 LifecycleModel。
 - 保存 dataset collection、manifest、报告和血缘。
-- 只把通过验证的 canonical dataset collection 交给 Release Workflow。
+- 只把通过验证的 canonical dataset collection 交给 Release Candidate Workflow。
 - Manifest 中每个 dataset 的 exact `sourceProcess`、`processIndex`、role 和 materializationRole 必须足以让 Release 对 validation failure 做反向影响分析；不得仅靠 UUID 或文件名猜测派生关系。
 - Worker Calculation Bundle v2 的 content hash 必须在原始 canonical manifest bytes 上移除顶层 `bundleContentHash` 后验证；不得先把任意 JSON number 转成 JavaScript `number` 再重序列化，因为超出安全整数范围时会改变证据字节。
 - 正常运行必须使用 `design/local-artifact-path-convention.md` 定义的内容寻址默认路径；路径只用于导航，`materialization-key.json`、manifest、精确 identity/version 和 SHA-256 才是权威证据。

@@ -652,7 +652,7 @@ test("intake, Result Catalog, and resolved one-hop Model complete locally", asyn
   assert.ok(completedJob.resources.rssBytes > 0);
   assert.ok(completedJob.resources.heapLimitBytes > 0);
   assert.ok(completedJob.resources.elapsedSeconds >= 0);
-  assert.match(completedJob.nextActions[0], /release\/cli\.mjs/);
+  assert.match(completedJob.nextActions[0], /release-candidate\/cli\.mjs/);
   assert.match(completedJob.nextActions[0], /intake prepare/);
   assert.match(completedJob.nextActions[0], /--materialization/);
   assert.match(completedJob.nextActions[0], /--source-intake/);

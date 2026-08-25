@@ -1,4 +1,4 @@
-const ROOT = "workflows/release/reply-templates";
+const ROOT = "workflows/release-candidate/reply-templates";
 
 const templates = Object.freeze({
   "cache status": [
@@ -79,6 +79,7 @@ const templates = Object.freeze({
       "packageSetHash",
       "publicationAuthorized",
       "artifacts",
+      "nextDecision",
       "nextActions",
     ],
   ],
