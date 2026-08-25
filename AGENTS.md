@@ -27,8 +27,8 @@ checkPaths:
   - .node-version
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 47ff8247e2f22b0e45f3032baa6fac9ad1847d8f
-lastReviewedNote: "Pinned the pure-JavaScript repository to one Node 24.19.0 and pnpm 11.23.0 workspace, upgraded Result Materialization to the released TIDAS SDK 0.2.0, and retained all Workflow and security boundaries."
+lastReviewedCommit: 62b9b8fe6207249a56da3ba30a390e5241503fef
+lastReviewedNote: "Pinned the pure-JavaScript repository to one Node 24.19.0 and pnpm 11.23.0 workspace, made CI/runtime setup and graph auditing portable, upgraded Result Materialization to TIDAS SDK 0.2.0, and retained all Workflow and security boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -42,9 +42,9 @@ related:
 
 ## 当前实施基线
 
-旧 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。不得恢复旧 20-stage runtime、默认兼容层或长期 legacy 目录。
+旧业务 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。根 `test/` 现在只拥有仓库级工具链、CI 和生产依赖图契约；不得在其中恢复旧 20-stage runtime、业务测试、默认兼容层或长期 legacy 目录。
 
-后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
+后续工作一次只优化一个根 Workflow。新增业务实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS；只有跨 Workflow 的仓库工具链/自动化 contract test 放在根 `test/`。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
 
 ## 加载顺序
 
@@ -114,6 +114,7 @@ related:
 - Node：精确 `24.19.0`
 - package manager：精确 `pnpm@11.23.0`，五个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`
 - 运行时：纯 JavaScript/MJS；不得为了工具链命名对齐引入 TypeScript、compiler 或 codegen
+- CI：使用不可变提交的 `pnpm/setup` 一次安装精确 Node/pnpm，随后显式执行 frozen install；生产图审计只通过当前 pnpm JavaScript entry 和 `shell:false` 运行
 - branch model：M1
 - daily trunk / routine PR base：`main`
 - 当前工作分支：`feature/issue-57`
