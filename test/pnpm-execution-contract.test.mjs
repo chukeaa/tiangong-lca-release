@@ -8,10 +8,12 @@ const GRAPH_AUDIT = fileURLToPath(
   new URL("./production-dependency-graph.test.mjs", import.meta.url),
 );
 
-test("the graph audit executes the current pnpm JavaScript entry without a shell", () => {
+test("the graph audit executes the resolved pnpm entry without a shell", () => {
   const source = readFileSync(GRAPH_AUDIT, "utf8");
   assert.match(source, /process\.env\.npm_execpath/);
-  assert.match(source, /spawnSync\(\s*process\.execPath,/s);
+  assert.match(source, /resolvePnpmInvocation\(process\.env\.npm_execpath\)/);
+  assert.match(source, /spawnSync\(\s*PNPM_INVOCATION\.command,/s);
+  assert.match(source, /\.\.\.PNPM_INVOCATION\.prefixArgs/);
   assert.match(source, /shell:\s*false/);
   assert.doesNotMatch(source, /spawnSync\(\s*["'`]pnpm(?:\.cmd)?["'`]/s);
 });

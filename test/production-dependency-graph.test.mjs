@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { resolvePnpmInvocation } from "./pnpm-invocation.mjs";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const EXPECTED_WORKSPACE_PACKAGES = [
@@ -16,13 +17,13 @@ const RETIRED_PRODUCTION_PACKAGES = new Set([
   "ts-to-zod",
   "@typescript/vfs",
 ]);
-const PNPM_ENTRY = resolvePnpmEntry(process.env.npm_execpath);
+const PNPM_INVOCATION = resolvePnpmInvocation(process.env.npm_execpath);
 
 test("the installed production graph uses SDK 0.2.0 without retired compiler/codegen", () => {
   const result = spawnSync(
-    process.execPath,
+    PNPM_INVOCATION.command,
     [
-      PNPM_ENTRY,
+      ...PNPM_INVOCATION.prefixArgs,
       "list",
       "--recursive",
       "--prod",
@@ -61,22 +62,6 @@ test("the installed production graph uses SDK 0.2.0 without retired compiler/cod
   assert.deepEqual(sdkVersions, ["0.2.0"]);
   assert.deepEqual(retired, []);
 });
-
-function resolvePnpmEntry(value) {
-  const entry = value?.trim();
-  if (!entry) {
-    throw new Error(
-      "pnpm execution contract is unavailable: npm_execpath is missing",
-    );
-  }
-  const basename = entry.replaceAll("\\", "/").split("/").at(-1)?.toLowerCase();
-  if (!["pnpm.cjs", "pnpm.js", "pnpm.mjs"].includes(basename)) {
-    throw new Error(
-      `pnpm execution contract is unavailable: npm_execpath does not identify a pnpm JavaScript entry (${basename ?? "unknown"})`,
-    );
-  }
-  return entry;
-}
 
 function collectDependencies(node, collected) {
   for (const [name, dependency] of Object.entries(node.dependencies ?? {})) {
