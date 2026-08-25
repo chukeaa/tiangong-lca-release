@@ -19,6 +19,7 @@ test("the graph audit executes the current pnpm JavaScript entry without a shell
 test("the graph audit fails closed outside a pnpm-run contract", () => {
   const environment = { ...process.env };
   delete environment.npm_execpath;
+  delete environment.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, ["--test", GRAPH_AUDIT], {
     encoding: "utf8",
     env: environment,
