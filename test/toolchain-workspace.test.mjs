@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { resolvePnpmInvocation } from "./pnpm-invocation.mjs";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const WORKSPACE_PACKAGES = [
@@ -12,6 +14,7 @@ const WORKSPACE_PACKAGES = [
   "workflows/publication",
 ];
 const PACKAGE_MANIFESTS = [".", ...WORKSPACE_PACKAGES];
+const PNPM_INVOCATION = resolvePnpmInvocation(process.env.npm_execpath);
 
 test("the repository pins one exact Node and pnpm toolchain", () => {
   const rootManifest = readJson("package.json");
@@ -27,6 +30,31 @@ test("the repository pins one exact Node and pnpm toolchain", () => {
       `${relativePath} must reject every other Node release`,
     );
   }
+
+  const result = spawnSync(
+    PNPM_INVOCATION.command,
+    [
+      ...PNPM_INVOCATION.prefixArgs,
+      "config",
+      "list",
+      "--location=project",
+      "--json",
+    ],
+    {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      shell: false,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const effectiveConfig = JSON.parse(result.stdout);
+  assert.equal(effectiveConfig.engineStrict, true);
+  assert.equal(effectiveConfig.strictPeerDependencies, true);
+  assert.equal(effectiveConfig.sharedWorkspaceLockfile, true);
+  assert.equal(effectiveConfig.savePrefix, "");
+  assert.equal(effectiveConfig.pmOnFail, "error");
+  assert.equal(existsSync(new URL("../.npmrc", import.meta.url)), false);
 });
 
 test("the five install trees are one pnpm workspace with one lockfile", () => {
