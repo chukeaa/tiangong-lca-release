@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "1a9c21f4e66b4a3a8e949dde88404cc9fc562e98"
+lastReviewedAt: "2026-08-26"
+lastReviewedCommit: "9e913af4e3811160beb279cc9fb6309bb6fb5f8e"
 
 catalog:
   repos:
@@ -236,7 +236,7 @@ rules:
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Candidate-derived transformation boundaries, deferred design status, and return paths must stay coherent.
+    reason: Candidate-bound DSL, semantic decision handling, deterministic transformation, validation, and return paths must stay coherent.
   - id: result-materialization-workflow-contract
     scope: repo
     repo: release

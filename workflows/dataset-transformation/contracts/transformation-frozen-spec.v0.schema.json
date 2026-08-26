@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/transformation-frozen-spec.v0.schema.json",
+  "title": "Dataset Transformation Frozen Spec v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "operation",
+    "output",
+    "policies",
+    "resolvedFields",
+    "decisions",
+    "resultEvidence",
+    "lineage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.dataset-transformation-frozen-spec.v0"
+    },
+    "status": { "const": "frozen" },
+    "operation": {
+      "type": "object",
+      "required": ["type", "candidate", "inputs", "weighting"],
+      "properties": {
+        "type": { "const": "process.weighted-aggregate.v0" },
+        "candidate": { "type": "object" },
+        "inputs": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "object" }
+        },
+        "weighting": {
+          "type": "object",
+          "required": ["mode", "status", "values", "rawTotal", "unit"],
+          "properties": {
+            "mode": { "enum": ["explicit", "annual-production"] },
+            "status": { "const": "resolved" },
+            "values": { "type": "array", "minItems": 2 },
+            "rawTotal": { "type": "number", "exclusiveMinimum": 0 },
+            "unit": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "output": { "type": "object" },
+    "policies": { "type": "object" },
+    "resolvedFields": { "type": "object" },
+    "decisions": { "type": "array" },
+    "resultEvidence": {
+      "type": "object",
+      "required": ["disposition", "reason", "nextWorkflow"],
+      "properties": {
+        "disposition": { "const": "invalidated" },
+        "reason": { "type": "string" },
+        "nextWorkflow": { "const": "calculation" }
+      }
+    },
+    "lineage": { "type": "object" }
+  }
+}

@@ -7,35 +7,93 @@ authoritative: true
 owner: release
 language: zh-CN
 whenToUse:
-  - 当用户需要基于 Release Candidate 中的精确数据进行再加工时
+  - 当用户需要基于 Release Candidate 中的精确 Process 执行受控加权聚合时
+  - 当需要恢复 Transformation inspect、decision、freeze 或 execute 节点时
 whenToUpdate:
-  - 当支持的加工机制、输入输出契约、验证或返回路径得到确认时
+  - 当支持的加工机制、DSL、冲突策略、验证或返回路径变化时
 checkPaths:
   - workflows/dataset-transformation/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
-lastReviewedNote: "Positioned Dataset Transformation as a deferred Candidate-derived refinement loop without predefining processing rules."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Implemented DSL v0 conflict-resolution and deterministic weighted Unit Process aggregation with real three-Process evidence."
 related:
   - AGENTS.md
+  - dsl-v0.md
   - ../release-candidate/README.md
   - ../../README.md
 ---
 
 # Dataset Transformation Workflow
 
-## 当前定位
+## 当前能力
 
-Dataset Transformation 是 Release Candidate 完成后的可选再加工入口。它用于从 Candidate 中选择精确 Process、LifecycleModel、Result 或其支持数据，经过后续确认的规则生成新的 canonical data，再构建新 Candidate。
+Dataset Transformation 是 Release Candidate 完成后的可选再加工入口。当前 DSL v0 已实现 Candidate-bound Unit Process 加权聚合：
 
 ```text
-Release Candidate
-  -> exact dataset selection
-  -> Dataset Transformation
-  -> transformed canonical data + lineage
-  -> Release Candidate
+Validated Candidate v1/v2
+  -> Draft DSL
+  -> exact input inspection
+  -> conflict report / needs_decision
+  -> Agent + user decisions
+  -> Frozen Spec
+  -> deterministic weighted Process
+  -> validation + lineage + handoff
+  -> Calculation -> Result Materialization -> new Candidate
 ```
 
-如果变换使原有计算或 Result evidence 失效，返回路径改为：
+支持：
+
+- 两个或更多精确 Unit Process；
+- 显式正权重；
+- `annualSupplyOrProductionVolume` 年产量权重和有 evidence 的逐项 override；
+- 完整业务字段族比较；
+- `take-from`、`rewrite`、`drop` 和年产量 `sum-resolved` 决定；
+- 定量参考归一化后的 exchange 加权；
+- 新 identity、review reset、lineage、execution receipt 和后续 Workflow handoff；
+- Release Candidate v1/v2 读取，便于已有验证 Candidate 与新 Candidate 共同使用。
+
+DSL 详细语义见 [Dataset Transformation DSL v0](dsl-v0.md)。
+
+## 核心原则
+
+业务字段不同、年产量缺失、取值不明确或当前 operation 无法表达时，状态是 `needs_decision`，不是失败。Agent 必须展示精确 source values、可选策略和影响；用户决定写回 Draft DSL 后重新 inspect。
+
+错误只保留给 malformed contract、Candidate/input drift、运行时故障或确定性生成结果未通过检查。这些异常从原节点诊断和恢复，不被伪装成业务冲突。
+
+## 产物
+
+| 节点           | Artifact                                                                                    | 可变性                         |
+| -------------- | ------------------------------------------------------------------------------------------- | ------------------------------ |
+| Agent/用户协商 | Draft DSL JSON                                                                              | 可修改；修改后必须重新 inspect |
+| inspect        | `transformation-analysis.json`、`conflict-report.json`                                      | 绑定 Draft/Candidate hash      |
+| freeze         | `transformation-frozen-spec.json`                                                           | 不可原地修改                   |
+| execute        | transformed Process、`transformation-execution-receipt.json`、`transformation-handoff.json` | 不可原地修改                   |
+
+大型 Candidate 和 Process bytes 继续保存在 ignored `.release/`；CLI stdout 只返回有界摘要和 artifact 路径。
+
+## 状态模型
+
+```text
+analyzing
+  -> needs_decision -> analyzing
+  -> ready -> frozen -> executing -> validating -> completed
+```
+
+`needs_decision` 可以反复出现：一个决定可能暴露新的兼容性或字段问题。不存在业务语义上的 terminal `failed` 状态。
+
+## 数值执行
+
+对输入 `i`，先用其精确参考 exchange amount `rᵢ` 归一化，再应用 normalized weight `wᵢ`：
+
+```text
+output(g) = Σᵢ wᵢ × input(i, g) / rᵢ
+```
+
+exchange 按 Flow UUID/version、direction、location、function type 分组。输出参考 amount 必须为 1。旧 uncertainty 与 allocation 不会被误当作聚合后的统计结论，必须按 v0 policy 重置。
+
+## Result evidence 与返回路径
+
+v0 生成新的 Unit Process 定量语义，因此父 Candidate 中已有 Result Process/LifecycleModel evidence 一律标记 `invalidated`。完成并不表示已经形成 Candidate，也不表示发布；handoff 固定为：
 
 ```text
 Dataset Transformation
@@ -44,36 +102,35 @@ Dataset Transformation
   -> Release Candidate
 ```
 
-## 已确认边界
+父 Candidate 不被覆盖。新 Candidate 必须绑定 Transformation Frozen Spec、Execution Receipt 和新的计算/物化证据。
 
-- 原 Candidate 不可修改；
-- 输入必须绑定父 Candidate hash 和精确 dataset identity/version/hash；
-- 输出必须保存父 Candidate、选择范围和变换血缘；
-- 输出必须经过与其语义影响匹配的确定性验证；
-- 输出进入新的 Candidate，不替换或覆盖父 Candidate；
-- 是否需要重新 Calculation/Result Materialization 必须由变换对模型和结果证据的影响决定。
+## CLI
 
-## 尚未设计
+```bash
+node workflows/dataset-transformation/cli.mjs dsl inspect \
+  --candidate <candidate-dir> --dsl <draft.json> --out-dir <analysis-dir> --json
 
-本阶段不定义：
+node workflows/dataset-transformation/cli.mjs dsl freeze \
+  --candidate <candidate-dir> --dsl <draft.json> \
+  --analysis-dir <analysis-dir> --out-dir <frozen-dir> --json
 
-- 支持哪些 Process/LifecycleModel 修改；
-- 支持哪些聚合或权重规则；
-- 字段继承、冲突和缺失策略；
-- Transformation Draft/Frozen Spec 的最终 schema；
-- 数值执行器和 validator；
-- workflow-local CLI；
-- 哪些变换可以安全复用既有 Result evidence。
+node workflows/dataset-transformation/cli.mjs transform execute \
+  --candidate <candidate-dir> --spec-dir <frozen-dir> \
+  --out-dir <execution-dir> --json
+```
 
-这些内容需要在后续单独跟踪的设计与实现任务中确认。在此之前，本 Workflow 不提供可执行变换能力。
+## 验证与示例
 
-## 预期产物边界
+自动测试覆盖 business conflict、三 Process 归一化加权、年产量缺失/sentinel 与 evidenced override、Candidate drift、CLI 有界输出和回复模板。
 
-后续至少需要形成：
+真实 Candidate 试验见 [三个相近 Process 的聚合示例](examples/three-process-electricity/README.md)。该试验完成 runtime checks、TIDAS JSON validation、eILCD projection/validation 和 semantic round-trip。
 
-- 绑定父 Candidate 的 Transformation Intake；
-- 可审查的变换需求和未决问题；
-- 冻结后的确定性变换规格；
-- transformed canonical datasets；
-- validation 和 lineage evidence；
-- 返回 Release Candidate 或 Calculation/Result Materialization 的明确判断。
+## 暂不支持
+
+- LifecycleModel 或 Result Process 聚合执行；
+- reference Flow mapping 和单位换算；
+- 任意表达式、脚本或 JSON patch；
+- 通用 uncertainty 合并；
+- 远程 authoring、Candidate 构建或 Publication side effect。
+
+这些能力需要新的 operation/version 和对应真实证据，不能通过扩大 v0 隐式语义加入。
