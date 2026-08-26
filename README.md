@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
-lastReviewedNote: "Completed Candidate-bound Publication planning, approval, resumable platform execution, and independent readback while retaining Dataset Transformation as a separate refinement loop."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: fc678857fd28aa7039e7c5d1e575a97aeff78d91
+lastReviewedNote: "Reviewed after making pnpm-workspace.yaml the effective project-policy source; all five Workflow boundaries, Candidate routes, and implementation status remain unchanged."
 related:
   - AGENTS.md
   - docs/architecture.md

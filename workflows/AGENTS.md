@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
-lastReviewedNote: "Kept all Workflow boundaries intact while moving their JavaScript packages to one exact Node/pnpm workspace and one lockfile."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: fc678857fd28aa7039e7c5d1e575a97aeff78d91
+lastReviewedNote: "Reviewed the effective pnpm project-policy correction and confirmed that all shared Workflow evidence, permission, recovery, and one-workspace boundaries remain unchanged."
 related:
   - ../AGENTS.md
   - ../README.md

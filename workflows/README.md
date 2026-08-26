@@ -12,9 +12,9 @@ whenToUpdate:
   - 当顶层 Workflow 新增、删除、重命名或重新划分时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
-lastReviewedNote: "Reviewed the workflow index after completing Candidate-bound Publication execution and independent readback."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: fc678857fd28aa7039e7c5d1e575a97aeff78d91
+lastReviewedNote: "Reviewed the Workflow index after the effective pnpm project-policy correction; the five Workflow routes and outputs remain unchanged."
 related:
   - ../README.md
   - AGENTS.md
