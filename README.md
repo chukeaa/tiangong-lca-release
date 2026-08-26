@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Completed Candidate-bound Publication planning, approval, resumable platform execution, and independent readback while retaining Dataset Transformation as a separate refinement loop."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Implemented Dataset Transformation DSL v0, semantic decision continuation, and weighted Unit Process execution with a Calculation return path."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -125,17 +125,11 @@ Release Candidate v2 额外冻结 `publication-catalog.json`，让 Publication �
 
 ## 4. Dataset Transformation Workflow
 
-Dataset Transformation 是 Candidate 完成后的可选再加工入口。它消费 Candidate 中精确选择且经过 hash 验证的数据，产生带完整父 Candidate 与变换血缘的新数据，再进入 Candidate 构建。
+Dataset Transformation 是 Candidate 完成后的可选再加工入口。当前 DSL v0 支持从 Candidate v1/v2 选择精确 Unit Process，以显式权重或 `annualSupplyOrProductionVolume` 证据形成加权聚合。
 
-当前只确认以下边界：
+Workflow 先生成完整业务字段冲突报告。字段差异、年产量缺失或取值不明确进入 `needs_decision`，由 Agent 提出策略并把用户决定写回 DSL；它们不是失败。决定完整后冻结 Candidate/dataset hashes、weights、字段值和 metadata policy，再由确定性执行器归一化参考 amount、聚合 exchanges、生成新 identity、重置 review，并输出 validation receipt 和 lineage。
 
-- 不原地修改 Candidate；
-- 输入必须绑定父 Candidate hash 和精确 dataset identity/version/hash；
-- 加工规则必须在后续设计中先形成可审查草案，再冻结为确定性规格；
-- 输出必须经过必要验证并生成新 Candidate；
-- 如果变换使原计算结果失效，必须返回 Calculation/Result Materialization，不能复用旧 Result evidence。
-
-具体支持的修改、聚合规则、字段策略、验证和执行入口尚未设计，本阶段不预设。
+加权 Unit Process 改变定量语义，因此旧 Result evidence 明确失效，完成后返回 `Calculation -> Result Materialization -> Release Candidate`。父 Candidate 不被覆盖，Transformation 也不产生发布副作用。LifecycleModel、Result Process、unit mapping 和通用表达式留给后续 operation/version。
 
 详见 [Dataset Transformation Workflow](workflows/dataset-transformation/README.md)。
 
@@ -207,5 +201,5 @@ Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它�
 - Calculation 已实现 workflow-local ResultSet、Closure、计算任务、Bundle 数据面和 Worker 日志委托入口。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
-- Dataset Transformation 当前只有高层边界，没有已确认的加工规则或执行入口。
+- Dataset Transformation 已实现 DSL v0、Candidate v1/v2 精确读取、业务字段冲突决策、显式/年产量权重、加权 Unit Process、验证、CLI、schemas、回复模板和真实三 Process 试验。
 - Publication 已实现 Candidate v2 catalog、范围解析、精确 payload、目标检查、hash-bound Approval、可恢复远程发布、独立回读、严格 schemas、CLI、回复模板和 fail-closed 测试；当前执行 adapter 支持平台发布状态码 `100`。

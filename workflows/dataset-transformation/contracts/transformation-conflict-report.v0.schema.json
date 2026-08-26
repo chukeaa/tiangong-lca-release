@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/transformation-conflict-report.v0.schema.json",
+  "title": "Dataset Transformation Conflict Report v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "transformationDraftSha256",
+    "candidate",
+    "conflictCount",
+    "unresolvedCount",
+    "unresolvedConflictIds",
+    "conflicts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.transformation-conflict-report.v0"
+    },
+    "status": { "enum": ["needs_decision", "ready"] },
+    "transformationDraftSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "candidate": { "type": "object" },
+    "conflictCount": { "type": "integer", "minimum": 0 },
+    "unresolvedCount": { "type": "integer", "minimum": 0 },
+    "unresolvedConflictIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "decisionRequired",
+          "id",
+          "category",
+          "summary",
+          "sourceValues",
+          "options",
+          "resolutionStatus"
+        ]
+      }
+    }
+  }
+}

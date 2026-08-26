@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "tiangong.release.transformation-example-evidence.v0",
+  "candidate": {
+    "releaseVersion": "2026.08.0",
+    "releaseCandidateSha256": "4fff31bb163c895ec25c9233f3523f21ce8963dd9d3b06f5ce573b33f1d743a9",
+    "canonicalDatasetIndexSha256": "7fbbf2888b29ba5689b0a509e09700090bb78adcf4f6a9c3e621a937f46edf36",
+    "packageSetHash": "753fd2132ce4d23ec9941298b374aa186d33c84529315b75313b5c7826621536"
+  },
+  "inputs": [
+    {
+      "key": "process:012fc8f6-9a30-4d98-9b03-34ddec3a6f10@01.01.002",
+      "sha256": "02232e2d82628c7f5ccac6025106a555c378aecbd6b58a092e41210dde1bf90f",
+      "canonicalContentHash": "2abfb871afe0cd4af57f9c22487aed74f14f4032cb01c8e9a5b3498b87fb49aa",
+      "weight": 0.5
+    },
+    {
+      "key": "process:0277e7da-78c5-456d-b902-39a6aabd52fe@01.01.002",
+      "sha256": "8940cff1297e800517eee0157f406c91e93e10cd9d13c0abd6f697960973c4da",
+      "canonicalContentHash": "4a273ceeab781dcc33c403397523568796e7109de08b060de87a27ec671de254",
+      "weight": 0.3
+    },
+    {
+      "key": "process:03ae7e51-0820-4c7c-82aa-785c1fe2afd8@01.01.003",
+      "sha256": "3ae735c2606a422ea8d3af68a8e8250a035e81c233a1a9bb19d73fe0404ca728",
+      "canonicalContentHash": "36f7d6b68e48e71053393b7c5a936929a4c48926270d154cca9a2f15ab104013",
+      "weight": 0.2
+    }
+  ],
+  "initialInspection": {
+    "status": "needs_decision",
+    "conflictCount": 7
+  },
+  "resolvedInspection": {
+    "status": "ready",
+    "unresolvedCount": 0
+  },
+  "frozenSpecSha256": "a872ba6a6f48fc71de03183a911d841d45030e0a51b6e9309328a0232d8b78d1",
+  "executionReceiptSha256": "be0c17ed2e72f03b396a31263a5ff1b7fa26e3a36f5167ef12c61d53c2c2b495",
+  "output": {
+    "key": "process:7f1fbe5a-2f9c-4bb1-8d2d-f138e9cb7c8e@01.00.000",
+    "sha256": "78c8f6284ce21b8c8558e32c2c302c13a2f65128271dee71af996cfac38b3c91",
+    "canonicalContentHash": "1fe6b43c0048b98cb9bd213e854eaab6878fbb6283abaf495eeff2c52d6ae44a",
+    "byteSize": 13991,
+    "exchangeCount": 6,
+    "referenceAmount": 1
+  },
+  "validation": {
+    "runtimeChecks": "passed",
+    "tidasJson": "passed",
+    "eilcdProjection": "passed",
+    "eilcdValidation": "passed",
+    "semanticRoundtrip": "passed",
+    "eilcdProjectionTreeSha256": "745b159ba3910039334958a436c102ea208e45837f01e6b2e5251d6d658ddc32",
+    "semanticSetSha256": "88158ec711a64bfe24dd6cb067f6f180fb975c5ad428a1dbe1dd9b02ab1070b5"
+  },
+  "deterministicRepeat": {
+    "sameFrozenSpecSha256": true,
+    "sameExecutionReceiptSha256": true,
+    "sameOutputSha256": true,
+    "sameCanonicalContentHash": true
+  },
+  "nextWorkflow": "calculation",
+  "finalTarget": "new-release-candidate"
+}

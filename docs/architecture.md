@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Extended the Candidate branch through complete hash-bound Publication approval, resumable execution, and independent readback."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Added the Candidate-bound Dataset Transformation DSL, semantic decision loop, deterministic execution, and Calculation return path."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -151,9 +151,9 @@ Candidate v2 在构建时生成 `publication-catalog.json`，把 canonical index
 
 ## Dataset Transformation 边界
 
-Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 为输入，输出带变换血缘的新 canonical data。当前不冻结支持的加工类型、字段策略、聚合算法或执行入口。
+Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 为输入。DSL v0 的 Draft 与 conflict report 保留 Agent/用户语义协商，Frozen Spec 展开为确定性权重、业务字段值和 metadata policy；执行器只消费 Frozen Spec，输出新 Unit Process、validation receipt 和 lineage handoff。
 
-任何实现都必须先判断旧 Result evidence 是否仍有效。改变模型、定量基准、provider、权重或结果语义的变换不能直接复用旧 Result；它必须返回 Calculation/Result Materialization。
+业务字段差异属于 `needs_decision`，不是 terminal failure。加权 Unit Process 改变定量语义，v0 固定把旧 Result evidence 标记为 invalidated，并返回 Calculation/Result Materialization；只有重新生成 Result evidence 后才能构建新 Candidate。
 
 ## Publication 边界
 
@@ -183,11 +183,12 @@ Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 
 - 确定性计算、验证和打包不得由 Agent 模拟；
 - 共享代码只提取已被多个 Workflow 实际复用的机制；
 - 不为目录对称创建空运行时抽象；
-- Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter 和状态 mapping；Dataset Transformation 在详细设计完成前只保留文档边界，不添加推测性执行代码。
+- Dataset Transformation 只实现已确认的 `process.weighted-aggregate.v0`，不通过通用 patch 或表达式扩大语义；Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter 和状态 mapping。
 
 ## 当前实现基线
 
 - Calculation 已实现 ResultSet、Closure/Calculation 提交、任务查询和数据库/S3 Calculation Bundle 数据面。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核和 Candidate qualification。
-- Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读、CLI 和测试；Dataset Transformation 当前尚无执行入口。
+- Dataset Transformation 已实现 Draft inspect、conflict/decision、Frozen Spec、加权 Unit Process、validation/handoff、CLI、schemas、测试和真实三 Process 试验。
+- Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读、CLI 和测试。
