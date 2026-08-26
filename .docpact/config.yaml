@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "62b9b8fe6207249a56da3ba30a390e5241503fef"
+lastReviewedAt: "2026-08-26"
+lastReviewedCommit: "56880e3491506504c5fa88c2e17add236ac7350f"
 
 catalog:
   repos:
@@ -29,7 +29,6 @@ ownership:
           - package.json
           - pnpm-workspace.yaml
           - pnpm-lock.yaml
-          - .npmrc
           - .node-version
           - test/**
           - .github/workflows/ci.yml
@@ -75,7 +74,6 @@ coverage:
     - .gitignore
     - .env.example
     - .node-version
-    - .npmrc
     - test/**
     - workflows/**
     - package.json
@@ -126,7 +124,6 @@ routing:
         - package.json
         - pnpm-workspace.yaml
         - pnpm-lock.yaml
-        - .npmrc
         - .node-version
         - test/**
         - .github/workflows/ci.yml
@@ -305,8 +302,6 @@ rules:
         kind: workspace-contract
       - path: pnpm-lock.yaml
         kind: dependency-lock
-      - path: .npmrc
-        kind: package-manager-policy
       - path: .node-version
         kind: runtime-pin
       - path: test/**
@@ -320,4 +315,4 @@ rules:
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: The exact runtime, pnpm workspace, dependency lock, documentation baseline, and repository-level validation entrypoints must stay aligned.
+    reason: The exact runtime, effective pnpm workspace policy, dependency lock, documentation baseline, and repository-level validation entrypoints must stay aligned.

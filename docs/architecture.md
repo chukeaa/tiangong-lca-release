@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 62b9b8fe6207249a56da3ba30a390e5241503fef
-lastReviewedNote: "Confirmed the Workflow topology while consolidating all JavaScript packages under one exact Node/pnpm workspace, using portable CI/graph execution, and upgrading the Materialization validator to TIDAS SDK 0.2.0."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 56880e3491506504c5fa88c2e17add236ac7350f
+lastReviewedNote: "Confirmed the Workflow topology while making pnpm-workspace.yaml the only effective project-policy source and retaining portable CI/graph execution, pure JavaScript, and the TIDAS SDK 0.2.0 validator."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -181,7 +181,7 @@ Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 
 ## 实现边界
 
 - 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
-- 全仓运行时固定为 Node `24.19.0` 和 pnpm `11.23.0`，五个 package 共用根 workspace 与唯一 lock；
+- 全仓运行时固定为 Node `24.19.0` 和 pnpm `11.23.0`，五个 package 共用根 workspace 与唯一 lock；项目级 engine、peer、lockfile、save-prefix 和 package-manager mismatch policy 只由 `pnpm-workspace.yaml` 的 camelCase 设置拥有，并通过 pnpm 的有效配置输出验证；
 - CI 由不可变 `pnpm/setup` 提供精确 Node/pnpm，production graph audit 通过 `process.execPath + npm_execpath` 且禁用 shell，避免 Windows `.cmd` shim 差异；
 - 当前实现保持纯 JavaScript/MJS，生产依赖图不得因 SDK 或工具链迁移重新引入 TypeScript、compiler 或 schema codegen；
 - 外部 provider schema 只在 adapter 边界解析；

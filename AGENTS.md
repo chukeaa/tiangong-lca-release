@@ -23,12 +23,11 @@ checkPaths:
   - package.json
   - pnpm-workspace.yaml
   - pnpm-lock.yaml
-  - .npmrc
   - .node-version
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 62b9b8fe6207249a56da3ba30a390e5241503fef
-lastReviewedNote: "Pinned the pure-JavaScript repository to one Node 24.19.0 and pnpm 11.23.0 workspace, made CI/runtime setup and graph auditing portable, upgraded Result Materialization to TIDAS SDK 0.2.0, and retained all Workflow and security boundaries."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 56880e3491506504c5fa88c2e17add236ac7350f
+lastReviewedNote: "Moved the effective pnpm 11 project policy into pnpm-workspace.yaml, removed the ignored project .npmrc, and retained the exact runtime, pure-JavaScript, SDK, Workflow, and security boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -112,7 +111,7 @@ related:
 ## Runtime 与分支事实
 
 - Node：精确 `24.19.0`
-- package manager：精确 `pnpm@11.23.0`，五个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`
+- package manager：精确 `pnpm@11.23.0`，五个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`；`engineStrict=true`、`strictPeerDependencies=true`、`sharedWorkspaceLockfile=true`、`savePrefix=""` 与 `pmOnFail=error` 必须由 workspace YAML 形成可被 `pnpm config list --location=project --json` 观察到的有效项目配置，不保留无效的项目 `.npmrc`
 - 运行时：纯 JavaScript/MJS；不得为了工具链命名对齐引入 TypeScript、compiler 或 codegen
 - CI：使用不可变提交的 `pnpm/setup` 一次安装精确 Node/pnpm，随后显式执行 frozen install；生产图审计只通过当前 pnpm JavaScript entry 和 `shell:false` 运行
 - branch model：M1
