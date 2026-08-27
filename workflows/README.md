@@ -12,9 +12,9 @@ whenToUpdate:
   - 当顶层 Workflow 新增、删除、重命名或重新划分时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Reviewed the workflow index after completing Candidate-bound Publication execution and independent readback."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Updated the workflow index for active Dataset Transformation DSL v0 and weighted Process execution."
 related:
   - ../README.md
   - AGENTS.md
@@ -29,7 +29,7 @@ related:
 | [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载                                                                    | Closure evidence、Calculation Bundle                                                     |
 | [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel                                                                            | Canonical datasets、identity/version plan、manifest                                      |
 | [Release Candidate](release-candidate/README.md)           | 准备闭合输入，验证、打包并冻结不可变 Candidate                                                                         | Release Intake、Package Plan、Scope Decision、Candidate                                  |
-| [Dataset Transformation](dataset-transformation/README.md) | 对 Candidate 中的精确数据执行后续定义的可追溯再加工                                                                    | Transformation evidence、transformed canonical datasets                                  |
+| [Dataset Transformation](dataset-transformation/README.md) | 用 DSL 解决业务字段冲突并加权聚合精确 Unit Process                                                                     | Frozen Spec、transformed Process、validation/handoff                                     |
 | [Publication](publication/README.md)                       | 消费不可变 Candidate 并确认发布终态；按 opt-in recipe 发布 V3 LCIA package 并 finalize/verify/revoke Portal projection | Draft/Executable Plan、Approval、Execution/Readback Receipt、Package/Projection Receipts |
 
 默认主线是 `Calculation -> Result Materialization -> Release Candidate`。Candidate 完成后进入 Publication 做全量或选择性的依赖闭合范围规划，或进入 Dataset Transformation 再加工并生成新 Candidate。任何分支都不得原地修改已有 Candidate。

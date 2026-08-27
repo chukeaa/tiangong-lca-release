@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/transformation-execution-receipt.v0.schema.json",
+  "title": "Dataset Transformation Execution Receipt v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "candidate",
+    "transformationFrozenSpecSha256",
+    "operation",
+    "output",
+    "validation",
+    "resultEvidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.transformation-execution-receipt.v0"
+    },
+    "status": { "const": "completed" },
+    "candidate": { "type": "object" },
+    "transformationFrozenSpecSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "operation": { "type": "object" },
+    "output": { "type": "object" },
+    "validation": {
+      "type": "object",
+      "required": ["outcome", "checks"],
+      "properties": {
+        "outcome": { "const": "passed" },
+        "checks": {
+          "type": "object",
+          "additionalProperties": { "const": true }
+        }
+      }
+    },
+    "resultEvidence": { "type": "object" }
+  }
+}

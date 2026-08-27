@@ -1,0 +1,23 @@
+{
+  "name": "@tiangong-lca/release-workflow-dataset-transformation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "bin": {
+    "release-transform": "./cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "canonicalize": "4.0.0"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

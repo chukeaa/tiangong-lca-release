@@ -21,9 +21,9 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Reviewed repository ownership and security boundaries for complete Candidate-bound Publication execution; Dataset Transformation remains deferred."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Activated Dataset Transformation DSL v0 and weighted Unit Process execution while retaining Calculation as the required Result-evidence return path."
 related:
   - README.md
   - .docpact/config.yaml
@@ -58,7 +58,7 @@ related:
 - `workflows/calculation`：ResultSet、Closure、计算任务和 Calculation Bundle；
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
 - `workflows/release-candidate`：Release Intake、Package Plan、validation、失败修复范围决定和不可变 Candidate v2 handoff；
-- `workflows/dataset-transformation`：Candidate-derived 再加工边界，具体规则与执行器尚未设计；
+- `workflows/dataset-transformation`：Candidate-bound DSL v0、业务字段冲突决策、加权 Unit Process 执行、验证和 Calculation handoff；
 - `workflows/publication`：Candidate-bound 范围解析、精确 payload、target inspection、hash-bound Approval、可恢复平台写入、状态转换和独立回读；另有显式 opt-in 的 Portal LCIA V3 package plan/publish 与 projection finalize/verify/revoke 编排，只调用 Database-owned actor RPC，不读取 private artifact；Candidate adapter 继续发布到 state code `100`。
 
 完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 和 Candidate qualification 属于 Release Candidate。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。Publication 不得在远程执行期间改变 Candidate 内容。
@@ -102,7 +102,7 @@ related:
 - 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
 - 未经精确内容和 target 审批不得远程发布。
 - Release Candidate 一经冻结不得原地改写；Publication 可以用 hash-bound plan 选择引用完整的子集，但数据内容、identity、version 或 package 变化必须产生新 Candidate。
-- Dataset Transformation 在具体规则与入口完成设计前保持 fail closed。Publication 远程执行只能使用其 Workflow 已冻结的 actor-scoped、exact-plan-hash 和 independent-readback 契约，不得从根文档另行拼装写入。
+- Dataset Transformation 的业务字段差异必须进入 `needs_decision`，不得作为 terminal failure；只有 hash drift、malformed contract、系统故障或生成结果缺陷使用技术异常。Publication 远程执行只能使用其 Workflow 已冻结的 actor-scoped、exact-plan-hash 和 independent-readback 契约，不得从根文档另行拼装写入。
 
 ## Runtime 与分支事实
 
@@ -110,8 +110,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-55`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#55`
+- 当前工作分支：`feature/issue-59`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#59`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
@@ -135,6 +135,7 @@ related:
 - Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release Candidate 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
 - Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
 - preserved failed build 可生成完整 exclusion impact report；范围排除必须由 hash-bound decision 明确确认，并通过新的 Package Plan 重跑全部 validator，不能绕过错误或修改失败 Candidate；
-- Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；Dataset Transformation 不声称已有执行入口；
+- Dataset Transformation 的 inspect、`needs_decision`、Frozen DSL、加权 Unit Process、validation receipt 和 Calculation handoff 真实可执行；旧 Result evidence 不得复用；
+- Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；
 - 当前变更通过仓库门禁并形成独立 Git commit。
 - Portal LCIA projection 在 exact Package Publication/Projection Plan 两次 confirmation、幂等远程写入和独立 current + publicly-visible readback 后才完成；revoke 在 exact Finalization Receipt confirmation 和 revoked readback 后才完成，既有 Candidate Publication 回归保持全绿。

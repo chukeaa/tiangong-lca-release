@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Reviewed shared workflow boundaries for complete authorized Publication and retained Candidate-derived refinement as a separate deferred workflow."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
+lastReviewedNote: "Reviewed shared decision and artifact boundaries after activating Dataset Transformation DSL v0 and weighted Unit Process execution."
 related:
   - ../AGENTS.md
   - ../README.md

@@ -236,7 +236,7 @@ rules:
         mode: review_or_update
       - path: README.md
         mode: review_or_update
-    reason: Candidate-derived transformation boundaries, deferred design status, and return paths must stay coherent.
+    reason: Candidate-bound DSL, semantic decision handling, deterministic transformation, validation, and return paths must stay coherent.
   - id: result-materialization-workflow-contract
     scope: repo
     repo: release
