@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Added the Candidate-bound Dataset Transformation DSL, semantic decision loop, deterministic execution, and Calculation return path."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
+lastReviewedNote: "Reviewed for Issue #68; project-owned spreadsheet generation and Release-owned subprocess budgeting remain implementation details inside the existing Release Candidate boundary."
 related:
   - ../AGENTS.md
   - ../README.md

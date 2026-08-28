@@ -21,9 +21,9 @@ checkPaths:
   - workflows/**
   - package.json
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Activated Dataset Transformation DSL v0 and weighted Unit Process execution while retaining Calculation as the required Result-evidence return path."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
+lastReviewedNote: "Reviewed for Issue #68; portable Release Candidate review generation and a Release-owned TIDAS memory budget do not change repository ownership, Workflow topology, or validation boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -110,8 +110,8 @@ related:
 - package manager：`npm`
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-61`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#61`
+- 当前工作分支：`feature/issue-68`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#68`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前文档基线验证门：`npm run prepush:gate`
 
