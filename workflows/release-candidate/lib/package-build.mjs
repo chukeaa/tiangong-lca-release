@@ -25,6 +25,7 @@ import { loadReleaseIntake } from "./release-intake.mjs";
 export const PACKAGE_PROFILE =
   "standalone-lifecyclemodel-result-full-closure.v1";
 export const EXPECTED_TIDAS_VERSION = "0.2.0";
+export const DEFAULT_TIDAS_MEMORY_BUDGET_MIB = 2048;
 
 const DISTRIBUTION_PACKAGES = [
   ["unit-process-full-closure.v1.tidas.zip", "UnitProcessDatabase", "tidas"],
@@ -47,10 +48,13 @@ export async function buildPackageCandidate({
   releaseVersion,
   scopeDecisionDir,
   tidasBin = process.env.TIDAS_BIN ?? "tidas",
+  tidasMemoryBudgetMiB = process.env.TIDAS_MEMORY_BUDGET_MIB ??
+    DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   runTool = runTidas,
   verifyTool = verifyBuiltPackages,
 }) {
   validateReleaseVersion(releaseVersion);
+  const memoryBudgetMiB = validateTidasMemoryBudgetMiB(tidasMemoryBudgetMiB);
   const releaseIntake = await loadReleaseIntake(releaseIntakeDir);
   const scopeDecision = scopeDecisionDir
     ? await loadScopeDecision(scopeDecisionDir)
@@ -181,6 +185,7 @@ export async function buildPackageCandidate({
     packageBuildStarted = true;
     const toolResult = await runTool({
       tidasBin,
+      memoryBudgetMiB,
       canonicalRoot,
       indexPath,
       packagesDir,
@@ -194,6 +199,7 @@ export async function buildPackageCandidate({
     qualificationStarted = true;
     const packageVerification = await verifyTool({
       tidasBin,
+      memoryBudgetMiB,
       packagesDir,
       workspace: verificationWorkspace,
       releaseVersion,
@@ -266,6 +272,13 @@ export async function buildPackageCandidate({
       error.details = {
         ...(error.details ?? {}),
         releaseIntakeDir: path.resolve(releaseIntakeDir),
+        requestedCandidatePath: target,
+        releaseVersion,
+        scopeDecisionDir: scopeDecisionDir
+          ? path.resolve(scopeDecisionDir)
+          : undefined,
+        tidasBin,
+        memoryBudgetMiB,
         retainedBuild: retained,
       };
     }
@@ -393,6 +406,36 @@ function validateReleaseVersion(value) {
     );
 }
 
+function validateTidasMemoryBudgetMiB(value) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 1_048_576)
+    fail(
+      "tidas_memory_budget_invalid",
+      "TIDAS memory budget must be a whole number between 1 and 1048576 MiB",
+      { value },
+    );
+  return parsed;
+}
+
+function tidasSpawnOptions(memoryBudgetMiB) {
+  return {
+    env: {
+      ...process.env,
+      TIDAS_MEMORY_BUDGET_MIB: String(
+        validateTidasMemoryBudgetMiB(memoryBudgetMiB),
+      ),
+    },
+  };
+}
+
+function isMemoryBudgetExceeded(value) {
+  if (value === "memory_budget_exceeded") return true;
+  if (Array.isArray(value)) return value.some(isMemoryBudgetExceeded);
+  if (value && typeof value === "object")
+    return Object.values(value).some(isMemoryBudgetExceeded);
+  return false;
+}
+
 async function applyDistributionNames(packagesDir, releaseVersion) {
   for (const [source, product, format] of DISTRIBUTION_PACKAGES) {
     await rename(
@@ -407,6 +450,7 @@ async function applyDistributionNames(packagesDir, releaseVersion) {
 
 export async function verifyBuiltPackages({
   tidasBin,
+  memoryBudgetMiB = DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   packagesDir,
   workspace,
   releaseVersion,
@@ -472,27 +516,33 @@ export async function verifyBuiltPackages({
         reportPath,
       });
     const action = format === "tidas" ? "validate-tidas" : "validate-ilcd";
-    const validation = await spawnCommand(tidasBin, [
-      "release",
-      action,
-      "--input-dir",
-      extracted,
-      "--format",
-      "json",
-    ]);
-    if (validation.code !== 0)
+    const validation = await spawnCommand(
+      tidasBin,
+      ["release", action, "--input-dir", extracted, "--format", "json"],
+      tidasSpawnOptions(memoryBudgetMiB),
+    );
+    if (validation.code !== 0) {
+      const diagnostics = parseFailedTidasOutput(validation.stdout);
+      const memoryExceeded = isMemoryBudgetExceeded(
+        diagnostics.operationReport,
+      );
       await failPackageVerification({
-        code: `${format}_package_validation_failed`,
+        code: memoryExceeded
+          ? "tidas_memory_budget_exceeded"
+          : `${format}_package_validation_failed`,
         message: `${format.toUpperCase()} validation failed after ZIP readback: ${fileName}`,
         stage: action,
         format,
         product,
         fileName,
         stderr: validation.stderr,
+        operationReport: diagnostics.operationReport,
+        stdoutTail: diagnostics.stdoutTail,
         completedPackages: packages,
         releaseVersion,
         reportPath,
       });
+    }
     let report;
     try {
       report = JSON.parse(validation.stdout);
@@ -537,6 +587,8 @@ async function failPackageVerification({
   product,
   fileName,
   stderr = "",
+  operationReport,
+  stdoutTail,
   completedPackages,
   releaseVersion,
   reportPath,
@@ -549,6 +601,8 @@ async function failPackageVerification({
     product,
     fileName,
     stderr: String(stderr).slice(-4000),
+    operationReport,
+    stdoutTail,
   };
   if (reportPath)
     await writeFile(
@@ -810,12 +864,18 @@ function validateInputs(manifest, index, intake) {
 
 export async function runTidas({
   tidasBin,
+  memoryBudgetMiB = DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   canonicalRoot,
   indexPath,
   packagesDir,
   spawnCommand = spawnBounded,
 }) {
-  await verifyTidasRuntime({ tidasBin, spawnCommand });
+  const budget = validateTidasMemoryBudgetMiB(memoryBudgetMiB);
+  await verifyTidasRuntime({
+    tidasBin,
+    memoryBudgetMiB: budget,
+    spawnCommand,
+  });
   await mkdir(path.dirname(packagesDir), { recursive: true });
   const args = [
     "release",
@@ -829,14 +889,17 @@ export async function runTidas({
     "--format",
     "json",
   ];
-  const result = await spawnCommand(tidasBin, args);
+  const result = await spawnCommand(tidasBin, args, tidasSpawnOptions(budget));
   if (result.code !== 0) {
     const structuredDiagnostics = parseFailedTidasOutput(result.stdout);
     fail(
-      "tidas_package_build_failed",
+      isMemoryBudgetExceeded(structuredDiagnostics.operationReport)
+        ? "tidas_memory_budget_exceeded"
+        : "tidas_package_build_failed",
       `tidas-tools exited with code ${result.code}`,
       {
         stderr: result.stderr.slice(-4000),
+        memoryBudgetMiB: budget,
         ...structuredDiagnostics,
       },
     );
@@ -858,11 +921,13 @@ function parseFailedTidasOutput(stdout) {
 
 export async function verifyTidasRuntime({
   tidasBin,
+  memoryBudgetMiB = DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   spawnCommand = spawnBounded,
 }) {
   const version = await runTidasPreflight({
     tidasBin,
     args: ["version", "--format", "json", "--progress", "never"],
+    memoryBudgetMiB,
     spawnCommand,
   });
   if (
@@ -882,6 +947,7 @@ export async function verifyTidasRuntime({
   const validation = await runTidasPreflight({
     tidasBin,
     args: ["validate", "--describe", "--format", "json", "--progress", "never"],
+    memoryBudgetMiB,
     spawnCommand,
   });
   const describe = validation.summary?.validation_describe;
@@ -906,8 +972,17 @@ export async function verifyTidasRuntime({
   };
 }
 
-async function runTidasPreflight({ tidasBin, args, spawnCommand }) {
-  const result = await spawnCommand(tidasBin, args);
+async function runTidasPreflight({
+  tidasBin,
+  args,
+  memoryBudgetMiB,
+  spawnCommand,
+}) {
+  const result = await spawnCommand(
+    tidasBin,
+    args,
+    tidasSpawnOptions(memoryBudgetMiB),
+  );
   if (result.code !== 0)
     fail(
       "tidas_preflight_failed",
@@ -933,9 +1008,12 @@ async function runTidasPreflight({ tidasBin, args, spawnCommand }) {
   }
 }
 
-function spawnBounded(command, args) {
+function spawnBounded(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     const append = (current, chunk) => `${current}${chunk}`.slice(-1_000_000);

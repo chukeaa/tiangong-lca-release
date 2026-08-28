@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Implemented Dataset Transformation DSL v0, semantic decision continuation, and weighted Unit Process execution with a Calculation return path."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
+lastReviewedNote: "Reviewed for Issue #68; the Release Candidate runtime correction does not change the five-Workflow product structure or Candidate successor paths."
 related:
   - AGENTS.md
   - docs/architecture.md

@@ -12,9 +12,9 @@ whenToUpdate:
   - 当顶层 Workflow 新增、删除、重命名或重新划分时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Updated the workflow index for active Dataset Transformation DSL v0 and weighted Process execution."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
+lastReviewedNote: "Reviewed for Issue #68; the Workflow inventory and navigation remain unchanged."
 related:
   - ../README.md
   - AGENTS.md
