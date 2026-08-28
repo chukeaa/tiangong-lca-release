@@ -2,8 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fail, hashJson, sha256Bytes } from "./common.mjs";
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const VERSION = /^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$/u;
 
 export async function buildPublicationCatalog({ canonicalRoot, index }) {
@@ -32,7 +31,10 @@ export async function buildPublicationCatalog({ canonicalRoot, index }) {
       path: dataset.path,
       sha256: dataset.sha256,
       canonicalContentHash: dataset.canonicalContentHash,
-      rawReferences: collectClosureReferences(document),
+      rawReferences: collectClosureReferences(document, {
+        key: identityKey(dataset),
+        path: dataset.path,
+      }),
     };
     if (records.has(projected.key))
       fail(
@@ -142,7 +144,7 @@ function reachable(records, roots) {
   return found;
 }
 
-function collectClosureReferences(document) {
+function collectClosureReferences(document, dataset) {
   const result = [];
   const visit = (value, location, parentKey) => {
     if (!value || typeof value !== "object") return;
@@ -154,6 +156,11 @@ function collectClosureReferences(document) {
           fail(
             "publication_catalog_reference_invalid",
             `Required Publication reference lacks an exact UUID/version at ${location}`,
+            {
+              dataset: dataset?.key ?? null,
+              datasetPath: dataset?.path ?? null,
+              reference: { uuid, version: version ?? null, location },
+            },
           );
         result.push({ uuid, version, location });
       }
