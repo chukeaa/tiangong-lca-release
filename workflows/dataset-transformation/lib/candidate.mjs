@@ -19,7 +19,7 @@ const CANDIDATE_VERSIONS = new Set([
 
 export async function loadCandidate(
   candidateDir,
-  { verifyArchive = true } = {},
+  { verifyArchive = true, requiredRole = "unit_process" } = {},
 ) {
   const root = path.resolve(candidateDir);
   const { value: candidate } = await readJson(
@@ -67,26 +67,53 @@ export async function loadCandidate(
       "candidate_package_set_hash_mismatch",
       "Candidate package-set binding has drifted",
     );
-  const unitPackage = (candidate.packages ?? []).find(({ path: itemPath }) =>
-    itemPath.endsWith("-UnitProcessDatabase.tidas.zip"),
-  );
-  if (!unitPackage || !HASH_PATTERN.test(unitPackage.sha256 ?? ""))
+  const packageSuffixes = {
+    unit_process: "-UnitProcessDatabase.tidas.zip",
+    result_process: "-ResultDatabase.tidas.zip",
+  };
+  if (requiredRole !== null && !(requiredRole in packageSuffixes))
     fail(
-      "candidate_unit_process_package_missing",
-      "Candidate does not bind one Unit Process TIDAS package",
+      "transformation_input_role_unsupported",
+      `Unsupported Candidate Process role: ${requiredRole}`,
     );
-  const archive = containedPath(root, unitPackage.path);
-  const info = await stat(archive).catch(() => null);
-  if (!info || info.size !== unitPackage.byteSize)
+  const packagesByRole = {};
+  for (const [role, suffix] of Object.entries(packageSuffixes)) {
+    const packageEntry = (candidate.packages ?? []).find(({ path: itemPath }) =>
+      itemPath.endsWith(suffix),
+    );
+    if (!packageEntry) continue;
+    if (!HASH_PATTERN.test(packageEntry.sha256 ?? ""))
+      fail(
+        "candidate_process_package_invalid",
+        `Candidate binds an invalid ${role} TIDAS package hash`,
+      );
+    packagesByRole[role] = {
+      package: packageEntry,
+      archive: containedPath(root, packageEntry.path),
+    };
+  }
+  if (requiredRole && !packagesByRole[requiredRole])
     fail(
-      "candidate_package_size_mismatch",
-      `Candidate package size has drifted: ${unitPackage.path}`,
+      "candidate_process_package_missing",
+      `Candidate does not bind one ${requiredRole} TIDAS package`,
     );
-  if (verifyArchive && (await sha256File(archive)) !== unitPackage.sha256)
-    fail(
-      "candidate_package_hash_mismatch",
-      `Candidate package bytes have drifted: ${unitPackage.path}`,
-    );
+  if (requiredRole) {
+    const selected = packagesByRole[requiredRole];
+    const info = await stat(selected.archive).catch(() => null);
+    if (!info || info.size !== selected.package.byteSize)
+      fail(
+        "candidate_package_size_mismatch",
+        `Candidate package size has drifted: ${selected.package.path}`,
+      );
+    if (
+      verifyArchive &&
+      (await sha256File(selected.archive)) !== selected.package.sha256
+    )
+      fail(
+        "candidate_package_hash_mismatch",
+        `Candidate package bytes have drifted: ${selected.package.path}`,
+      );
+  }
   const byKey = new Map();
   for (const entry of index.datasets) {
     const key = datasetKey(entry);
@@ -104,12 +131,17 @@ export async function loadCandidate(
     index,
     indexSha256: hashJson(index),
     byKey,
-    unitPackage,
-    archive,
+    packagesByRole,
+    unitPackage: packagesByRole.unit_process?.package ?? null,
+    archive: packagesByRole.unit_process?.archive ?? null,
   };
 }
 
-export async function loadProcessInputs(candidateEvidence, keys) {
+export async function loadProcessInputs(
+  candidateEvidence,
+  keys,
+  { role = "unit_process" } = {},
+) {
   if (!Array.isArray(keys) || keys.length < 2)
     fail(
       "transformation_input_count_invalid",
@@ -125,10 +157,10 @@ export async function loadProcessInputs(candidateEvidence, keys) {
         "transformation_input_unknown",
         `Transformation input is outside the Candidate: ${key}`,
       );
-    if (entry.datasetType !== "process" || entry.role !== "unit_process")
+    if (entry.datasetType !== "process" || entry.role !== role)
       fail(
         "transformation_input_role_unsupported",
-        `DSL v0 supports only Candidate Unit Process inputs: ${key}`,
+        `Operation requires Candidate ${role} inputs: ${key}`,
       );
     if (
       typeof entry.path !== "string" ||
@@ -140,7 +172,13 @@ export async function loadProcessInputs(candidateEvidence, keys) {
         "transformation_input_path_invalid",
         `Candidate Process path is not contained in the Process category: ${key}`,
       );
-    const bytes = await extractMember(candidateEvidence.archive, entry.path);
+    const archive = candidateEvidence.packagesByRole[role]?.archive;
+    if (!archive)
+      fail(
+        "candidate_process_package_missing",
+        `Candidate does not provide an archive for ${role}`,
+      );
+    const bytes = await extractMember(archive, entry.path);
     if (sha256Bytes(bytes) !== entry.sha256)
       fail(
         "transformation_input_hash_mismatch",

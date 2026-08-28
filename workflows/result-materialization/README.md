@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Documented how exact Materialization lineage supports Release exclusion impact without mutating outputs."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Documented hash-bound Result-only handling for Transformation handoffs."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -36,6 +36,8 @@ related:
 - 已冻结的 source closure、graph evidence 和 result arrays；
 - 已有 Materialization Request、Identity Plan、Version Plan 或部分生成结果；
 - 已完成 materialization、但需要针对新 recipe 或上一版 manifest 重新生成的 dataset collection。
+
+Dataset Transformation 的 Result weighted aggregation handoff 使用 `status=ready_for_result_materialization`，绑定 Frozen Spec、Execution Receipt、Derived Result identity/version/hash 和父 Candidate。该入口默认只物化 Result Process；它不会因为父 Candidate 中存在 LifecycleModel 就自动聚合、复制或补造新 Model。
 
 ## 为什么是独立 Workflow
 

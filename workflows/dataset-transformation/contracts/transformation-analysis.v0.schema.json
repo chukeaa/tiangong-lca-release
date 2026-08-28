@@ -29,7 +29,11 @@
       "items": { "type": "string" }
     },
     "nextAction": {
-      "enum": ["freeze_exact_dsl", "agent_and_user_resolve_conflicts_in_dsl"]
+      "enum": [
+        "freeze_exact_dsl",
+        "agent_and_user_resolve_conflicts_in_dsl",
+        "agent_recommends_and_user_selects_aggregation_target"
+      ]
     }
   },
   "$defs": {

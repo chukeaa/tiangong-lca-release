@@ -10,6 +10,8 @@ import {
   writeImmutableDirectory,
 } from "./io.mjs";
 import { aggregateProcesses } from "./process-aggregation.mjs";
+import { operationRole } from "./operations.mjs";
+import { aggregateResultProcesses } from "./result-aggregation.mjs";
 
 export async function executeTransformation({ candidateDir, specDir, outDir }) {
   const { value: frozenSpec } = await readJson(
@@ -27,7 +29,8 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
     );
   validateContract("frozenSpec", frozenSpec);
   const frozenSpecSha256 = hashJson(frozenSpec);
-  const candidate = await loadCandidate(candidateDir);
+  const role = operationRole(frozenSpec.operation.type);
+  const candidate = await loadCandidate(candidateDir, { requiredRole: role });
   if (
     candidate.candidateSha256 !==
       frozenSpec.operation.candidate.releaseCandidateSha256 ||
@@ -39,7 +42,7 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
       "Candidate differs from the hash-bound frozen Transformation spec",
     );
   const inputKeys = frozenSpec.operation.inputs.map(({ key }) => key);
-  const inputs = await loadProcessInputs(candidate, inputKeys);
+  const inputs = await loadProcessInputs(candidate, inputKeys, { role });
   for (const input of inputs) {
     const bound = frozenSpec.operation.inputs.find(
       ({ key }) => key === input.key,
@@ -53,13 +56,15 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
         `Process differs from the frozen Transformation spec: ${input.key}`,
       );
   }
-  const result = aggregateProcesses({ inputs, frozenSpec, frozenSpecSha256 });
-  const validation = validateResult({ result, frozenSpec, inputs });
+  const aggregate =
+    role === "result_process" ? aggregateResultProcesses : aggregateProcesses;
+  const result = aggregate({ inputs, frozenSpec, frozenSpecSha256 });
+  const validation = validateResult({ result, frozenSpec, inputs, role });
   const relativePath = `canonical-datasets/processes/${frozenSpec.output.identity.uuid}_${frozenSpec.output.identity.version}.json`;
   const dataset = {
     key: `process:${frozenSpec.output.identity.uuid}@${frozenSpec.output.identity.version}`,
     datasetType: "process",
-    role: "unit_process",
+    role,
     uuid: frozenSpec.output.identity.uuid,
     version: frozenSpec.output.identity.version,
     path: relativePath.replace("canonical-datasets/", ""),
@@ -81,9 +86,12 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
     validation,
     resultEvidence: frozenSpec.resultEvidence,
   };
+  const resultRoute = role === "result_process";
   const handoff = {
     schemaVersion: "tiangong.release.transformation-handoff.v0",
-    status: "ready_for_calculation",
+    status: resultRoute
+      ? "ready_for_result_materialization"
+      : "ready_for_calculation",
     parentCandidate: frozenSpec.operation.candidate,
     transformationFrozenSpecSha256: frozenSpecSha256,
     transformationExecutionReceiptSha256: hashJson(receipt),
@@ -92,9 +100,10 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
       mode: "exact-parent-candidate-reference",
       packageSetHash: candidate.candidate.packageSetHash,
     },
-    nextWorkflow: "calculation",
-    reason:
-      "The new weighted Unit Process has no valid Result Process or LifecycleModel evidence yet",
+    nextWorkflow: resultRoute ? "result-materialization" : "calculation",
+    reason: resultRoute
+      ? "The weighted Result Process is a Derived Result that requires canonical Result Materialization; no LifecycleModel is synthesized"
+      : "The new weighted Unit Process has no valid Result Process or LifecycleModel evidence yet",
     finalTarget: "new-release-candidate",
   };
   validateContract("executionReceipt", receipt);
@@ -121,7 +130,7 @@ export async function executeTransformation({ candidateDir, specDir, outDir }) {
   };
 }
 
-function validateResult({ result, frozenSpec, inputs }) {
+function validateResult({ result, frozenSpec, inputs, role }) {
   const process = result.document.processDataSet;
   const referenceId = String(
     process.processInformation.quantitativeReference.referenceToReferenceFlow,
@@ -165,6 +174,25 @@ function validateResult({ result, frozenSpec, inputs }) {
         Number.isFinite(Number(exchange.meanAmount)) &&
         Number.isFinite(Number(exchange.resultingAmount)),
     ),
+    outputRoleApplied:
+      role === "result_process"
+        ? process.modellingAndValidation?.LCIMethodAndAllocation
+            ?.typeOfDataSet === "LCI result"
+        : process.modellingAndValidation?.LCIMethodAndAllocation
+            ?.typeOfDataSet !== "LCI result",
+    lciaAmountsFinite:
+      role !== "result_process" ||
+      resultItems(process).every((item) =>
+        Number.isFinite(Number(item.meanAmount ?? item.resultingAmount)),
+      ),
+    lciaMethodsUnique:
+      role !== "result_process" ||
+      new Set(
+        resultItems(process).map(
+          (item) =>
+            `${item.referenceToLCIAMethodDataSet?.["@refObjectId"]}@${item.referenceToLCIAMethodDataSet?.["@version"]}`,
+        ),
+      ).size === resultItems(process).length,
   };
   const failedChecks = Object.entries(checks)
     .filter(([, passed]) => !passed)
@@ -180,7 +208,14 @@ function validateResult({ result, frozenSpec, inputs }) {
     checks,
     inputCount: inputs.length,
     outputExchangeCount: process.exchanges.exchange.length,
+    outputLciaMethodCount: resultItems(process).length,
     referenceAmount,
     weightsSum,
   };
+}
+
+function resultItems(process) {
+  const value = process.LCIAResults?.LCIAResult;
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
 }

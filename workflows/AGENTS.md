@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
-lastReviewedNote: "Reviewed for Issue #68; no shared Workflow decision, evidence, permission, or recovery boundary changes."
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Updated for Issue #70: Dataset Transformation aggregation target is an explicit user decision."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -54,7 +54,7 @@ related:
 
 - 创建或采用哪个业务工作对象；
 - 启动可能耗时或产生远程副作用的验证和计算；
-- Dataset Transformation 的具体加工规则、语义、权重、功能单位和重要字段；
+- Dataset Transformation 的 aggregation target、具体加工规则、语义、权重、功能单位和重要字段；
 - Release Candidate 内容与正式发布授权。
 
 观察、建议、决定、发布授权和执行必须在语义上保持区分。

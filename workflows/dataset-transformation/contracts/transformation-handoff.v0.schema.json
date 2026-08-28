@@ -18,13 +18,15 @@
   ],
   "properties": {
     "schemaVersion": { "const": "tiangong.release.transformation-handoff.v0" },
-    "status": { "const": "ready_for_calculation" },
+    "status": {
+      "enum": ["ready_for_calculation", "ready_for_result_materialization"]
+    },
     "parentCandidate": { "type": "object" },
     "transformationFrozenSpecSha256": { "$ref": "#/$defs/hash" },
     "transformationExecutionReceiptSha256": { "$ref": "#/$defs/hash" },
     "transformedDatasets": { "type": "array", "minItems": 1 },
     "inheritedData": { "type": "object" },
-    "nextWorkflow": { "const": "calculation" },
+    "nextWorkflow": { "enum": ["calculation", "result-materialization"] },
     "reason": { "type": "string", "minLength": 1 },
     "finalTarget": { "const": "new-release-candidate" }
   },

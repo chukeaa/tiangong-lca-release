@@ -8,7 +8,7 @@ owner: release
 language: zh-CN
 whenToUse:
   - 当 Agent 与用户形成、审查或冻结 Dataset Transformation 规则时
-  - 当实现或验证 process.weighted-aggregate.v0 时
+  - 当实现或验证 Unit Process / Result Process weighted aggregation 时
 whenToUpdate:
   - 当 DSL 字段、冲突策略、权重语义或执行算法变化时
 checkPaths:
@@ -16,9 +16,9 @@ checkPaths:
   - workflows/dataset-transformation/lib/**
   - workflows/dataset-transformation/cli.mjs
   - workflows/dataset-transformation/test/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Defined executable DSL v0 for conflict-guided deterministic weighted Unit Process aggregation."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Defined explicit aggregation-target selection and deterministic Unit/Result Process operations."
 related:
   - README.md
   - contracts/dataset-transformation-dsl.v0.schema.json
@@ -28,18 +28,22 @@ related:
 
 ## 1. 目的与边界
 
-DSL v0 把用户和 Agent 对一组 Candidate Process 的加工决定，转换为可复现的确定性执行规格。它只支持：
+DSL v0 把用户和 Agent 对一组 Candidate Process 的加工决定，转换为可复现的确定性执行规格。加权目标必须先形成明确选择：
 
 ```text
-process.weighted-aggregate.v0
+unit-process.weighted-aggregate.v1
+result-process.weighted-aggregate.v0
 ```
 
-输入必须是同一已验证 Release Candidate v1/v2 中的两个或更多 Unit Process。v0 不支持 Result Process、LifecycleModel、任意表达式、任意 JSON patch、单位映射或参考流转换；这些需求会保留为 `needs_decision` 或要求修改路线，不会被解释成执行失败。
+`process.weighted-aggregate.v0` 保留为既有 Unit Process operation 的兼容入口。新协商从 `weighted-aggregate.choose-target.v0` 开始，由 Agent 解释并推荐，用户确认后改写为上述一个明确 operation。输入必须是同一已验证 Release Candidate v1/v2 中两个或更多、role 与 operation 一致的精确 Process。
+
+Unit Process operation 表达“构造新的代表性过程并重新计算”；Result Process operation 表达“组合已有计算结果而不重新求解供应链”。LifecycleModel、任意表达式、任意 JSON patch、单位映射或参考流转换仍不支持。
 
 ## 2. Artifact 生命周期
 
 ```text
 Draft DSL (可修改，F2)
+  -> Agent recommendation + user aggregation-target decision
   -> inspect
 Transformation Analysis + Conflict Report
   -> Agent / 用户补全 decisions
@@ -49,7 +53,8 @@ Revised Draft DSL
 Frozen Spec (hash-bound，F3，不可原地修改)
   -> execute
 Transformed Process + Execution Receipt + Handoff
-  -> Calculation -> Result Materialization -> new Candidate
+  -> Unit Process: Calculation -> Result Materialization -> new Candidate
+  -> Result Process: Result Materialization -> new Candidate
 ```
 
 `needs_decision` 是正常业务状态。只有 malformed contract、Candidate/input drift、运行时故障或生成结果违反确定性检查时才返回 system error / `needs_repair`。
@@ -71,23 +76,57 @@ Draft 的 JSON Schema 是 [`contracts/dataset-transformation-dsl.v0.schema.json`
 
 ## 4. 输入与操作
 
+### 4.1 目标选择
+
+尚未确认目标时，Draft 只承载推荐，不执行输入或字段分析：
+
 ```json
 {
   "operation": {
-    "type": "process.weighted-aggregate.v0",
+    "type": "weighted-aggregate.choose-target.v0",
+    "targetRecommendation": {
+      "recommendedOperation": "result-process.weighted-aggregate.v0",
+      "reason": "用户要组合已有省级 Result，而不是构造新的生产模型",
+      "sourceRefs": ["conversation:goal"]
+    }
+  }
+}
+```
+
+inspect 返回 `operation:aggregation-target`。用户确认后，Draft 使用明确 operation，并保留决定理由：
+
+```json
+{
+  "conflictId": "operation:aggregation-target",
+  "strategy": "select-operation",
+  "value": "result-process.weighted-aggregate.v0",
+  "reason": "用户确认直接生成已有 Result 的加权组合"
+}
+```
+
+recommendation 是 F2 建议，不是授权。Frozen Spec 只接受明确 Unit/Result operation；不增加一个会与 operation type 重复的 `targetLayer` 执行字段。
+
+### 4.2 精确输入
+
+```json
+{
+  "operation": {
+    "type": "unit-process.weighted-aggregate.v1",
     "inputs": ["process:<uuid>@<version>", "process:<uuid>@<version>"],
     "weighting": {}
   }
 }
 ```
 
-每个 identity 必须精确匹配 Candidate canonical dataset index 中的 `unit_process`。inspect 会绑定：
+每个 identity 必须精确匹配 Candidate canonical dataset index 中 operation 要求的 `unit_process` 或 `result_process` role。inspect 会绑定：
 
 - Release Candidate canonical JSON SHA-256；
 - canonical dataset index SHA-256；
 - package-set hash；
 - 每个 Process 的 byte SHA-256 与 canonical content hash；
 - 参考 Flow UUID、version、direction 和参考 amount。
+
+Result Process 还绑定 source Process / Calculation lineage、LCI exchange identity signature 和 LCIA method UUID/version signature。
 
 同一 UUID 的其他 version、名称匹配和 `latest` 均不会替代精确输入。
 
@@ -178,8 +217,9 @@ v0 支持的决定策略：
 - `rewrite`：用用户确认的完整结构重写；
 - `drop`：Schema 允许且语义明确时删除；
 - `sum-resolved`：仅用于 annual-production 权重下的输出年产量。
+- `select-operation`：仅用于 `operation:aggregation-target`，value 必须与明确 operation type 一致。
 
-参考流或 dataset type 不兼容时，v0 不允许用户用“确认”强行跳过。Agent 应建议修改 selection、拆分输出或等待后续 mapping 规则；状态仍是 `needs_decision`。
+参考流或 dataset type 不兼容时，v0 不允许用户用“确认”强行跳过。Result Process 还必须共享一个可提取的 Calculation lineage、完全相同的 LCI exchange identity set，以及完全相同的 LCIA method UUID/version set。缺失 method/exchange 不解释为零；Agent 应建议修改 selection、拆分输出、回到 Unit Process 路线或准备共同计算基线，状态仍是 `needs_decision`。
 
 ## 7. 输出与系统派生字段
 
@@ -205,7 +245,7 @@ Draft 必须提供新的 UUID、version、匹配 URI 和确定时间：
 - review 重置为 `Not reviewed`；
 - exchange internal IDs 重新生成；
 - transformation lineage 写入 general comment；
-- 旧 Result evidence 标记为 invalidated。
+- Unit Process 路线把旧 Result evidence 标记为 `invalidated`；Result Process 路线把新 evidence 标记为 `derived`。
 
 ## 8. Exchange metadata policy
 
@@ -239,7 +279,15 @@ group identity 是：
 Flow UUID + Flow Version + Direction + Location + Function Type
 ```
 
-由于所有输入要求具有相同 reference Flow/version/direction，输出 reference amount 必须为 1。缺失 exchange 对该输入贡献 0。
+由于所有输入要求具有相同 reference Flow/version/direction，输出 reference amount 必须为 1。Unit Process 路线允许某个非参考 exchange 在部分输入缺失，此时该输入贡献 0；Result Process 路线要求完整 exchange identity set 相同，不把缺失 exchange 当作零。
+
+Result Process 的每个 LCIA method `m` 采用相同归一化公式：
+
+```text
+LCIA(m) = Σᵢ wᵢ × LCIA(i, m) / rᵢ
+```
+
+method 按 UUID + version 对齐，不按数组位置对齐。Result operation 可以处理 LCI-only 的共同空方法集，也可以处理完全一致的 LCI + LCIA method set。
 
 ## 10. 冻结、执行和验证
 
@@ -252,11 +300,12 @@ execute 至少检查：
 - 输出 reference amount 为 1；
 - exchange IDs 唯一；
 - 所有 amount 有限；
+- Result Process 的 Calculation lineage、exchange set、LCIA method set 和 LCIA amounts 有效；
 - 新 identity 已应用；
 - review 已重置；
 - receipt、output 和 handoff hash 可重算。
 
-生成的是新 Unit Process，因此旧 Result Process/LifecycleModel evidence 无效。handoff 固定进入 Calculation，之后经 Result Materialization 和 Release Candidate 形成新 Candidate；Transformation 不会原地改写父 Candidate，也不会自行发布。
+Unit Process 输出使旧 Result Process/LifecycleModel evidence 无效，handoff 进入 Calculation。Result Process 输出是 hash-bound Derived Result，handoff 直接进入 Result Materialization，不调用 Worker Calculation，也不自动生成或聚合 LifecycleModel。Transformation 不会原地改写父 Candidate，也不会自行发布。
 
 ## 11. CLI
 
@@ -277,4 +326,4 @@ node workflows/dataset-transformation/cli.mjs transform execute \
 
 ## 12. 后续扩展边界
 
-LifecycleModel 加权聚合、Result Process 聚合、reference-flow mapping、unit conversion 和更丰富 uncertainty 算法需要新 operation/version。它们不得通过给 v0 增加隐式解释来实现。Promotion 前需要真实数据场景、独立数值验证和明确的 Result evidence 路线。
+LifecycleModel 加权聚合、跨 Calculation basis 的 Result mapping、reference-flow mapping、unit conversion、部分 LCIA method set 合并和更丰富 uncertainty 算法需要新 operation/version。它们不得通过给现有 operation 增加隐式解释来实现。Promotion 前需要真实数据场景、独立数值验证和明确的 Result evidence 路线。
