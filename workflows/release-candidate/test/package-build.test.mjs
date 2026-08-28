@@ -523,7 +523,7 @@ test("package build assembles local closure and delegates four-package build", a
     result.candidate.canonicalDatasetIndexSha256,
   );
   assert.equal(
-    hashJson(publicationCatalog),
+    sha256Bytes(Buffer.from(canonicalJson(publicationCatalog))),
     result.candidate.publicationCatalog.sha256,
   );
   assert.equal(result.candidate.packages.length, 4);

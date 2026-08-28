@@ -46,11 +46,15 @@ export async function materializePublicationPayload({
     path.join(planningRoot, "publication-scope-resolution.json"),
     "publication_scope_resolution_missing",
   );
-  const { value: catalog } = await readJson(
-    path.join(candidateRoot, "publication-catalog.json"),
-    "candidate_publication_catalog_missing",
-  );
-  requireDraftBindings({ candidate, draftPlan, resolution, catalog });
+  const catalogPath = path.join(candidateRoot, "publication-catalog.json");
+  const catalogBytes = await readFile(catalogPath).catch(() => null);
+  if (!catalogBytes)
+    fail(
+      "candidate_publication_catalog_missing",
+      `Unable to read required Publication artifact: ${catalogPath}`,
+    );
+  const catalog = JSON.parse(catalogBytes.toString("utf8"));
+  requireDraftBindings({ candidate, draftPlan, resolution, catalogBytes });
 
   const tidasPackages = (candidate.packages ?? [])
     .filter((artifact) => artifact.path.endsWith(".tidas.zip"))
@@ -149,9 +153,7 @@ export async function materializePublicationPayload({
   for (const dataset of selected)
     if (dataset.datasetType === "lifecyclemodel")
       for (const reference of dataset.references ?? []) {
-        const targetDataset = selected.find(
-          ({ key }) => key === reference.target,
-        );
+        const targetDataset = selected.find(({ key }) => key === reference);
         if (targetDataset?.role === "result_process") {
           const prior = modelByResultProcess.get(targetDataset.key);
           if (prior && prior !== dataset.uuid)
@@ -296,7 +298,12 @@ export async function loadVerifiedPayload(
   return { root, manifest, datasets, manifestSha256: hashJson(manifest) };
 }
 
-function requireDraftBindings({ candidate, draftPlan, resolution, catalog }) {
+function requireDraftBindings({
+  candidate,
+  draftPlan,
+  resolution,
+  catalogBytes,
+}) {
   if (
     draftPlan.schemaVersion !== "tiangong.release.publication-draft-plan.v1" ||
     draftPlan.status !== "prepared_unapproved" ||
@@ -318,8 +325,8 @@ function requireDraftBindings({ candidate, draftPlan, resolution, catalog }) {
     "publication_scope_resolution_hash_mismatch",
     "Publication scope resolution",
   );
-  verifyJsonHash(
-    catalog,
+  verifyBytes(
+    catalogBytes,
     draftPlan.candidate?.publicationCatalogSha256,
     "publication_catalog_hash_mismatch",
     "Candidate Publication catalog",

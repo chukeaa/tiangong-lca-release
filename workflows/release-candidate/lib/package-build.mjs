@@ -16,7 +16,10 @@ import path from "node:path";
 import { canonicalJson, fail, hashJson, sha256Bytes } from "./common.mjs";
 import { loadScopeDecision } from "./exclusion-impact.mjs";
 import { readNdjson } from "./records.mjs";
-import { buildPublicationCatalog } from "./publication-catalog.mjs";
+import {
+  buildPublicationCatalog,
+  writePublicationCatalogFile,
+} from "./publication-catalog.mjs";
 import { loadReleaseIntake } from "./release-intake.mjs";
 
 export const PACKAGE_PROFILE =
@@ -162,10 +165,9 @@ export async function buildPackageCandidate({
       canonicalRoot,
       index: assembledIndex,
     });
-    await writeFile(
+    const publicationCatalogSha256 = await writePublicationCatalogFile(
+      publicationCatalog,
       path.join(candidateStaging, "publication-catalog.json"),
-      canonicalJson(publicationCatalog),
-      { flag: "wx" },
     );
     const packagesDir = path.join(candidateStaging, "packages");
     const verificationWorkspace = path.join(
@@ -222,7 +224,7 @@ export async function buildPackageCandidate({
       canonicalDatasetIndexSha256: hashJson(assembledIndex),
       publicationCatalog: {
         path: "publication-catalog.json",
-        sha256: hashJson(publicationCatalog),
+        sha256: publicationCatalogSha256,
       },
       packages,
       packageSetHash: hashJson(

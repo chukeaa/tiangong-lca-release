@@ -281,12 +281,28 @@ async function loadCandidateEvidence(candidateRoot) {
       "candidate_dataset_index_hash_mismatch",
       "Candidate dataset index hash has drifted",
     );
-  const catalog = await readJson(
-    path.join(candidateRoot, candidate.publicationCatalog?.path ?? ""),
-    "candidate_publication_catalog_missing",
+  const catalogPath = path.join(
+    candidateRoot,
+    candidate.publicationCatalog?.path ?? "",
   );
+  const catalogBytes = await readFile(catalogPath).catch(() => null);
+  if (!catalogBytes)
+    fail(
+      "candidate_publication_catalog_missing",
+      `Unable to read required Publication artifact: ${catalogPath}`,
+    );
+  let catalog;
+  try {
+    catalog = JSON.parse(catalogBytes.toString("utf8"));
+  } catch (error) {
+    fail(
+      "candidate_publication_catalog_missing",
+      `Unable to read required Publication artifact: ${catalogPath}`,
+      { cause: error.message },
+    );
+  }
   if (
-    hashJson(catalog) !== candidate.publicationCatalog?.sha256 ||
+    sha256Bytes(catalogBytes) !== candidate.publicationCatalog?.sha256 ||
     catalog.canonicalDatasetIndexSha256 !==
       candidate.canonicalDatasetIndexSha256
   )
@@ -395,24 +411,20 @@ function validateCatalog(catalog, catalogByKey, index) {
         `Publication catalog dataset does not match the canonical index: ${dataset.key}`,
       );
     for (const reference of dataset.references)
-      if (
-        reference?.role !== "closure_dependency" ||
-        typeof reference.location !== "string" ||
-        !catalogByKey.has(reference.target)
-      )
+      if (typeof reference !== "string" || !catalogByKey.has(reference))
         fail(
           "candidate_publication_reference_missing",
-          `Publication catalog reference target is missing: ${dataset.key} -> ${reference.target}`,
+          `Publication catalog reference target is missing: ${dataset.key} -> ${reference}`,
         );
   }
   for (const name of ["unitProcess", "result"])
     validateCatalogComponent(name, catalog.components?.[name], catalogByKey);
+  // Must mirror publicationCatalogSetHash in workflows/release-candidate:
+  // per-dataset canonical hash, then a hash of the ordered hash list.
   const expectedSetHash = hashJson(
-    catalog.datasets.map(({ key, sha256, references }) => ({
-      key,
-      sha256,
-      references,
-    })),
+    catalog.datasets.map(({ key, sha256, references }) =>
+      hashJson({ key, sha256, references }),
+    ),
   );
   if (expectedSetHash !== catalog.catalogSetHash)
     fail(
@@ -491,7 +503,7 @@ function reachable(catalogByKey, roots, excluded = new Map()) {
       );
     found.add(key);
     for (const reference of dataset.references ?? [])
-      if (!found.has(reference.target)) queue.push(reference.target);
+      if (!found.has(reference)) queue.push(reference);
   }
   return found;
 }
@@ -500,10 +512,10 @@ function reverseEdges(catalogByKey, selected) {
   const reverse = new Map();
   for (const key of selected) {
     for (const reference of catalogByKey.get(key).references ?? []) {
-      if (!selected.has(reference.target)) continue;
-      const dependents = reverse.get(reference.target) ?? [];
+      if (!selected.has(reference)) continue;
+      const dependents = reverse.get(reference) ?? [];
       dependents.push(key);
-      reverse.set(reference.target, dependents.sort());
+      reverse.set(reference, dependents.sort());
     }
   }
   return reverse;
@@ -513,8 +525,8 @@ function assertReferenceComplete(catalogByKey, effective) {
   const conflicts = [];
   for (const key of effective)
     for (const reference of catalogByKey.get(key).references ?? [])
-      if (!effective.has(reference.target))
-        conflicts.push({ from: key, ...reference });
+      if (!effective.has(reference))
+        conflicts.push({ from: key, target: reference });
   if (conflicts.length)
     fail(
       "publication_scope_reference_incomplete",

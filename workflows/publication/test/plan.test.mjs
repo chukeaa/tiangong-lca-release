@@ -176,11 +176,9 @@ test("Publication fails closed for unknown, mismatched, empty, and drifted scope
   const driftedCatalog = structuredClone(originalCatalog);
   driftedCatalog.datasets[0].sha256 = "f".repeat(64);
   driftedCatalog.catalogSetHash = hashJson(
-    driftedCatalog.datasets.map(({ key: value, sha256, references }) => ({
-      key: value,
-      sha256,
-      references,
-    })),
+    driftedCatalog.datasets.map(({ key: value, sha256, references }) =>
+      hashJson({ key: value, sha256, references }),
+    ),
   );
   await writeFile(catalogPath, canonicalJson(driftedCatalog));
   await writeFile(
@@ -189,7 +187,7 @@ test("Publication fails closed for unknown, mismatched, empty, and drifted scope
       ...originalCandidate,
       publicationCatalog: {
         ...originalCandidate.publicationCatalog,
-        sha256: hashJson(driftedCatalog),
+        sha256: sha256Bytes(Buffer.from(canonicalJson(driftedCatalog))),
       },
     }),
   );
@@ -390,11 +388,9 @@ async function createCandidateFixture() {
     },
     datasets,
     catalogSetHash: hashJson(
-      datasets.map(({ key: value, sha256, references }) => ({
-        key: value,
-        sha256,
-        references,
-      })),
+      datasets.map(({ key: value, sha256, references }) =>
+        hashJson({ key: value, sha256, references }),
+      ),
     ),
   };
   const packagePlan = { schemaVersion: "tiangong.release.package-plan.v1" };
@@ -447,7 +443,7 @@ async function createCandidateFixture() {
     canonicalDatasetIndexSha256: hashJson(index),
     publicationCatalog: {
       path: "publication-catalog.json",
-      sha256: hashJson(catalog),
+      sha256: sha256Bytes(Buffer.from(canonicalJson(catalog))),
     },
     packages,
     packageSetHash: hashJson(
@@ -496,11 +492,7 @@ function dataset(keyValue, datasetType, role, uuid, targets, components) {
     path: `${datasetType}s/${uuid}_${VERSION}.json`,
     sha256: sha256Bytes(bytes),
     canonicalContentHash: hashJson(document),
-    references: targets.map((target, index) => ({
-      target,
-      location: `references/${index}`,
-      role: "closure_dependency",
-    })),
+    references: [...new Set(targets)].sort(),
     components,
   };
 }
