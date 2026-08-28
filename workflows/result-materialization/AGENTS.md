@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Required exact lineage evidence for Release impact analysis while keeping Materialization immutable."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Defined Result-only handling for Dataset Transformation Derived Result handoffs."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -31,6 +31,7 @@ related:
 ## Agent 的职责
 
 - 识别 Calculation Bundle、Derived Result 或已有 materialization artifact。
+- 消费 Dataset Transformation 的 `ready_for_result_materialization` handoff 时，只使用其 hash-bound Derived Result 和 receipt；默认生成 Result Process，不把缺失的 LifecycleModel 解释为待补齐对象。
 - 展示可用 recipe、已有证据和必须由用户决定的模型/metadata 问题。
 - 冻结精确 Materialization Request。
 - 冻结 requested roots、最终输出类型、Result Process 内容层、required Result set 和 direct-edge evidence。
@@ -128,6 +129,7 @@ Agent 提议不能替代用户对模型结构、重要 metadata 和首次 lineag
 
 - 不重新求解 LCI/LCIA。
 - 不执行用户业务加权或模型语义变换。
+- 不把 Result weighted aggregation handoff 扩大为 LifecycleModel 聚合；只有独立确认的 model operation 才能引入新的模型图语义。
 - 不改写源 Unit Process。
 - 不生成只有 LCIA、没有有效 LCI/reference basis 的 Result Process。
 - 不让 LifecycleModel 引用另一次 materialization 的未验证 Result Process。

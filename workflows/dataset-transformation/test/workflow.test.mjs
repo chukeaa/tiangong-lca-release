@@ -22,6 +22,11 @@ import {
   sha256Bytes,
   sha256File,
 } from "../lib/common.mjs";
+import {
+  PENDING_OPERATION,
+  RESULT_OPERATION,
+  UNIT_OPERATION,
+} from "../lib/operations.mjs";
 
 const execFileAsync = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -33,8 +38,15 @@ const INPUTS = [
   "33333333-3333-4333-8333-333333333333",
 ];
 const OUTPUT = "44444444-4444-4444-8444-444444444444";
+const RESULT_INPUTS = [
+  "77777777-7777-4777-8777-777777777777",
+  "88888888-8888-4888-8888-888888888888",
+  "99999999-9999-4999-8999-999999999999",
+];
 const FLOW_INPUT = "55555555-5555-4555-8555-555555555555";
 const FLOW_REFERENCE = "66666666-6666-4666-8666-666666666666";
+const LCIA_METHOD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CALCULATION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const key = (uuid) => `process:${uuid}@${VERSION}`;
 
 test("semantic differences produce needs_decision rather than a failed workflow", async (t) => {
@@ -67,7 +79,13 @@ test("semantic differences produce needs_decision rather than a failed workflow"
 test("resolved DSL normalizes three quantitative references before weighted aggregation", async (t) => {
   const fixture = await createFixture();
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
-  const readyDraft = draft({ decisions: resolvedDecisions() });
+  const readyDraft = draft({
+    operationType: UNIT_OPERATION,
+    decisions: resolvedDecisions({
+      includeTargetDecision: true,
+      operationType: UNIT_OPERATION,
+    }),
+  });
   const draftFile = path.join(fixture.root, "draft-ready.json");
   await writeFile(draftFile, canonicalJson(readyDraft));
   const inspection = await analyzeTransformation({
@@ -117,6 +135,146 @@ test("resolved DSL normalizes three quantitative references before weighted aggr
   );
   assert.equal(execution.handoff.nextWorkflow, "calculation");
   assert.equal(execution.handoff.finalTarget, "new-release-candidate");
+});
+
+test("aggregation target remains a normal user decision before input inspection", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const value = draft({
+    operationType: PENDING_OPERATION,
+    inputs: [],
+    decisions: [],
+  });
+  value.operation.targetRecommendation = {
+    recommendedOperation: RESULT_OPERATION,
+    reason: "The user asked for a weighted average of existing Results",
+    sourceRefs: ["conversation:goal"],
+  };
+  const draftFile = path.join(fixture.root, "target-pending.json");
+  await writeFile(draftFile, canonicalJson(value));
+  const inspection = await analyzeTransformation({
+    candidateDir: fixture.candidate,
+    dslFile: draftFile,
+    outDir: path.join(fixture.root, "target-pending-analysis"),
+  });
+  assert.equal(inspection.analysis.status, "needs_decision");
+  assert.deepEqual(inspection.analysis.unresolvedConflictIds, [
+    "operation:aggregation-target",
+  ]);
+  assert.equal(
+    inspection.analysis.operation.targetSelection.recommendation
+      .recommendedOperation,
+    RESULT_OPERATION,
+  );
+  assert.equal(
+    inspection.analysis.nextAction,
+    "agent_recommends_and_user_selects_aggregation_target",
+  );
+});
+
+test("new Unit Process operation requires an explicit matching target confirmation", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const unconfirmed = draft({
+    operationType: UNIT_OPERATION,
+    decisions: resolvedDecisions(),
+  });
+  const draftFile = path.join(fixture.root, "unit-unconfirmed.json");
+  await writeFile(draftFile, canonicalJson(unconfirmed));
+  const inspection = await analyzeTransformation({
+    candidateDir: fixture.candidate,
+    dslFile: draftFile,
+    outDir: path.join(fixture.root, "unit-unconfirmed-analysis"),
+  });
+  assert.ok(
+    inspection.analysis.unresolvedConflictIds.includes(
+      "operation:aggregation-target",
+    ),
+  );
+});
+
+test("compatible Result Processes aggregate LCI and LCIA then route to Result Materialization", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const value = draft({
+    operationType: RESULT_OPERATION,
+    inputs: RESULT_INPUTS,
+    decisions: resolvedDecisions({
+      inputs: RESULT_INPUTS,
+      includeTargetDecision: true,
+      operationType: RESULT_OPERATION,
+    }),
+  });
+  value.operation.targetRecommendation = {
+    recommendedOperation: RESULT_OPERATION,
+    reason: "The requested output is a weighted Result rather than a new model",
+  };
+  const draftFile = path.join(fixture.root, "result-ready.json");
+  await writeFile(draftFile, canonicalJson(value));
+  const inspection = await analyzeTransformation({
+    candidateDir: fixture.candidate,
+    dslFile: draftFile,
+    outDir: path.join(fixture.root, "result-analysis"),
+  });
+  assert.equal(inspection.analysis.status, "ready");
+  assert.equal(
+    inspection.analysis.operation.compatibility.calculationId,
+    CALCULATION_ID,
+  );
+  assert.equal(inspection.analysis.operation.compatibility.lciaMethodCount, 1);
+  const frozen = await freezeTransformation({
+    candidateDir: fixture.candidate,
+    dslFile: draftFile,
+    analysisDir: inspection.path,
+    outDir: path.join(fixture.root, "result-frozen"),
+  });
+  const execution = await executeTransformation({
+    candidateDir: fixture.candidate,
+    specDir: frozen.path,
+    outDir: path.join(fixture.root, "result-execution"),
+  });
+  const process = JSON.parse(
+    await readFile(
+      path.join(execution.path, "canonical-datasets", execution.dataset.path),
+      "utf8",
+    ),
+  ).processDataSet;
+  const inventory = process.exchanges.exchange.find(
+    (item) => item.referenceToFlowDataSet["@refObjectId"] === FLOW_INPUT,
+  );
+  assert.equal(Number(inventory.resultingAmount), 2.7);
+  assert.equal(Number(process.LCIAResults.LCIAResult[0].meanAmount), 19);
+  assert.equal(execution.dataset.role, "result_process");
+  assert.equal(execution.handoff.status, "ready_for_result_materialization");
+  assert.equal(execution.handoff.nextWorkflow, "result-materialization");
+  assert.equal(execution.receipt.resultEvidence.disposition, "derived");
+});
+
+test("incompatible Result method sets remain a route decision instead of execution failure", async (t) => {
+  const fixture = await createFixture({ mismatchedResultMethod: true });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const value = draft({
+    operationType: RESULT_OPERATION,
+    inputs: RESULT_INPUTS,
+    decisions: resolvedDecisions({
+      inputs: RESULT_INPUTS,
+      includeTargetDecision: true,
+      operationType: RESULT_OPERATION,
+    }),
+  });
+  const draftFile = path.join(fixture.root, "result-incompatible.json");
+  await writeFile(draftFile, canonicalJson(value));
+  const inspection = await analyzeTransformation({
+    candidateDir: fixture.candidate,
+    dslFile: draftFile,
+    outDir: path.join(fixture.root, "result-incompatible-analysis"),
+  });
+  assert.equal(inspection.analysis.status, "needs_decision");
+  assert.ok(
+    inspection.analysis.unresolvedConflictIds.includes(
+      "compatibility:lcia-methods",
+    ),
+  );
 });
 
 test("annual-production gaps remain decisions and explicit evidenced overrides resolve them", async (t) => {
@@ -230,20 +388,23 @@ test("CLI emits bounded needs_decision JSON and a semantic reply template", asyn
   assert.equal("conflicts" in payload, false);
 });
 
-function draft({ weighting = null, decisions = [] } = {}) {
+function draft({
+  weighting = null,
+  decisions = [],
+  operationType = "process.weighted-aggregate.v0",
+  inputs = INPUTS,
+} = {}) {
   return {
     schemaVersion: "tiangong.release.dataset-transformation-dsl.v0",
     status: "draft",
     operation: {
-      type: "process.weighted-aggregate.v0",
-      inputs: INPUTS.map(key),
+      type: operationType,
+      inputs: inputs.map(key),
       weighting: weighting ?? {
         mode: "explicit",
-        values: {
-          [key(INPUTS[0])]: 0.5,
-          [key(INPUTS[1])]: 0.3,
-          [key(INPUTS[2])]: 0.2,
-        },
+        values: Object.fromEntries(
+          inputs.map((uuid, index) => [key(uuid), [0.5, 0.3, 0.2][index]]),
+        ),
       },
     },
     output: {
@@ -255,7 +416,7 @@ function draft({ weighting = null, decisions = [] } = {}) {
       generatedAt: "2026-08-26T00:00:00.000Z",
     },
     policies: {
-      prototypeInput: key(INPUTS[0]),
+      ...(inputs.length ? { prototypeInput: key(inputs[0]) } : {}),
       exchangeMetadata: {
         base: "take-from-prototype-then-input-order",
         dataSources: "union-deduplicate",
@@ -268,9 +429,24 @@ function draft({ weighting = null, decisions = [] } = {}) {
   };
 }
 
-function resolvedDecisions({ annualStrategy = "drop" } = {}) {
-  const first = key(INPUTS[0]);
+function resolvedDecisions({
+  annualStrategy = "drop",
+  inputs = INPUTS,
+  includeTargetDecision = false,
+  operationType = UNIT_OPERATION,
+} = {}) {
+  const first = key(inputs[0]);
   return [
+    ...(includeTargetDecision
+      ? [
+          {
+            conflictId: "operation:aggregation-target",
+            strategy: "select-operation",
+            value: operationType,
+            reason: "The user explicitly confirmed the aggregation target",
+          },
+        ]
+      : []),
     {
       conflictId: "field:name",
       strategy: "rewrite",
@@ -281,6 +457,17 @@ function resolvedDecisions({ annualStrategy = "drop" } = {}) {
         treatmentStandardsRoutes: [],
       },
       reason: "The aggregate needs a distinct name",
+    },
+    {
+      conflictId: "field:generalComment",
+      strategy: "rewrite",
+      value: [
+        {
+          "@xml:lang": "en",
+          "#text": "Weighted aggregation across the confirmed inputs",
+        },
+      ],
+      reason: "Input-specific lineage comments cannot become the output claim",
     },
     {
       conflictId: "field:geography",
@@ -304,13 +491,15 @@ function resolvedDecisions({ annualStrategy = "drop" } = {}) {
   ];
 }
 
-async function createFixture() {
+async function createFixture({ mismatchedResultMethod = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "transformation-v0-"));
   const candidate = path.join(root, "candidate");
-  const packageRoot = path.join(root, "package-root");
+  const unitPackageRoot = path.join(root, "unit-package-root");
+  const resultPackageRoot = path.join(root, "result-package-root");
   await mkdir(path.join(candidate, "packages"), { recursive: true });
-  await mkdir(path.join(packageRoot, "processes"), { recursive: true });
-  const documents = [
+  await mkdir(path.join(unitPackageRoot, "processes"), { recursive: true });
+  await mkdir(path.join(resultPackageRoot, "processes"), { recursive: true });
+  const unitDocuments = [
     processDocument({
       uuid: INPUTS[0],
       location: "CN-HB",
@@ -334,11 +523,11 @@ async function createFixture() {
     }),
   ];
   const entries = [];
-  for (const [index, document] of documents.entries()) {
+  for (const [index, document] of unitDocuments.entries()) {
     const file = `${INPUTS[index]}_${VERSION}.json`;
     const relative = `processes/${file}`;
     const bytes = Buffer.from(canonicalJson(document));
-    await writeFile(path.join(packageRoot, relative), bytes);
+    await writeFile(path.join(unitPackageRoot, relative), bytes);
     entries.push({
       byteSize: bytes.length,
       canonicalContentHash: hashJson(document),
@@ -350,29 +539,84 @@ async function createFixture() {
       version: VERSION,
     });
   }
-  const archiveName = "TiangongLCA-test-UnitProcessDatabase.tidas.zip";
-  const archive = path.join(candidate, "packages", archiveName);
-  await execFileAsync("zip", ["-X", "-q", "-r", archive, "."], {
-    cwd: packageRoot,
+  const resultDocuments = [
+    resultProcessDocument({
+      uuid: RESULT_INPUTS[0],
+      sourceUuid: INPUTS[0],
+      location: "CN-HB",
+      inputAmount: 2,
+      lciaAmount: 10,
+      annual: "100 kg/year",
+    }),
+    resultProcessDocument({
+      uuid: RESULT_INPUTS[1],
+      sourceUuid: INPUTS[1],
+      location: "CN-SN",
+      inputAmount: 3,
+      lciaAmount: 20,
+      annual: null,
+      methodUuid: mismatchedResultMethod
+        ? "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        : LCIA_METHOD,
+    }),
+    resultProcessDocument({
+      uuid: RESULT_INPUTS[2],
+      sourceUuid: INPUTS[2],
+      location: "CN-JS",
+      inputAmount: 4,
+      lciaAmount: 40,
+      annual: "9999 missing-data-sentinel/year",
+    }),
+  ];
+  for (const [index, document] of resultDocuments.entries()) {
+    const file = `${RESULT_INPUTS[index]}_${VERSION}.json`;
+    const relative = `processes/${file}`;
+    const bytes = Buffer.from(canonicalJson(document));
+    await writeFile(path.join(resultPackageRoot, relative), bytes);
+    entries.push({
+      byteSize: bytes.length,
+      canonicalContentHash: hashJson(document),
+      datasetType: "process",
+      path: relative,
+      role: "result_process",
+      sha256: sha256Bytes(bytes),
+      uuid: RESULT_INPUTS[index],
+      version: VERSION,
+    });
+  }
+  const unitArchiveName = "TiangongLCA-test-UnitProcessDatabase.tidas.zip";
+  const unitArchive = path.join(candidate, "packages", unitArchiveName);
+  await execFileAsync("zip", ["-X", "-q", "-r", unitArchive, "."], {
+    cwd: unitPackageRoot,
   });
-  const archiveInfo = await readFile(archive);
+  const resultArchiveName = "TiangongLCA-test-ResultDatabase.tidas.zip";
+  const resultArchive = path.join(candidate, "packages", resultArchiveName);
+  await execFileAsync("zip", ["-X", "-q", "-r", resultArchive, "."], {
+    cwd: resultPackageRoot,
+  });
+  const unitArchiveInfo = await readFile(unitArchive);
+  const resultArchiveInfo = await readFile(resultArchive);
   const packages = [
     {
-      path: `packages/${archiveName}`,
+      path: `packages/${unitArchiveName}`,
       mediaType: "application/zip",
-      byteSize: archiveInfo.length,
-      sha256: await sha256File(archive),
+      byteSize: unitArchiveInfo.length,
+      sha256: await sha256File(unitArchive),
     },
-    ...[
-      "UnitProcessDatabase.ilcd.zip",
-      "ResultDatabase.tidas.zip",
-      "ResultDatabase.ilcd.zip",
-    ].map((name, index) => ({
-      path: `packages/TiangongLCA-test-${name}`,
+    {
+      path: `packages/${resultArchiveName}`,
       mediaType: "application/zip",
-      byteSize: index + 1,
-      sha256: String(index + 1).repeat(64),
-    })),
+      byteSize: resultArchiveInfo.length,
+      sha256: await sha256File(resultArchive),
+    },
+    ...["UnitProcessDatabase.ilcd.zip", "ResultDatabase.ilcd.zip"].map(
+      (name, index) => ({
+        path: `packages/TiangongLCA-test-${name}`,
+        mediaType: "application/zip",
+        byteSize: index + 1,
+        sha256: String(index + 1).repeat(64),
+      }),
+    ),
   ];
   const index = {
     schemaVersion: "tiangong.release.canonical-dataset-index.v1",
@@ -472,6 +716,44 @@ function processDocument({ uuid, location, refAmount, inputAmount, annual }) {
       },
     },
   };
+}
+
+function resultProcessDocument({
+  uuid,
+  sourceUuid,
+  location,
+  inputAmount,
+  lciaAmount,
+  annual,
+  methodUuid = LCIA_METHOD,
+}) {
+  const document = processDocument({
+    uuid,
+    location,
+    refAmount: 1,
+    inputAmount,
+    annual,
+  });
+  const process = document.processDataSet;
+  process.modellingAndValidation.LCIMethodAndAllocation.typeOfDataSet =
+    "LCI result";
+  process.processInformation.dataSetInformation["common:generalComment"] = {
+    "@xml:lang": "en",
+    "#text": `aggregated LCI/LCIA result generated for ${sourceUuid}@${VERSION} under calculation ${CALCULATION_ID}.`,
+  };
+  process.LCIAResults = {
+    LCIAResult: [
+      {
+        meanAmount: String(lciaAmount),
+        referenceToLCIAMethodDataSet: {
+          "@refObjectId": methodUuid,
+          "@version": VERSION,
+          "@type": "LCIA method data set",
+        },
+      },
+    ],
+  };
+  return document;
 }
 
 function exchange(id, direction, flow, amount) {

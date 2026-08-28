@@ -20,12 +20,37 @@
     "operation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "inputs", "weighting"],
+      "required": ["type"],
       "properties": {
-        "type": { "const": "process.weighted-aggregate.v0" },
+        "type": {
+          "enum": [
+            "weighted-aggregate.choose-target.v0",
+            "process.weighted-aggregate.v0",
+            "unit-process.weighted-aggregate.v1",
+            "result-process.weighted-aggregate.v0"
+          ]
+        },
+        "targetRecommendation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["recommendedOperation", "reason"],
+          "properties": {
+            "recommendedOperation": {
+              "enum": [
+                "unit-process.weighted-aggregate.v1",
+                "result-process.weighted-aggregate.v0"
+              ]
+            },
+            "reason": { "type": "string", "minLength": 1 },
+            "sourceRefs": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
         "inputs": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 0,
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/processKey" }
         },
@@ -123,7 +148,13 @@
       "properties": {
         "conflictId": { "type": "string", "minLength": 1 },
         "strategy": {
-          "enum": ["take-from", "rewrite", "drop", "sum-resolved"]
+          "enum": [
+            "take-from",
+            "rewrite",
+            "drop",
+            "sum-resolved",
+            "select-operation"
+          ]
         },
         "input": { "$ref": "#/$defs/processKey" },
         "value": {},

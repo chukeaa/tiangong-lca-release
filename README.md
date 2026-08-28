@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
-lastReviewedNote: "Reviewed for Issue #68; the Release Candidate runtime correction does not change the five-Workflow product structure or Candidate successor paths."
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Updated for Issue #70 with explicit Unit/Result Transformation semantics and conditional successor paths."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -125,11 +125,11 @@ Release Candidate v2 额外冻结 `publication-catalog.json`，让 Publication �
 
 ## 4. Dataset Transformation Workflow
 
-Dataset Transformation 是 Candidate 完成后的可选再加工入口。当前 DSL v0 支持从 Candidate v1/v2 选择精确 Unit Process，以显式权重或 `annualSupplyOrProductionVolume` 证据形成加权聚合。
+Dataset Transformation 是 Candidate 完成后的可选再加工入口。当前 DSL v0 先让 Agent 解释并推荐 Unit Process 或 Result Process 聚合语义，再由用户确认目标；随后从 Candidate v1/v2 选择匹配 role 的精确 Process，以显式权重或 `annualSupplyOrProductionVolume` 证据形成加权聚合。
 
 Workflow 先生成完整业务字段冲突报告。字段差异、年产量缺失或取值不明确进入 `needs_decision`，由 Agent 提出策略并把用户决定写回 DSL；它们不是失败。决定完整后冻结 Candidate/dataset hashes、weights、字段值和 metadata policy，再由确定性执行器归一化参考 amount、聚合 exchanges、生成新 identity、重置 review，并输出 validation receipt 和 lineage。
 
-加权 Unit Process 改变定量语义，因此旧 Result evidence 明确失效，完成后返回 `Calculation -> Result Materialization -> Release Candidate`。父 Candidate 不被覆盖，Transformation 也不产生发布副作用。LifecycleModel、Result Process、unit mapping 和通用表达式留给后续 operation/version。
+加权 Unit Process 改变过程清单语义，因此旧 Result evidence 明确失效，完成后返回 `Calculation -> Result Materialization -> Release Candidate`。加权 Result Process 只组合 hash-bound、共同 Calculation lineage、exchange set 和 LCIA method set 兼容的已有 Result，完成后直接返回 `Result Materialization -> Release Candidate`，不重新求解，也不隐式聚合 LifecycleModel。父 Candidate 不被覆盖，Transformation 也不产生发布副作用。
 
 详见 [Dataset Transformation Workflow](workflows/dataset-transformation/README.md)。
 
@@ -185,7 +185,7 @@ Candidate
 
 ### 再加工
 
-Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它。加工完成后根据结果有效性返回 Release Candidate，或返回 Calculation/Result Materialization 重新产生结果证据。
+Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它。用户先确认 Unit Process 或 Result Process 加权语义：Unit Process 路线返回 Calculation 后重新产生 Result evidence；Result Process 路线产生 Derived Result 并返回 Result Materialization，不隐式聚合 LifecycleModel。两条路线最终都构建新的 Candidate。
 
 ## 共享边界
 
@@ -201,5 +201,5 @@ Dataset Transformation 只能读取并验证 Candidate 数据，不能覆盖它�
 - Calculation 已实现 workflow-local ResultSet、Closure、计算任务、Bundle 数据面和 Worker 日志委托入口。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核工作簿、scope decision 和 Candidate qualification。
-- Dataset Transformation 已实现 DSL v0、Candidate v1/v2 精确读取、业务字段冲突决策、显式/年产量权重、加权 Unit Process、验证、CLI、schemas、回复模板和真实三 Process 试验。
+- Dataset Transformation 已实现 DSL v0、Candidate v1/v2 精确读取、Unit/Result aggregation-target 决策、业务字段冲突决策、显式/年产量权重、加权 Unit/Result Process、LCI/LCIA 兼容性验证、条件 handoff、CLI、schemas、回复模板和真实三 Process 试验。
 - Publication 已实现 Candidate v2 catalog、范围解析、精确 payload、目标检查、hash-bound Approval、可恢复远程发布、独立回读、严格 schemas、CLI、回复模板和 fail-closed 测试；当前执行 adapter 支持平台发布状态码 `100`。

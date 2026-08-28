@@ -24,7 +24,13 @@
       "type": "object",
       "required": ["type", "candidate", "inputs", "weighting"],
       "properties": {
-        "type": { "const": "process.weighted-aggregate.v0" },
+        "type": {
+          "enum": [
+            "process.weighted-aggregate.v0",
+            "unit-process.weighted-aggregate.v1",
+            "result-process.weighted-aggregate.v0"
+          ]
+        },
         "candidate": { "type": "object" },
         "inputs": {
           "type": "array",
@@ -52,9 +58,11 @@
       "type": "object",
       "required": ["disposition", "reason", "nextWorkflow"],
       "properties": {
-        "disposition": { "const": "invalidated" },
+        "disposition": { "enum": ["invalidated", "derived"] },
         "reason": { "type": "string" },
-        "nextWorkflow": { "const": "calculation" }
+        "nextWorkflow": {
+          "enum": ["calculation", "result-materialization"]
+        }
       }
     },
     "lineage": { "type": "object" }

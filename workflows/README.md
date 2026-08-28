@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
-lastReviewedNote: "Reviewed for Issue #68; the Workflow inventory and navigation remain unchanged."
+lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
+lastReviewedNote: "Updated for Issue #70 to expose Unit/Result Transformation semantics."
 related:
   - ../README.md
   - AGENTS.md
@@ -29,7 +29,7 @@ related:
 | [Calculation](calculation/README.md)                       | 从 ResultSet/Closure/任务接入，完成验证、计算与下载        | Closure evidence、Calculation Bundle                        |
 | [Result Materialization](result-materialization/README.md) | 将冻结结果组装为标准 Process/LifecycleModel                | Canonical datasets、identity/version plan、manifest         |
 | [Release Candidate](release-candidate/README.md)           | 准备闭合输入，验证、打包并冻结不可变 Candidate             | Release Intake、Package Plan、Scope Decision、Candidate     |
-| [Dataset Transformation](dataset-transformation/README.md) | 用 DSL 解决业务字段冲突并加权聚合精确 Unit Process         | Frozen Spec、transformed Process、validation/handoff        |
+| [Dataset Transformation](dataset-transformation/README.md) | 选择 Unit/Result 语义，用 DSL 解决冲突并加权精确 Process   | Frozen Spec、transformed Process、conditional handoff       |
 | [Publication](publication/README.md)                       | 消费不可变 Candidate，经过精确授权后写入平台并确认发布终态 | Draft/Executable Plan、Approval、Execution/Readback Receipt |
 
 默认主线是 `Calculation -> Result Materialization -> Release Candidate`。Candidate 完成后进入 Publication 做全量或选择性的依赖闭合范围规划，或进入 Dataset Transformation 再加工并生成新 Candidate。任何分支都不得原地修改已有 Candidate。
