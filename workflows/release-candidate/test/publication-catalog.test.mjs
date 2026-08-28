@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { canonicalJson, hashJson, sha256Bytes } from "../lib/common.mjs";
-import { buildPublicationCatalog } from "../lib/publication-catalog.mjs";
+import {
+  buildPublicationCatalog,
+  publicationCatalogSetHash,
+  writePublicationCatalogFile,
+} from "../lib/publication-catalog.mjs";
 
 const NON_RFC_UUID = "f2a6e8a4-1b22-e2e9-6903-b8ac475b05b3";
 
@@ -82,11 +86,9 @@ test("publication catalog accepts non-RFC-versioned platform UUIDs", async () =>
     const processRecord = catalog.datasets.find(
       (entry) => entry.uuid === "0016d864-1d9b-4f54-83b3-a1c61ba9564d",
     );
-    assert.equal(processRecord.references.length, 1);
-    assert.equal(
-      processRecord.references[0].target,
+    assert.deepEqual(processRecord.references, [
       `source:${NON_RFC_UUID}@01.00.005`,
-    );
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -129,6 +131,111 @@ test("publication catalog reports the offending dataset for malformed references
         return true;
       },
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("publication catalog dedupes repeated references and hashes the set incrementally", async () => {
+  const repeatedReference = {
+    "@refObjectId": NON_RFC_UUID,
+    "@version": "01.00.005",
+    "@type": "source data set",
+  };
+  const { root, index } = await tempIndex([
+    {
+      dataset: {
+        path: "processes/0016d864-1d9b-4f54-83b3-a1c61ba9564d_01.00.000.json",
+        datasetType: "process",
+        role: "unit_process",
+        uuid: "0016d864-1d9b-4f54-83b3-a1c61ba9564d",
+        version: "01.00.000",
+      },
+      document: unitProcessDocument([
+        repeatedReference,
+        { ...repeatedReference },
+      ]),
+    },
+    {
+      dataset: {
+        path: "sources/f2a6e8a4-1b22-e2e9-6903-b8ac475b05b3_01.00.005.json",
+        datasetType: "source",
+        role: "source",
+        uuid: NON_RFC_UUID,
+        version: "01.00.005",
+      },
+      document: {
+        sourceDataSet: {
+          sourceInformation: {
+            dataSetInformation: { "common:UUID": NON_RFC_UUID },
+          },
+        },
+      },
+    },
+  ]);
+  try {
+    const catalog = await buildPublicationCatalog({
+      canonicalRoot: root,
+      index,
+    });
+    const processRecord = catalog.datasets.find(
+      (entry) => entry.uuid === "0016d864-1d9b-4f54-83b3-a1c61ba9564d",
+    );
+    assert.deepEqual(processRecord.references, [
+      `source:${NON_RFC_UUID}@01.00.005`,
+    ]);
+    assert.equal(
+      catalog.catalogSetHash,
+      publicationCatalogSetHash(catalog.datasets),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("streaming catalog file equals canonical serialization and binds its bytes", async () => {
+  const { root, index } = await tempIndex([
+    {
+      dataset: {
+        path: "processes/0016d864-1d9b-4f54-83b3-a1c61ba9564d_01.00.000.json",
+        datasetType: "process",
+        role: "unit_process",
+        uuid: "0016d864-1d9b-4f54-83b3-a1c61ba9564d",
+        version: "01.00.000",
+      },
+      document: unitProcessDocument({
+        "@refObjectId": NON_RFC_UUID,
+        "@version": "01.00.005",
+        "@type": "source data set",
+      }),
+    },
+    {
+      dataset: {
+        path: "sources/f2a6e8a4-1b22-e2e9-6903-b8ac475b05b3_01.00.005.json",
+        datasetType: "source",
+        role: "source",
+        uuid: NON_RFC_UUID,
+        version: "01.00.005",
+      },
+      document: {
+        sourceDataSet: {
+          sourceInformation: {
+            dataSetInformation: { "common:UUID": NON_RFC_UUID },
+          },
+        },
+      },
+    },
+  ]);
+  try {
+    const catalog = await buildPublicationCatalog({
+      canonicalRoot: root,
+      index,
+    });
+    const file = path.join(root, "publication-catalog.json");
+    const streamedSha256 = await writePublicationCatalogFile(catalog, file);
+    const bytes = await readFile(file);
+    assert.equal(sha256Bytes(bytes), streamedSha256);
+    assert.equal(bytes.toString("utf8"), canonicalJson(catalog));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

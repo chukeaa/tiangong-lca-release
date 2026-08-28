@@ -1,9 +1,20 @@
+import { createHash } from "node:crypto";
+import { createWriteStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import canonicalize from "canonicalize";
 import { fail, hashJson, sha256Bytes } from "./common.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const VERSION = /^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$/u;
+
+export function publicationCatalogSetHash(datasets) {
+  return hashJson(
+    datasets.map(({ key, sha256, references }) =>
+      hashJson({ key, sha256, references }),
+    ),
+  );
+}
 
 export async function buildPublicationCatalog({ canonicalRoot, index }) {
   const records = new Map();
@@ -48,7 +59,7 @@ export async function buildPublicationCatalog({ canonicalRoot, index }) {
   }
 
   for (const record of records.values()) {
-    record.references = record.rawReferences.map((reference) => {
+    record.resolvedTargets = record.rawReferences.map((reference) => {
       const candidates = (keysByUuid.get(reference.uuid) ?? []).filter((key) =>
         reference.version ? key.endsWith(`@${reference.version}`) : true,
       );
@@ -64,11 +75,7 @@ export async function buildPublicationCatalog({ canonicalRoot, index }) {
           `Required Publication reference is ambiguous: ${record.key} -> ${reference.uuid}@${reference.version ?? "unspecified"}`,
           { from: record.key, reference, candidates: candidates.sort() },
         );
-      return {
-        target: candidates[0],
-        location: reference.location,
-        role: "closure_dependency",
-      };
+      return candidates[0];
     });
     delete record.rawReferences;
   }
@@ -87,8 +94,9 @@ export async function buildPublicationCatalog({ canonicalRoot, index }) {
   const resultSet = reachable(records, resultRoots);
   const datasets = [...records.values()]
     .sort((left, right) => left.key.localeCompare(right.key))
-    .map((record) => ({
+    .map(({ resolvedTargets, ...record }) => ({
       ...record,
+      references: [...new Set(resolvedTargets)].sort(),
       components: [
         ...(unitProcessSet.has(record.key) ? ["unit_process"] : []),
         ...(resultSet.has(record.key) ? ["result"] : []),
@@ -115,14 +123,35 @@ export async function buildPublicationCatalog({ canonicalRoot, index }) {
       },
     },
     datasets,
-    catalogSetHash: hashJson(
-      datasets.map(({ key, sha256, references }) => ({
-        key,
-        sha256,
-        references,
-      })),
-    ),
+    catalogSetHash: publicationCatalogSetHash(datasets),
   };
+}
+
+export async function writePublicationCatalogFile(catalog, filePath) {
+  const hash = createHash("sha256");
+  const stream = createWriteStream(filePath, { flags: "wx" });
+  const write = (chunk) => {
+    hash.update(chunk, "utf8");
+    stream.write(chunk);
+  };
+  write(
+    `{"canonicalDatasetIndexSha256":${canonicalize(catalog.canonicalDatasetIndexSha256)},`,
+  );
+  write(`"catalogSetHash":${canonicalize(catalog.catalogSetHash)},`);
+  write(`"components":${canonicalize(catalog.components)},`);
+  write(`"datasetCount":${canonicalize(catalog.datasetCount)},`);
+  write(`"datasets":[`);
+  let first = true;
+  for (const dataset of catalog.datasets) {
+    const chunk = canonicalize(dataset);
+    write(first ? chunk : `,${chunk}`);
+    first = false;
+  }
+  write(`],"schemaVersion":${canonicalize(catalog.schemaVersion)}}\n`);
+  await new Promise((resolve, reject) =>
+    stream.end((error) => (error ? reject(error) : resolve())),
+  );
+  return hash.digest("hex");
 }
 
 function reachable(records, roots) {
@@ -138,8 +167,8 @@ function reachable(records, roots) {
         `Publication component names a missing root: ${key}`,
       );
     found.add(key);
-    for (const reference of record.references)
-      if (!found.has(reference.target)) queue.push(reference.target);
+    for (const target of record.resolvedTargets)
+      if (!found.has(target)) queue.push(target);
   }
   return found;
 }
