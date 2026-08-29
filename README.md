@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reconciled current Transformation semantics and all six package trees under exact pnpm 11.24 without changing release authority."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: current Transformation semantics and pnpm workspace coexist with the opt-in Portal LCIA package/projection recipe without changing release authority."
 related:
   - AGENTS.md
   - docs/architecture.md

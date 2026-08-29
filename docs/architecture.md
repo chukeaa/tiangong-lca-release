@@ -18,8 +18,8 @@ checkPaths:
   - .docpact/config.yaml
   - workflows/**
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reconciled current main topology with exact pnpm 11.24, six packages, portable CI, pure JavaScript, and SDK 0.2 validation."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: exact pnpm 11.24 topology, pure JavaScript, SDK 0.2, and Portal LCIA package/projection boundaries are jointly represented."
 related:
   - ../AGENTS.md
   - ../README.md

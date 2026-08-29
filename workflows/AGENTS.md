@@ -13,8 +13,8 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reviewed shared Workflow decisions and exact pnpm 11.24 installation after current-main reconciliation."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: shared pnpm Workflow decisions preserve the separate confirmation and readback boundaries of Portal LCIA publication."
 related:
   - ../AGENTS.md
   - ../README.md

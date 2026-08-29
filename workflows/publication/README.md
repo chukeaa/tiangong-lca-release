@@ -14,8 +14,8 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reviewed full-closure selection and payload behavior under the root pnpm 11.24 workspace without changing publication authority."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: full-closure selection and the Portal LCIA package/projection recipe both run under the root pnpm 11.24 workspace without widening authority."
 related:
   - AGENTS.md
   - ../release-candidate/README.md

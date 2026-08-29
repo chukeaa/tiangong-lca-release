@@ -26,8 +26,8 @@ checkPaths:
   - .node-version
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reconciled current main's Transformation/Release Candidate work into one exact pnpm 11.24 workspace while preserving pure-JavaScript and security boundaries."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA publication remains isolated and actor-scoped after reconciling current pnpm, Unit/Result Transformation, full-closure, and SDK changes."
 related:
   - README.md
   - .docpact/config.yaml

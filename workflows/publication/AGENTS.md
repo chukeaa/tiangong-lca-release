@@ -14,8 +14,8 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reviewed current full-closure plan/payload changes under exact pnpm 11.24; publication authorization and readback boundaries remain unchanged."
+lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
+lastReviewedNote: "Reviewed for Release #59: full-closure Candidate publication and Portal LCIA package/projection publication retain separate exact authorization and readback boundaries."
 related:
   - README.md
   - ../AGENTS.md
