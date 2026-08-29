@@ -1,6 +1,6 @@
-import { createRequire } from "node:module";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import ExcelJS from "exceljs";
 import { canonicalJson, fail, hashJson, sha256Bytes } from "./common.mjs";
 
 const WORKBOOK_NAME = "exclusion-impact-review.xlsx";
@@ -18,7 +18,6 @@ const SHEET_NAMES = Object.freeze([
 export async function buildExclusionImpactReviewWorkbook({
   impactReportPath,
   outDir,
-  spreadsheetNodeModules,
   previewDir,
 }) {
   const reportPath = path.resolve(impactReportPath);
@@ -41,12 +40,13 @@ export async function buildExclusionImpactReviewWorkbook({
   const model = buildExclusionReviewWorkbookModel(report, {
     sourceReportSha256,
   });
-  const { SpreadsheetFile, Workbook } = await loadArtifactTool(
-    spreadsheetNodeModules,
-  );
-  const workbook = Workbook.create();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "TianGong LCA Release";
+  workbook.created = new Date(0);
+  workbook.modified = new Date(0);
+  workbook.calcProperties.fullCalcOnLoad = true;
   const sheets = new Map(
-    SHEET_NAMES.map((name) => [name, workbook.worksheets.add(name)]),
+    SHEET_NAMES.map((name) => [name, workbook.addWorksheet(name)]),
   );
   populateDetailSheet(sheets.get("Invalid Data"), model.invalidData, {
     widths: [15, 39, 13, 66, 24, 12, 13, 30, 18, 19],
@@ -74,44 +74,48 @@ export async function buildExclusionImpactReviewWorkbook({
   );
   populateSummarySheet(sheets.get("Summary"), model);
 
-  const keyInspection = await workbook.inspect({
-    kind: "table",
-    range: "Summary!A1:D22",
-    include: "values,formulas",
-    tableMaxRows: 22,
-    tableMaxCols: 4,
-    maxChars: 7000,
-  });
-  const formulaErrors = await workbook.inspect({
-    kind: "match",
-    searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",
-    options: { useRegex: true, maxResults: 100 },
-    summary: "exclusion review formula error scan",
-    maxChars: 3000,
-  });
-  assertFormulaErrorScanClean(formulaErrors.ndjson);
+  const keyInspection = inspectRange(sheets.get("Summary"), 1, 1, 22, 4);
+  const formulaErrors = scanFormulaErrors(workbook);
+  if (formulaErrors.length)
+    fail(
+      "review_workbook_formula_error",
+      "Spreadsheet review workbook contains a formula error",
+      { scan: formulaErrors },
+    );
   await mkdir(path.dirname(target), { recursive: true });
   const staging = `${target}.tmp-${process.pid}`;
   await mkdir(staging, { recursive: false });
   try {
     await mkdir(previews, { recursive: true });
+    const previewFiles = [];
     for (const sheetName of SHEET_NAMES) {
-      const preview = await workbook.render({
-        sheetName,
-        autoCrop: "all",
-        scale: 1,
-        format: "png",
-      });
+      const previewFile = `${fileSafe(sheetName)}.svg`;
       await writeFile(
-        path.join(previews, `${fileSafe(sheetName)}.png`),
-        new Uint8Array(await preview.arrayBuffer()),
+        path.join(previews, previewFile),
+        renderWorksheetPreview(sheets.get(sheetName)),
+        { flag: "wx" },
       );
+      previewFiles.push(previewFile);
     }
     const stagedWorkbook = path.join(staging, WORKBOOK_NAME);
-    const output = await SpreadsheetFile.exportXlsx(workbook);
-    await suppressArtifactInspectNotice(() => output.save(stagedWorkbook));
-    await rm(`${stagedWorkbook}.inspect.ndjson`, { force: true });
-    const workbookBytes = await readFile(stagedWorkbook);
+    const workbookBytes = Buffer.from(await workbook.xlsx.writeBuffer());
+    const readbackWorkbook = new ExcelJS.Workbook();
+    await readbackWorkbook.xlsx.load(workbookBytes);
+    const readbackSheets = readbackWorkbook.worksheets.map(({ name }) => name);
+    if (JSON.stringify(readbackSheets) !== JSON.stringify(SHEET_NAMES))
+      fail(
+        "review_workbook_readback_invalid",
+        "Spreadsheet workbook readback does not contain the required sheets",
+        { expected: SHEET_NAMES, observed: readbackSheets },
+      );
+    const readbackFormulaErrors = scanFormulaErrors(readbackWorkbook);
+    if (readbackFormulaErrors.length)
+      fail(
+        "review_workbook_formula_error",
+        "Spreadsheet workbook readback contains a formula error",
+        { scan: readbackFormulaErrors },
+      );
+    await writeFile(stagedWorkbook, workbookBytes, { flag: "wx" });
     const receipt = {
       schemaVersion: "tiangong.release.exclusion-impact-review-receipt.v1",
       authoritative: false,
@@ -127,9 +131,12 @@ export async function buildExclusionImpactReviewWorkbook({
       },
       verification: {
         keyRangeInspected: "Summary!A1:D22",
+        workbookReadbackCompleted: true,
         formulaErrorScanCompleted: true,
         formulaErrorCount: 0,
         visualPreviewSheetCount: SHEET_NAMES.length,
+        visualPreviewFormat: "svg",
+        visualPreviewFiles: previewFiles,
       },
     };
     await writeFile(path.join(staging, RECEIPT_NAME), canonicalJson(receipt), {
@@ -141,12 +148,13 @@ export async function buildExclusionImpactReviewWorkbook({
       impactReportPath: reportPath,
       workbookPath: path.join(target, WORKBOOK_NAME),
       receiptPath: path.join(target, RECEIPT_NAME),
+      previewDir: previews,
       receipt,
       model,
       sourceReportSha256,
       inspection: {
-        keyRange: keyInspection.ndjson,
-        formulaErrors: formulaErrors.ndjson,
+        keyRange: keyInspection,
+        formulaErrors,
       },
     };
   } catch (error) {
@@ -293,19 +301,16 @@ export function buildExclusionReviewWorkbookModel(
 }
 
 function populateSummarySheet(sheet, model) {
-  sheet.showGridLines = false;
+  sheet.views = [{ state: "frozen", ySplit: 4, showGridLines: false }];
   sheet.mergeCells("A1:D1");
-  sheet.getRange("A1").values = [["Release Exclusion Impact Review"]];
+  sheet.getCell("A1").value = "Release Exclusion Impact Review";
   sheet.mergeCells("A2:D2");
-  sheet.getRange("A2").values = [
-    [
-      "Human review view only. The immutable JSON impact report and its SHA-256 remain authoritative for every decision.",
-    ],
-  ];
-  sheet.getRange("A4:D4").values = [
+  sheet.getCell("A2").value =
+    "Human review view only. The immutable JSON impact report and its SHA-256 remain authoritative for every decision.";
+  setMatrix(sheet, 4, 1, [
     ["Metric", "Workbook Value", "Report Evidence", "Interpretation"],
-  ];
-  sheet.getRange("A5:D16").values = [
+  ]);
+  setMatrix(sheet, 5, 1, [
     ["Analysis status", model.status, model.status, "complete or blocked"],
     [
       "Safe to exclude",
@@ -333,7 +338,7 @@ function populateSummarySheet(sheet, model) {
     ["Remaining reference conflicts", null, null, "non-zero blocks exclusion"],
     ["Impact report SHA-256", model.sourceReportSha256, "", "decision binding"],
     ["Excluded set hash", model.excludedSetHash, "", "complete set identity"],
-  ];
+  ]);
   const ranges = {
     invalid: detailFormula("Invalid Data", model.invalidData.rows.length),
     roots: detailFormula("Affected Roots", model.affectedRoots.rows.length),
@@ -351,32 +356,41 @@ function populateSummarySheet(sheet, model) {
       model.referenceConflicts.rows.length,
     ),
   };
-  sheet.getRange("B7:B11").formulas = [
-    [ranges.invalid],
-    [ranges.roots],
-    [ranges.derived],
-    [ranges.unreachable],
-    [ranges.excluded],
-  ];
-  sheet.getRange("C7:C11").values = [
+  [
+    [ranges.invalid, model.invalidData.rows.length],
+    [ranges.roots, model.affectedRoots.rows.length],
+    [ranges.derived, model.derivedData.rows.length],
+    [ranges.unreachable, model.unreachableSupport.rows.length],
+    [ranges.excluded, model.completeExclusionSet.rows.length],
+  ].forEach(([formula, result], index) => {
+    sheet.getCell(7 + index, 2).value = formulaCellValue(formula, result);
+  });
+  setMatrix(sheet, 7, 3, [
     [model.invalidData.rows.length],
     [model.affectedRoots.rows.length],
     [model.derivedData.rows.length],
     [model.unreachableSupport.rows.length],
     [model.completeExclusionSet.rows.length],
-  ];
-  sheet.getRange("B13").formulas = [["=B12-B11"]];
-  sheet.getRange("B14").formulas = [[ranges.conflicts]];
-  sheet.getRange("C14").values = [[model.referenceConflicts.rows.length]];
+  ]);
+  sheet.getCell("B13").value = {
+    formula: "B12-B11",
+    result: model.resultingDatasetCount,
+  };
+  sheet.getCell("B14").value = formulaCellValue(
+    ranges.conflicts,
+    model.referenceConflicts.rows.length,
+  );
+  sheet.getCell("C14").value = model.referenceConflicts.rows.length;
 
   sheet.mergeCells("A18:D18");
-  sheet.getRange("A18").values = [["Decision Guide"]];
-  sheet.getRange("A19:D19").values = [
-    ["Action", "Recommended", "Allowed", "Meaning"],
-  ];
+  sheet.getCell("A18").value = "Decision Guide";
+  setMatrix(sheet, 19, 1, [["Action", "Recommended", "Allowed", "Meaning"]]);
   const options = new Map(model.options.map((item) => [item.action, item]));
-  sheet.getRange("A20:D22").values = ["repair", "exclude", "stop"].map(
-    (action) => {
+  setMatrix(
+    sheet,
+    20,
+    1,
+    ["repair", "exclude", "stop"].map((action) => {
       const option = options.get(action) ?? {};
       return [
         action,
@@ -384,39 +398,38 @@ function populateSummarySheet(sheet, model) {
         option.allowed === true,
         option.description ?? "",
       ];
-    },
+    }),
   );
   applyTitleStyle(sheet, 4);
-  applyHeaderStyle(sheet.getRange("A4:D4"));
-  applyHeaderStyle(sheet.getRange("A19:D19"));
-  sheet.getRange("A5:D16").format.borders = {
-    insideHorizontal: { style: "thin", color: "#D8E1E8" },
-  };
-  sheet.getRange("A20:D22").format.borders = {
-    insideHorizontal: { style: "thin", color: "#D8E1E8" },
-  };
-  sheet.getRange("A18:D18").format = {
-    fill: "#DCEFEA",
-    font: { bold: true, color: "#123B35", size: 13 },
-    verticalAlignment: "center",
-  };
-  sheet.getRange("A18:D18").format.rowHeight = 26;
-  sheet.getRange("B7:C14").format.numberFormat = "#,##0";
-  sheet.getRange("B15:B16").format.numberFormat = "@";
-  sheet.getRange("A1:A22").format.columnWidth = 29;
-  sheet.getRange("B1:B22").format.columnWidth = 68;
-  sheet.getRange("C1:C22").format.columnWidth = 21;
-  sheet.getRange("D1:D22").format.columnWidth = 58;
-  sheet.getRange("A1:D22").format.verticalAlignment = "center";
-  sheet.getRange("D1:D22").format.wrapText = true;
-  sheet.getRange("B15:B16").format.wrapText = true;
-  sheet.getRange("B15:B16").format.rowHeight = 30;
-  sheet.getRange("A20:D20").format.fill = "#E8F3EF";
-  sheet.getRange("A21:D21").format.fill = model.safeToExclude
-    ? "#FFF4D6"
-    : "#FDE8E7";
-  sheet.getRange("A22:D22").format.fill = "#F1F4F6";
-  sheet.freezePanes.freezeRows(4);
+  applyHeaderStyle(sheet, 4, 1, 4);
+  applyHeaderStyle(sheet, 19, 1, 4);
+  applyHorizontalBorders(sheet, 5, 1, 16, 4, "FFD8E1E8");
+  applyHorizontalBorders(sheet, 20, 1, 22, 4, "FFD8E1E8");
+  styleCells(sheet, 18, 1, 18, 4, {
+    fill: solidFill("FFDCEFEA"),
+    font: { bold: true, color: { argb: "FF123B35" }, size: 13 },
+    alignment: { vertical: "middle" },
+  });
+  sheet.getRow(18).height = 26;
+  styleCells(sheet, 7, 2, 14, 3, { numFmt: "#,##0" });
+  styleCells(sheet, 15, 2, 16, 2, { numFmt: "@" });
+  setColumnWidths(sheet, [29, 68, 21, 58]);
+  styleCells(sheet, 1, 1, 22, 4, {
+    alignment: { vertical: "middle" },
+  });
+  styleCells(sheet, 1, 4, 22, 4, {
+    alignment: { vertical: "middle", wrapText: true },
+  });
+  styleCells(sheet, 15, 2, 16, 2, {
+    alignment: { vertical: "middle", wrapText: true },
+  });
+  sheet.getRow(15).height = 30;
+  sheet.getRow(16).height = 30;
+  styleCells(sheet, 20, 1, 20, 4, { fill: solidFill("FFE8F3EF") });
+  styleCells(sheet, 21, 1, 21, 4, {
+    fill: solidFill(model.safeToExclude ? "FFFFF4D6" : "FFFDE8E7"),
+  });
+  styleCells(sheet, 22, 1, 22, 4, { fill: solidFill("FFF1F4F6") });
 }
 
 function populateDetailSheet(sheet, section, { widths }) {
@@ -427,121 +440,227 @@ function populateDetailSheet(sheet, section, { widths }) {
       ? section.rows
       : [["No records", ...Array(columnCount - 1).fill("")]];
   const lastRow = 4 + dataRows.length;
-  sheet.showGridLines = false;
+  sheet.views = [{ state: "frozen", ySplit: 4, showGridLines: false }];
   sheet.mergeCells(`A1:${lastColumn}1`);
-  sheet.getRange("A1").values = [[section.title]];
+  sheet.getCell("A1").value = section.title;
   sheet.mergeCells(`A2:${lastColumn}2`);
-  sheet.getRange("A2").values = [[section.note]];
-  sheet.getRange(`A4:${lastColumn}4`).values = [section.headers];
-  sheet.getRange(`A5:${lastColumn}${lastRow}`).values = dataRows;
+  sheet.getCell("A2").value = section.note;
+  setMatrix(sheet, 4, 1, [section.headers]);
+  setMatrix(sheet, 5, 1, dataRows);
   applyTitleStyle(sheet, columnCount);
-  applyHeaderStyle(sheet.getRange(`A4:${lastColumn}4`));
-  sheet.getRange(`A5:${lastColumn}${lastRow}`).format.borders = {
-    insideHorizontal: { style: "thin", color: "#E1E7EB" },
+  applyHeaderStyle(sheet, 4, 1, columnCount);
+  applyHorizontalBorders(sheet, 5, 1, lastRow, columnCount, "FFE1E7EB");
+  styleCells(sheet, 5, 1, lastRow, columnCount, {
+    alignment: { vertical: "middle", wrapText: true },
+  });
+  setColumnWidths(sheet, widths);
+  for (let row = 5; row <= lastRow; row += 1) sheet.getRow(row).height = 30;
+  sheet.getRow(1).height = 31;
+  sheet.getRow(2).height = 36;
+  sheet.getRow(4).height = 25;
+  sheet.autoFilter = {
+    from: { row: 4, column: 1 },
+    to: { row: lastRow, column: columnCount },
   };
-  sheet.getRange(`A5:${lastColumn}${lastRow}`).format.verticalAlignment =
-    "center";
-  sheet.getRange(`A5:${lastColumn}${lastRow}`).format.wrapText = true;
-  for (let index = 0; index < widths.length; index += 1)
-    sheet.getRangeByIndexes(0, index, lastRow, 1).format.columnWidth =
-      widths[index];
-  sheet.getRange(`A4:${lastColumn}${lastRow}`).format.autofitRows();
-  sheet.getRange("A1").format.rowHeight = 31;
-  sheet.getRange("A2").format.rowHeight = 36;
-  sheet.getRange(`A4:${lastColumn}4`).format.rowHeight = 25;
-  sheet.freezePanes.freezeRows(4);
 }
 
 function applyTitleStyle(sheet, columnCount) {
-  const lastColumn = columnName(columnCount);
-  sheet.getRange(`A1:${lastColumn}1`).format = {
-    fill: "#153B50",
-    font: { bold: true, color: "#FFFFFF", size: 17 },
-    verticalAlignment: "center",
-  };
-  sheet.getRange(`A2:${lastColumn}2`).format = {
-    fill: "#EAF1F4",
-    font: { color: "#365A6C", italic: true, size: 10 },
-    verticalAlignment: "center",
-    wrapText: true,
-  };
-  sheet.getRange("A1").format.rowHeight = 31;
-  sheet.getRange("A2").format.rowHeight = 36;
+  styleCells(sheet, 1, 1, 1, columnCount, {
+    fill: solidFill("FF153B50"),
+    font: { bold: true, color: { argb: "FFFFFFFF" }, size: 17 },
+    alignment: { vertical: "middle" },
+  });
+  styleCells(sheet, 2, 1, 2, columnCount, {
+    fill: solidFill("FFEAF1F4"),
+    font: { color: { argb: "FF365A6C" }, italic: true, size: 10 },
+    alignment: { vertical: "middle", wrapText: true },
+  });
+  sheet.getRow(1).height = 31;
+  sheet.getRow(2).height = 36;
 }
 
-function applyHeaderStyle(range) {
-  range.format = {
-    fill: "#2B6F72",
-    font: { bold: true, color: "#FFFFFF", size: 10 },
-    verticalAlignment: "center",
-    wrapText: true,
-    borders: { preset: "outside", style: "thin", color: "#245E61" },
-  };
+function applyHeaderStyle(sheet, row, firstColumn, lastColumn) {
+  styleCells(sheet, row, firstColumn, row, lastColumn, {
+    fill: solidFill("FF2B6F72"),
+    font: { bold: true, color: { argb: "FFFFFFFF" }, size: 10 },
+    alignment: { vertical: "middle", wrapText: true },
+    border: thinBorder("FF245E61"),
+  });
 }
 
-async function loadArtifactTool(nodeModulesDir) {
-  const root = path.resolve(
-    nodeModulesDir ?? process.env.RELEASE_SPREADSHEET_NODE_MODULES ?? "",
-  );
-  if (!nodeModulesDir && !process.env.RELEASE_SPREADSHEET_NODE_MODULES)
-    fail(
-      "spreadsheet_runtime_missing",
-      "Set RELEASE_SPREADSHEET_NODE_MODULES or pass --spreadsheet-node-modules using the client Agent workspace dependency runtime",
-    );
-  const resolver = createRequire(path.join(path.dirname(root), "resolver.cjs"));
-  let entry;
-  try {
-    entry = resolver.resolve("@oai/artifact-tool");
-  } catch {
-    fail(
-      "spreadsheet_runtime_invalid",
-      `@oai/artifact-tool is not resolvable from ${root}`,
-    );
-  }
-  return import(entry);
+function setMatrix(sheet, startRow, startColumn, rows) {
+  rows.forEach((row, rowOffset) => {
+    row.forEach((value, columnOffset) => {
+      sheet.getCell(startRow + rowOffset, startColumn + columnOffset).value =
+        value ?? null;
+    });
+  });
 }
 
-async function suppressArtifactInspectNotice(action) {
-  const originalWrite = process.stdout.write;
-  process.stdout.write = function filteredWrite(chunk, encoding, callback) {
-    if (String(chunk).startsWith("Inspect result written to file:")) {
-      if (typeof encoding === "function") encoding();
-      else if (typeof callback === "function") callback();
-      return true;
+function setColumnWidths(sheet, widths) {
+  widths.forEach((width, index) => {
+    sheet.getColumn(index + 1).width = width;
+  });
+}
+
+function styleCells(sheet, firstRow, firstColumn, lastRow, lastColumn, style) {
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    for (let column = firstColumn; column <= lastColumn; column += 1) {
+      const cell = sheet.getCell(row, column);
+      if (style.fill) cell.fill = style.fill;
+      if (style.font) cell.font = { ...(cell.font ?? {}), ...style.font };
+      if (style.alignment)
+        cell.alignment = { ...(cell.alignment ?? {}), ...style.alignment };
+      if (style.border) cell.border = style.border;
+      if (style.numFmt) cell.numFmt = style.numFmt;
     }
-    return originalWrite.call(process.stdout, chunk, encoding, callback);
-  };
-  try {
-    return await action();
-  } finally {
-    process.stdout.write = originalWrite;
   }
 }
 
-function assertFormulaErrorScanClean(ndjson) {
-  let records;
-  try {
-    records = String(ndjson)
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
-  } catch {
-    fail(
-      "review_workbook_formula_scan_invalid",
-      "Spreadsheet formula-error scan returned an unreadable result",
-    );
+function applyHorizontalBorders(
+  sheet,
+  firstRow,
+  firstColumn,
+  lastRow,
+  lastColumn,
+  color,
+) {
+  for (let row = firstRow; row <= lastRow; row += 1)
+    for (let column = firstColumn; column <= lastColumn; column += 1)
+      sheet.getCell(row, column).border = {
+        bottom: { style: "thin", color: { argb: color } },
+      };
+}
+
+function solidFill(argb) {
+  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+}
+
+function thinBorder(argb) {
+  const side = { style: "thin", color: { argb } };
+  return { top: side, left: side, bottom: side, right: side };
+}
+
+function inspectRange(sheet, firstRow, firstColumn, lastRow, lastColumn) {
+  const rows = [];
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    const values = [];
+    for (let column = firstColumn; column <= lastColumn; column += 1) {
+      const value = sheet.getCell(row, column).value;
+      values.push(
+        value && typeof value === "object" && "formula" in value
+          ? { formula: value.formula, result: value.result }
+          : value,
+      );
+    }
+    rows.push(values);
   }
-  if (
-    records.length !== 1 ||
-    records[0].kind !== "notice" ||
-    records[0].message !== "Cell search matched 0 entries."
-  )
-    fail(
-      "review_workbook_formula_error",
-      "Spreadsheet review workbook contains a formula error",
-      { scan: records },
+  return JSON.stringify({ range: "Summary!A1:D22", rows });
+}
+
+function formulaCellValue(formula, result) {
+  return formula === "=0" ? 0 : { formula: formula.slice(1), result };
+}
+
+function scanFormulaErrors(workbook) {
+  const errors = [];
+  const errorPattern = /#(?:REF!|DIV\/0!|VALUE!|NAME\?|N\/A)/u;
+  workbook.eachSheet((sheet) => {
+    sheet.eachRow({ includeEmpty: true }, (row) => {
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        const value = cell.value;
+        if (
+          value &&
+          typeof value === "object" &&
+          "formula" in value &&
+          (errorPattern.test(String(value.formula)) ||
+            errorPattern.test(String(value.result ?? "")))
+        )
+          errors.push({ sheet: sheet.name, cell: cell.address });
+      });
+    });
+  });
+  return errors;
+}
+
+function renderWorksheetPreview(sheet) {
+  const rowCount = Math.min(Math.max(sheet.rowCount, 1), 24);
+  const columnCount = Math.min(Math.max(sheet.columnCount, 1), 10);
+  const widths = Array.from({ length: columnCount }, (_, index) =>
+    Math.min(Math.max((sheet.getColumn(index + 1).width ?? 12) * 7, 84), 240),
+  );
+  const rowHeight = 34;
+  const footerHeight = sheet.rowCount > rowCount ? 28 : 0;
+  const width = widths.reduce((total, value) => total + value, 0);
+  const height = rowCount * rowHeight + footerHeight;
+  const cells = [];
+  let y = 0;
+  for (let row = 1; row <= rowCount; row += 1) {
+    let x = 0;
+    for (let column = 1; column <= columnCount;) {
+      const cell = sheet.getCell(row, column);
+      const masterAddress = cell.isMerged ? cell.master.address : cell.address;
+      if (cell.isMerged && masterAddress !== cell.address) {
+        x += widths[column - 1];
+        column += 1;
+        continue;
+      }
+      let span = 1;
+      while (column + span <= columnCount) {
+        const candidate = sheet.getCell(row, column + span);
+        if (!candidate.isMerged || candidate.master.address !== masterAddress)
+          break;
+        span += 1;
+      }
+      const cellWidth = widths
+        .slice(column - 1, column - 1 + span)
+        .reduce((total, value) => total + value, 0);
+      const fill = colorFromStyle(cell.fill?.fgColor?.argb, "FFFFFF");
+      const fontColor = colorFromStyle(cell.font?.color?.argb, "243746");
+      const fontWeight = cell.font?.bold ? "700" : "400";
+      const value = truncate(displayCellValue(cell.value), 100);
+      cells.push(
+        `<rect x="${x}" y="${y}" width="${cellWidth}" height="${rowHeight}" fill="#${fill}" stroke="#D8E1E8"/>`,
+        `<text x="${x + 7}" y="${y + 21}" fill="#${fontColor}" font-family="Arial, sans-serif" font-size="11" font-weight="${fontWeight}">${escapeXml(value)}</text>`,
+      );
+      x += cellWidth;
+      column += span;
+    }
+    y += rowHeight;
+  }
+  if (footerHeight)
+    cells.push(
+      `<rect x="0" y="${y}" width="${width}" height="${footerHeight}" fill="#F1F4F6"/>`,
+      `<text x="8" y="${y + 19}" fill="#506572" font-family="Arial, sans-serif" font-size="11">Preview shows ${rowCount} of ${sheet.rowCount} rows</text>`,
     );
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${cells.join("")}</svg>\n`;
+}
+
+function displayCellValue(value) {
+  if (value === null || value === undefined) return "";
+  if (value && typeof value === "object" && "formula" in value)
+    return String(value.result ?? `=${value.formula}`);
+  return String(value);
+}
+
+function colorFromStyle(value, fallback) {
+  const normalized = String(value ?? "").replace(/^#?/u, "");
+  if (/^[0-9A-Fa-f]{8}$/u.test(normalized)) return normalized.slice(2);
+  if (/^[0-9A-Fa-f]{6}$/u.test(normalized)) return normalized;
+  return fallback;
+}
+
+function truncate(value, maximum) {
+  return value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`;
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function detailFormula(sheetName, rowCount) {

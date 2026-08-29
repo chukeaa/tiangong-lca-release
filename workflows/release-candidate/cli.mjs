@@ -5,6 +5,7 @@ import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   buildPackageCandidate,
+  DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   PACKAGE_PROFILE,
 } from "./lib/package-build.mjs";
 import {
@@ -43,6 +44,7 @@ const VALUE_OPTIONS = new Set([
   "release-version",
   "out-dir",
   "tidas-bin",
+  "tidas-memory-budget-mib",
   "flow-cache",
   "execution",
   "remote-host",
@@ -54,7 +56,6 @@ const VALUE_OPTIONS = new Set([
   "reason",
   "decided-by",
   "confirm-impact-sha256",
-  "spreadsheet-node-modules",
   "preview-dir",
 ]);
 const BOOLEAN_OPTIONS = new Set(["json", "help"]);
@@ -89,6 +90,7 @@ package build options:
   --release-version <id>    Formal database release version used in distributed filenames
   --out-dir <path>          New immutable Release Candidate directory
   --tidas-bin <path>        exact tidas v0.2.0 executable; defaults to TIDAS_BIN or PATH lookup
+  --tidas-memory-budget-mib <MiB> Release-owned TIDAS budget; defaults to TIDAS_MEMORY_BUDGET_MIB or ${DEFAULT_TIDAS_MEMORY_BUDGET_MIB}
   --scope-decision <path>   Optional verified exclusion decision directory
 
 failure analyze options:
@@ -107,8 +109,7 @@ failure decide options:
 
 failure review options:
   --impact-report <path>    Exact exclusion-impact-report.json
-  --spreadsheet-node-modules <path> Client Agent workspace dependency node_modules; defaults to RELEASE_SPREADSHEET_NODE_MODULES
-  --preview-dir <path>      Rendered PNG directory required for visual verification
+  --preview-dir <path>      Rendered SVG directory required for visual verification
   --out-dir <path>          New review bundle containing the Excel workbook and receipt
 
 Common:
@@ -230,7 +231,6 @@ async function main() {
     const result = await buildExclusionImpactReviewWorkbook({
       impactReportPath: path.resolve(options["impact-report"]),
       outDir: path.resolve(options["out-dir"]),
-      spreadsheetNodeModules: options["spreadsheet-node-modules"],
       previewDir: options["preview-dir"]
         ? path.resolve(options["preview-dir"])
         : undefined,
@@ -255,6 +255,7 @@ async function main() {
     releaseIntakeDir: path.resolve(options["release-intake"]),
     outDir: path.resolve(options["out-dir"]),
     tidasBin: options["tidas-bin"],
+    tidasMemoryBudgetMiB: options["tidas-memory-budget-mib"],
     releaseVersion: options["release-version"],
     scopeDecisionDir: options["scope-decision"]
       ? path.resolve(options["scope-decision"])
@@ -271,6 +272,11 @@ async function main() {
     candidate: result.path,
     packageCount: result.candidate.packages.length,
     packageSetHash: result.candidate.packageSetHash,
+    tidasMemoryBudgetMiB: Number(
+      options["tidas-memory-budget-mib"] ??
+        process.env.TIDAS_MEMORY_BUDGET_MIB ??
+        DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
+    ),
     publicationAuthorized: false,
     artifacts: {
       releaseCandidate: candidateManifest,
@@ -393,6 +399,8 @@ function respondVersionConfirmation(options) {
   ];
   if (options["tidas-bin"])
     argv.push("--tidas-bin", path.resolve(options["tidas-bin"]));
+  if (options["tidas-memory-budget-mib"])
+    argv.push("--tidas-memory-budget-mib", options["tidas-memory-budget-mib"]);
   if (options["scope-decision"])
     argv.push("--scope-decision", path.resolve(options["scope-decision"]));
   argv.push("--json");
@@ -488,13 +496,12 @@ function respondImpact(options, result) {
     excludedDatasetCount: result.report.impact.excludedCanonicalDatasets.length,
     safeToExclude: result.report.impact.safeToExclude,
     reviewWorkbookRequired: true,
-    spreadsheetRuntimeEnv: "RELEASE_SPREADSHEET_NODE_MODULES",
     nextActions: [
       {
         kind: "build_human_review_workbook",
         recommended: true,
         description:
-          "Use the client Agent spreadsheet runtime to render and visually verify the complete review workbook before asking for a scope decision.",
+          "Use the Release-owned spreadsheet runtime to render and visually verify the complete review workbook before asking for a scope decision.",
         command: `${RELEASE_COMMAND} failure review --impact-report ${shellQuote(reportPath)} --preview-dir ${shellQuote(`${reviewBase}-previews`)} --out-dir ${shellQuote(reviewBase)} --json`,
       },
     ],
@@ -525,6 +532,7 @@ function respondImpactReview(options, result) {
     reviewWorkbook: result.workbookPath,
     reviewWorkbookSha256: result.receipt.workbook.sha256,
     reviewReceipt: result.receiptPath,
+    reviewPreviews: result.previewDir,
     invalidDatasetCount: model.invalidData.rows.length,
     affectedRootCount: model.affectedRoots.rows.length,
     affectedMaterializedDatasetCount: model.derivedData.rows.length,
@@ -737,6 +745,76 @@ function shellQuote(value) {
 }
 
 function failureNextActions(error) {
+  if (error.code === "tidas_memory_budget_exceeded") {
+    const retained = error.details?.retainedBuild;
+    const selectedBudget = Number(
+      error.details?.memoryBudgetMiB ?? DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
+    );
+    const recommendedBudget = Math.max(
+      DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
+      selectedBudget * 2,
+    );
+    const retryArgv = [
+      "node",
+      RELEASE_CLI_PATH,
+      "package",
+      "build",
+      "--release-intake",
+      error.details.releaseIntakeDir,
+      "--profile",
+      PACKAGE_PROFILE,
+      "--release-version",
+      error.details.releaseVersion,
+      "--out-dir",
+      error.details.requestedCandidatePath,
+      "--tidas-memory-budget-mib",
+      String(recommendedBudget),
+    ];
+    if (error.details.tidasBin && error.details.tidasBin !== "tidas")
+      retryArgv.push("--tidas-bin", error.details.tidasBin);
+    if (error.details.scopeDecisionDir)
+      retryArgv.push("--scope-decision", error.details.scopeDecisionDir);
+    retryArgv.push("--json");
+    return [
+      ...(retained?.manifest
+        ? [
+            {
+              kind: "inspect_failed_build",
+              description:
+                "Inspect the preserved resource failure before retrying.",
+              command: `jq . ${shellQuote(retained.manifest)}`,
+              argv: ["jq", ".", retained.manifest],
+            },
+          ]
+        : []),
+      {
+        kind: "retry_with_larger_tidas_memory_budget",
+        recommended: true,
+        description: `Retry the same immutable inputs with ${recommendedBudget} MiB; no exclusion analysis is required for this resource failure.`,
+        command: retryArgv.map(shellQuote).join(" "),
+        argv: retryArgv,
+      },
+      ...(retained
+        ? [
+            {
+              kind: "inspect_retained_artifacts",
+              description:
+                "List the exact reports retained from the failed resource-bound run.",
+              command: `find ${shellQuote(retained.path)} -maxdepth 3 -type f -print`,
+              argv: [
+                "find",
+                retained.path,
+                "-maxdepth",
+                "3",
+                "-type",
+                "f",
+                "-print",
+              ],
+            },
+          ]
+        : []),
+    ];
+  }
   if (error.details?.retainedBuild) {
     const retained = error.details.retainedBuild;
     const actions = [];

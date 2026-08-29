@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: fc678857fd28aa7039e7c5d1e575a97aeff78d91
-lastReviewedNote: "Reviewed the effective pnpm project-policy correction and confirmed that all shared Workflow evidence, permission, recovery, and one-workspace boundaries remain unchanged."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed shared Workflow decisions and exact pnpm 11.24 installation after current-main reconciliation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -55,7 +55,7 @@ related:
 
 - 创建或采用哪个业务工作对象；
 - 启动可能耗时或产生远程副作用的验证和计算；
-- Dataset Transformation 的具体加工规则、语义、权重、功能单位和重要字段；
+- Dataset Transformation 的 aggregation target、具体加工规则、语义、权重、功能单位和重要字段；
 - Release Candidate 内容与正式发布授权。
 
 观察、建议、决定、发布授权和执行必须在语义上保持区分。

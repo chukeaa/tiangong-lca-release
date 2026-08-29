@@ -13,9 +13,9 @@ whenToUpdate:
   - 当发布选择、目标差异、状态转换、写入、审批、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
-lastReviewedNote: "Retained the complete Candidate-bound Publication flow while moving installation to the root pnpm workspace."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed full-closure selection and payload behavior under the root pnpm 11.24 workspace without changing publication authority."
 related:
   - AGENTS.md
   - ../release-candidate/README.md

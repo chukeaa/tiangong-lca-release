@@ -10,6 +10,7 @@ const EXPECTED_WORKSPACE_PACKAGES = [
   "@tiangong-lca/release-result-materialization-workflow",
   "@tiangong-lca/release-workflow-calculation",
   "@tiangong-lca/release-workflow-candidate",
+  "@tiangong-lca/release-workflow-dataset-transformation",
   "@tiangong-lca/release-workflow-publication",
 ];
 const RETIRED_PRODUCTION_PACKAGES = new Set([

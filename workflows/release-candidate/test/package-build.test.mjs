@@ -27,6 +27,7 @@ import {
 } from "../lib/flow-cache.mjs";
 import {
   buildPackageCandidate,
+  DEFAULT_TIDAS_MEMORY_BUDGET_MIB,
   EXPECTED_TIDAS_VERSION,
   PACKAGE_PROFILE,
   runTidas,
@@ -55,8 +56,8 @@ test("release package adapter requires exact tidas v0.2.0 contract", async () =>
   const calls = [];
   const result = await verifyTidasRuntime({
     tidasBin: "/tools/tidas",
-    spawnCommand: async (command, args) => {
-      calls.push([command, ...args]);
+    spawnCommand: async (command, args, options) => {
+      calls.push({ command, args, options });
       if (args[0] === "version")
         return {
           code: 0,
@@ -95,8 +96,15 @@ test("release package adapter requires exact tidas v0.2.0 contract", async () =>
   assert.equal(result.binaryVersion, "0.2.0");
   assert.equal(result.assetFingerprint, "fixture-fingerprint");
   assert.deepEqual(
-    calls.map(([, action]) => action),
+    calls.map(({ args }) => args[0]),
     ["version", "validate"],
+  );
+  assert.ok(
+    calls.every(
+      ({ options }) =>
+        options.env.TIDAS_MEMORY_BUDGET_MIB ===
+        String(DEFAULT_TIDAS_MEMORY_BUDGET_MIB),
+    ),
   );
 
   await assert.rejects(
@@ -523,7 +531,7 @@ test("package build assembles local closure and delegates four-package build", a
     result.candidate.canonicalDatasetIndexSha256,
   );
   assert.equal(
-    hashJson(publicationCatalog),
+    sha256Bytes(Buffer.from(canonicalJson(publicationCatalog))),
     result.candidate.publicationCatalog.sha256,
   );
   assert.equal(result.candidate.packages.length, 4);
@@ -688,6 +696,8 @@ exit 0
   );
   await chmod(fakeTidas, 0o755);
   const cli = new URL("../cli.mjs", import.meta.url);
+  const environment = { ...process.env };
+  delete environment.TIDAS_MEMORY_BUDGET_MIB;
   const result = spawnSync(
     process.execPath,
     [
@@ -706,7 +716,7 @@ exit 0
       fakeTidas,
       "--json",
     ],
-    { encoding: "utf8" },
+    { encoding: "utf8", env: environment },
   );
   assert.equal(result.status, 1);
   const payload = JSON.parse(result.stderr);
@@ -724,6 +734,69 @@ exit 0
     access(fixture.output),
     (error) => error.code === "ENOENT",
   );
+});
+
+test("CLI applies the Release memory default and returns an exact resource retry", async () => {
+  const fixture = await createFixture();
+  const fakeTidas = path.join(fixture.root, "memory-tidas.sh");
+  await writeFile(
+    fakeTidas,
+    `#!/bin/sh
+if [ "$TIDAS_MEMORY_BUDGET_MIB" != "${DEFAULT_TIDAS_MEMORY_BUDGET_MIB}" ]; then
+  printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"failed","diagnostics":[{"code":"wrong_test_budget"}]}'
+  exit 3
+fi
+if [ "$1" = "version" ]; then
+  printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"succeeded","exit_class":"success","completeness":"complete","summary":{"binary_version":"${EXPECTED_TIDAS_VERSION}","operation_report_schema":"tidas.operation-report.v1"}}'
+  exit 0
+fi
+if [ "$1" = "validate" ] && [ "$2" = "--describe" ]; then
+  printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"succeeded","exit_class":"success","completeness":"complete","summary":{"validation_describe":{"schema_version":"tidas.validation-describe.v1","package":{"name":"tidas","version":"${EXPECTED_TIDAS_VERSION}"},"protocols":["document-validation-batch.v1"],"asset_fingerprint":"fixture-fingerprint"}}}'
+  exit 0
+fi
+printf '%s' '{"schema_version":"tidas.operation-report.v1","status":"failed","exit_class":"internal","completeness":"complete","invocation":{"memory_budget_bytes":2147483648},"diagnostics":[{"code":"memory_budget_exceeded"}]}'
+exit 2
+`,
+  );
+  await chmod(fakeTidas, 0o755);
+  const cli = new URL("../cli.mjs", import.meta.url);
+  const environment = { ...process.env };
+  delete environment.TIDAS_MEMORY_BUDGET_MIB;
+  const result = spawnSync(
+    process.execPath,
+    [
+      cli.pathname,
+      "package",
+      "build",
+      "--release-intake",
+      fixture.releaseIntake,
+      "--profile",
+      PACKAGE_PROFILE,
+      "--release-version",
+      RELEASE_VERSION,
+      "--out-dir",
+      fixture.output,
+      "--tidas-bin",
+      fakeTidas,
+      "--json",
+    ],
+    { encoding: "utf8", env: environment },
+  );
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stderr);
+  assert.equal(payload.error.code, "tidas_memory_budget_exceeded");
+  assert.equal(payload.error.details.memoryBudgetMiB, 2048);
+  assert.deepEqual(
+    payload.nextActions.map(({ kind }) => kind),
+    [
+      "inspect_failed_build",
+      "retry_with_larger_tidas_memory_budget",
+      "inspect_retained_artifacts",
+    ],
+  );
+  assert.ok(payload.nextActions[1].argv.includes("--tidas-memory-budget-mib"));
+  assert.ok(payload.nextActions[1].argv.includes("4096"));
+  assert.ok(!payload.nextActions.some(({ kind }) => kind.includes("analyze")));
 });
 
 test("Release Intake expands exact LCIA Method Flow dependencies without mutating source intake", async () => {
@@ -877,9 +950,9 @@ test("Release failure analysis binds the complete exclusion set before rebuildin
   );
 
   const cli = new URL("../cli.mjs", import.meta.url);
-  const reviewEnvironment = { ...process.env };
-  delete reviewEnvironment.RELEASE_SPREADSHEET_NODE_MODULES;
-  const missingSpreadsheetRuntime = spawnSync(
+  const reviewDir = path.join(fixture.root, "review");
+  const previewDir = path.join(fixture.root, "review-previews");
+  const portableReview = spawnSync(
     process.execPath,
     [
       cli.pathname,
@@ -888,17 +961,26 @@ test("Release failure analysis binds the complete exclusion set before rebuildin
       "--impact-report",
       path.join(impactDir, "exclusion-impact-report.json"),
       "--out-dir",
-      path.join(fixture.root, "review"),
+      reviewDir,
       "--preview-dir",
-      path.join(fixture.root, "review-previews"),
+      previewDir,
       "--json",
     ],
-    { encoding: "utf8", env: reviewEnvironment },
+    { encoding: "utf8" },
   );
-  assert.equal(missingSpreadsheetRuntime.status, 1);
-  assert.equal(
-    JSON.parse(missingSpreadsheetRuntime.stderr).error.code,
-    "spreadsheet_runtime_missing",
+  assert.equal(portableReview.status, 0, portableReview.stderr);
+  const reviewPayload = JSON.parse(portableReview.stdout);
+  assert.equal(reviewPayload.outcome, "exclusion_review_ready");
+  assert.equal(reviewPayload.reviewPreviews, previewDir);
+  await access(reviewPayload.reviewWorkbook);
+  const reviewReceipt = JSON.parse(await readFile(reviewPayload.reviewReceipt));
+  assert.equal(reviewReceipt.workbook.sheets.length, 7);
+  assert.equal(reviewReceipt.verification.workbookReadbackCompleted, true);
+  assert.equal(reviewReceipt.verification.formulaErrorCount, 0);
+  assert.equal(reviewReceipt.verification.visualPreviewFormat, "svg");
+  assert.deepEqual(
+    (await readdir(previewDir)).sort(),
+    reviewReceipt.verification.visualPreviewFiles.toSorted(),
   );
 
   await assert.rejects(
@@ -1051,8 +1133,8 @@ test("final distribution ZIPs are independently extracted and validated", async 
     packagesDir,
     workspace: root,
     releaseVersion: RELEASE_VERSION,
-    spawnCommand: async (command, args) => {
-      calls.push([command, ...args]);
+    spawnCommand: async (command, args, options) => {
+      calls.push({ command, args, options });
       if (command === "unzip" && args[0] === "-Z1")
         return { code: 0, stdout: "data/example.json\n", stderr: "" };
       if (command === "unzip") return { code: 0, stdout: "", stderr: "" };
@@ -1073,13 +1155,22 @@ test("final distribution ZIPs are independently extracted and validated", async 
       },
       expectedArtifacts.get(artifact.fileName),
     );
-  assert.equal(calls.filter(([command]) => command === "unzip").length, 8);
+  assert.equal(calls.filter(({ command }) => command === "unzip").length, 8);
   assert.deepEqual(
     calls
-      .filter(([command]) => command === "/tools/tidas")
-      .map(([, , action]) => action)
+      .filter(({ command }) => command === "/tools/tidas")
+      .map(({ args }) => args[1])
       .sort(),
     ["validate-ilcd", "validate-ilcd", "validate-tidas", "validate-tidas"],
+  );
+  assert.ok(
+    calls
+      .filter(({ command }) => command === "/tools/tidas")
+      .every(
+        ({ options }) =>
+          options.env.TIDAS_MEMORY_BUDGET_MIB ===
+          String(DEFAULT_TIDAS_MEMORY_BUDGET_MIB),
+      ),
   );
 });
 

@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 Publication 的范围、状态、授权、写入、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
-lastReviewedNote: "Established complete Candidate-bound planning, approval, resumable execution, and independent readback contracts."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed current full-closure plan/payload changes under exact pnpm 11.24; publication authorization and readback boundaries remain unchanged."
 related:
   - README.md
   - ../AGENTS.md

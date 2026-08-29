@@ -11,6 +11,7 @@ const WORKSPACE_PACKAGES = [
   "workflows/calculation",
   "workflows/result-materialization",
   "workflows/release-candidate",
+  "workflows/dataset-transformation",
   "workflows/publication",
 ];
 const PACKAGE_MANIFESTS = [".", ...WORKSPACE_PACKAGES];
@@ -18,7 +19,7 @@ const PNPM_INVOCATION = resolvePnpmInvocation(process.env.npm_execpath);
 
 test("the repository pins one exact Node and pnpm toolchain", () => {
   const rootManifest = readJson("package.json");
-  assert.equal(rootManifest.packageManager, "pnpm@11.23.0");
+  assert.equal(rootManifest.packageManager, "pnpm@11.24.0");
   assert.equal(readText(".node-version").trim(), "24.19.0");
 
   for (const directory of PACKAGE_MANIFESTS) {
@@ -57,7 +58,7 @@ test("the repository pins one exact Node and pnpm toolchain", () => {
   assert.equal(existsSync(new URL("../.npmrc", import.meta.url)), false);
 });
 
-test("the five install trees are one pnpm workspace with one lockfile", () => {
+test("the six install trees are one pnpm workspace with one lockfile", () => {
   const workspace = readText("pnpm-workspace.yaml");
   for (const packagePath of WORKSPACE_PACKAGES) {
     assert.match(workspace, new RegExp(escapeRegex(packagePath)));
@@ -99,7 +100,7 @@ test("active package commands and automation are pnpm-only", () => {
     ci,
     /pnpm\/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2\.0\.2/,
   );
-  assert.match(ci, /version:\s*11\.23\.0/);
+  assert.match(ci, /version:\s*11\.24\.0/);
   assert.match(ci, /runtime:\s*node@24\.19\.0/);
   assert.match(ci, /cache:\s*true/);
   assert.match(ci, /install:\s*false/);

@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 intake、包的语义、候选构建、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
   - workflows/release-candidate/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 8a4babcecb152a4205de314183c2e7ba6becf41d
-lastReviewedNote: "Preserved immutable Candidate construction while moving local dependencies to the root pnpm workspace."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Documented portable review and memory recovery under the exact root pnpm 11.24 workspace."
 related:
   - AGENTS.md
   - ../../README.md
@@ -90,7 +90,7 @@ Package 不应由大量互斥枚举硬编码，而是由经过验证的 recipe �
 preserved failed build + exact issue spool
   -> failure analyze
   -> invalid datasets + reverse-dependent roots + derived Result/Model + unreachable support
-  -> failure review -> JSON + Excel human-review bundle
+  -> failure review -> JSON + Excel + SVG human-review bundle
   -> 用户选择 repair / confirm complete exclusion set / stop
   -> immutable scope decision
   -> 新 Package Plan
@@ -139,10 +139,9 @@ node cli.mjs failure analyze \
   --out-dir /path/to/exclusion-impact \
   --json
 
-# 客户端 Agent 使用 workspace dependency runtime 生成并逐页检查 Excel
+# 使用 Release 自有依赖生成 Excel，并逐页检查 SVG 预览
 node cli.mjs failure review \
   --impact-report /path/to/exclusion-impact/exclusion-impact-report.json \
-  --spreadsheet-node-modules /path/from/load-workspace-dependencies/node_modules \
   --preview-dir /path/to/exclusion-impact-review-previews \
   --out-dir /path/to/exclusion-impact-review \
   --json
@@ -167,7 +166,7 @@ node cli.mjs package build \
   --json
 ```
 
-`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。开始组装前会执行 `version` 与 `validate --describe` 握手，并要求精确的 `tidas v0.2.0` 与既定 validation protocol；旧版本会在产生 staging 输出前以可操作错误停止。命令随后生成本地 package build，并用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
+`--tidas-bin` 可省略，此时读取 `TIDAS_BIN`，再回退到 `PATH` 中的 `tidas`。完整闭包构建默认使用 Release-owned `2048 MiB` 内存预算；`--tidas-memory-budget-mib` 优先于 `TIDAS_MEMORY_BUDGET_MIB`，选择值会一致传给 build、preflight 和四包 qualification 的每个 TIDAS 子进程。`memory_budget_exceeded` 会保留资源失败证据并返回同一冻结输入、提高预算的精确重试命令，不触发数据排除分析。开始组装前会执行 `version` 与 `validate --describe` 握手，并要求精确的 `tidas v0.2.0` 与既定 validation protocol；旧版本会在产生 staging 输出前以可操作错误停止。命令随后生成本地 package build，并用最终 ZIP 做 qualification；只有全部通过才形成 Candidate。整个动作不上传、不批准、也不发布。
 
 如果省略 `--release-version`，命令不会开始构建，而是以 `release_version_confirmation_required` 返回按 Asia/Shanghai 当前年月生成的推荐版本（例如 `2026.08.0`）、四个预期文件名和专用回复模板。Agent 必须先请用户确认或替换版本号，再使用返回的 argv 带上 `--release-version` 重跑；显式传入版本号即表示该前置确认已经完成。
 
@@ -229,7 +228,7 @@ Package build 与 Candidate qualification 是两个明确边界：生成 ZIP 只
 
 当失败证据包含可验证的 TIDAS issue spool 时，CLI 同时给出 `failure analyze` 恢复动作。分析以 exact UUID/version 为起点，用 Calculation graph 求所有反向依赖 roots，再通过 Materialization lineage 找出对应 Result Process/LifecycleModel，并按字段路径保留 canonical 文档引用的 TIDAS 角色。`referenceToPrecedingDataSetVersion` 是允许指向包外历史版本的 lineage，不参与包内可达性或剩余引用冲突；其他 closure dependency 仍然 fail closed。只要仍有可达文档通过 closure dependency 引用建议排除集合，报告就设置 `safeToExclude=false`，禁止生成 exclusion decision。
 
-客户端 Agent 随后执行 `failure review`，用其 workspace dependency runtime 中的 `@oai/artifact-tool` 生成七个工作表的 `exclusion-impact-review.xlsx`，检查 Summary 的值与公式、扫描公式错误并逐页渲染验证。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单和验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
+Agent 随后执行 `failure review`。Workflow 使用自身 `package.json` 声明的 ExcelJS 生成七个工作表的 `exclusion-impact-review.xlsx`，重新读取 XLSX、检查 Summary 的值与公式、扫描公式错误，并从同一 workbook model 生成七张 SVG 预览供逐页视觉检查。该命令不依赖客户端私有 runtime、`@oai/artifact-tool` 或外部 `node_modules` 路径。`exclusion-impact-review-receipt.json` 记录源报告 hash、workbook hash、大小、工作表清单、XLSX 回读和预览验证范围。Excel 是方便用户排序、筛选和审阅的可编辑视图；权威范围仍由不可变 JSON 及其 SHA-256 定义。
 
 用户确认排除时，`failure decide` 将原始 failed build、Release Intake、Materialization、source intake、issue spool、完整排除集合和 resulting dataset count 绑定到不可变决定。后续 `package build --scope-decision` 会重新核对全部 hash，按 canonical path 构造新的 Candidate 输入并重新委托完整验证。原 failed build、Materialization 和源数据保持不变；范围决定不构成批准、上传或发布授权。
 

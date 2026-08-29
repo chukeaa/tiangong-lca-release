@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/dataset-transformation-dsl.v0.schema.json",
+  "title": "Dataset Transformation DSL v0 Draft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "operation",
+    "output",
+    "policies",
+    "decisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.dataset-transformation-dsl.v0"
+    },
+    "status": { "const": "draft" },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "weighted-aggregate.choose-target.v0",
+            "process.weighted-aggregate.v0",
+            "unit-process.weighted-aggregate.v1",
+            "result-process.weighted-aggregate.v0"
+          ]
+        },
+        "targetRecommendation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["recommendedOperation", "reason"],
+          "properties": {
+            "recommendedOperation": {
+              "enum": [
+                "unit-process.weighted-aggregate.v1",
+                "result-process.weighted-aggregate.v0"
+              ]
+            },
+            "reason": { "type": "string", "minLength": 1 },
+            "sourceRefs": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/processKey" }
+        },
+        "weighting": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["explicit", "annual-production"] },
+            "values": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "overrides": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/$defs/weightOverride" }
+            }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uuid", "version", "uri"],
+          "properties": {
+            "uuid": { "type": "string", "format": "uuid" },
+            "version": { "$ref": "#/$defs/version" },
+            "uri": { "type": "string", "minLength": 1 }
+          }
+        },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prototypeInput": { "$ref": "#/$defs/processKey" },
+        "exchangeMetadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "base",
+            "dataSources",
+            "comments",
+            "uncertainty",
+            "allocations"
+          ],
+          "properties": {
+            "base": { "const": "take-from-prototype-then-input-order" },
+            "dataSources": { "const": "union-deduplicate" },
+            "comments": { "const": "replace-with-lineage" },
+            "uncertainty": { "const": "reset" },
+            "allocations": { "const": "reset" }
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/decision" }
+    }
+  },
+  "$defs": {
+    "processKey": {
+      "type": "string",
+      "pattern": "^process:[0-9a-f-]{36}@[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{2}\\.[0-9]{2}\\.[0-9]{3}$"
+    },
+    "weightOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "reason"],
+      "properties": {
+        "value": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidence": {}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflictId", "strategy", "reason"],
+      "properties": {
+        "conflictId": { "type": "string", "minLength": 1 },
+        "strategy": {
+          "enum": [
+            "take-from",
+            "rewrite",
+            "drop",
+            "sum-resolved",
+            "select-operation"
+          ]
+        },
+        "input": { "$ref": "#/$defs/processKey" },
+        "value": {},
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

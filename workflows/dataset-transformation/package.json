@@ -1,0 +1,19 @@
+{
+  "name": "@tiangong-lca/release-workflow-dataset-transformation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "bin": {
+    "release-transform": "./cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "canonicalize": "4.0.0"
+  }
+}

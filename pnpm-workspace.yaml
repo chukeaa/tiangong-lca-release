@@ -2,12 +2,15 @@ packages:
   - workflows/calculation
   - workflows/result-materialization
   - workflows/release-candidate
+  - workflows/dataset-transformation
   - workflows/publication
 engineStrict: true
 strictPeerDependencies: true
 sharedWorkspaceLockfile: true
 savePrefix: ""
 pmOnFail: error
+overrides:
+  "exceljs>uuid": 11.1.1
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - "@aws-sdk/client-s3@3.1117.0"
