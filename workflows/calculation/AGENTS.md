@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/calculation/**
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 6c8a25b20830794c855549a4866456a5a0c6e3ea
+lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
 lastReviewedNote: "Required provider-compatible ResultSet adapters and a stable Release-owned internal reference."
 related:
   - README.md

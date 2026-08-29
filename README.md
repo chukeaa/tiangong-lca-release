@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Updated for Issue #70 with explicit Unit/Result Transformation semantics and conditional successor paths."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled current Transformation semantics and all six package trees under exact pnpm 11.24 without changing release authority."
 related:
   - AGENTS.md
   - docs/architecture.md

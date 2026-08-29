@@ -13,9 +13,9 @@ whenToUpdate:
   - 当支持的加工机制、DSL、冲突策略、验证或返回路径变化时
 checkPaths:
   - workflows/dataset-transformation/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Implemented explicit aggregation-target selection and deterministic Unit/Result Process routes."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed deterministic Unit/Result routes after current-main and pnpm 11.24 reconciliation."
 related:
   - AGENTS.md
   - dsl-v0.md

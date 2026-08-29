@@ -19,11 +19,15 @@ checkPaths:
   - .docpact/config.yaml
   - docs/architecture.md
   - workflows/**
+  - test/**
   - package.json
+  - pnpm-workspace.yaml
+  - pnpm-lock.yaml
+  - .node-version
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Updated for Issue #70 with explicit Unit/Result Transformation decisions, compatibility checks, and conditional handoffs."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled current main's Transformation/Release Candidate work into one exact pnpm 11.24 workspace while preserving pure-JavaScript and security boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -37,9 +41,9 @@ related:
 
 ## 当前实施基线
 
-旧 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。不得恢复旧 20-stage runtime、默认兼容层或长期 legacy 目录。
+旧业务 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。根 `test/` 现在只拥有仓库级工具链、CI 和生产依赖图契约；不得在其中恢复旧 20-stage runtime、业务测试、默认兼容层或长期 legacy 目录。
 
-后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
+后续工作一次只优化一个根 Workflow。新增业务实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS；只有跨 Workflow 的仓库工具链/自动化 contract test 放在根 `test/`。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
 
 ## 加载顺序
 
@@ -106,14 +110,16 @@ related:
 
 ## Runtime 与分支事实
 
-- Node：`>=24 <25`
-- package manager：`npm`
+- Node：精确 `24.19.0`
+- package manager：精确 `pnpm@11.24.0`，六个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`；`engineStrict=true`、`strictPeerDependencies=true`、`sharedWorkspaceLockfile=true`、`savePrefix=""` 与 `pmOnFail=error` 必须由 workspace YAML 形成可被 `pnpm config list --location=project --json` 观察到的有效项目配置，不保留无效的项目 `.npmrc`
+- 运行时：纯 JavaScript/MJS；不得为了工具链命名对齐引入 TypeScript、compiler 或 codegen
+- CI：使用不可变提交的 `pnpm/setup` 一次安装精确 Node/pnpm，随后显式执行 frozen install；生产图审计只通过当前 pnpm JavaScript entry 和 `shell:false` 运行
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-68`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#68`
+- 当前工作分支：`feature/issue-57`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#57`
 - 本地运行产物根目录：`.release/`，必须 gitignored
-- 当前文档基线验证门：`npm run prepush:gate`
+- 当前仓库验证门：`pnpm run prepush:gate`
 
 ## 文档规则
 

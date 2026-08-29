@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.19.0"
+  },
   "scripts": {
     "cli": "node cli.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1112.0",
-    "pg": "^8.23.0"
+    "@aws-sdk/client-s3": "3.1117.0",
+    "pg": "8.23.0"
   }
 }

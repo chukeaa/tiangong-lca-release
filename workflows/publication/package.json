@@ -4,19 +4,15 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": "24.19.0"
   },
   "bin": {
     "release-publication": "./cli.mjs"
   },
   "scripts": {
-    "test": "node --test",
-    "format:check": "prettier --check ."
+    "test": "node --test"
   },
   "dependencies": {
     "canonicalize": "4.0.0"
-  },
-  "devDependencies": {
-    "prettier": "3.6.2"
   }
 }

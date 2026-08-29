@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Updated for Issue #70: Dataset Transformation aggregation target is an explicit user decision."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed shared Workflow decisions and exact pnpm 11.24 installation after current-main reconciliation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -38,6 +38,7 @@ related:
 
 ## 共享执行原则
 
+- 所有已实现的 JavaScript/MJS Workflow 都属于根 pnpm workspace；只在仓库根执行 `pnpm install --frozen-lockfile`，不得恢复 Workflow-local lockfile 或嵌套 npm 安装树。
 - 先 `inspect`，再提出可执行动作；不默认从第一步开始。
 - 精确资源 ID、版本、hash 和 target 优先于名称或 `latest`。
 - 已有证据只有在覆盖范围、依赖和有效期匹配时才能复用。

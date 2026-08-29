@@ -824,10 +824,28 @@ function validUnitProcess(processId, flowId, processName) {
           classificationInformation: {
             "common:classification": {
               "common:class": [
-                { "@level": "0", "@classId": "A", "#text": "Agriculture" },
-                { "@level": "1", "@classId": "01", "#text": "Crop production" },
-                { "@level": "2", "@classId": "011", "#text": "Crops" },
-                { "@level": "3", "@classId": "0111", "#text": "Cereals" },
+                {
+                  "@level": "0",
+                  "@classId": "A",
+                  "#text": "Agriculture, forestry and fishing",
+                },
+                {
+                  "@level": "1",
+                  "@classId": "01",
+                  "#text":
+                    "Crop and animal production, hunting and related service activities",
+                },
+                {
+                  "@level": "2",
+                  "@classId": "011",
+                  "#text": "Growing of non-perennial crops",
+                },
+                {
+                  "@level": "3",
+                  "@classId": "0111",
+                  "#text":
+                    "Growing of cereals (except rice), leguminous crops and oil seeds",
+                },
               ],
             },
           },

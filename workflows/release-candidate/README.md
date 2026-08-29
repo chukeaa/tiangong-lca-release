@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 intake、包的语义、候选构建、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
   - workflows/release-candidate/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
-lastReviewedNote: "Issue #68 makes exclusion review portable and defines the Release-owned TIDAS memory default and resource-specific retry behavior."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Documented portable review and memory recovery under the exact root pnpm 11.24 workspace."
 related:
   - AGENTS.md
   - ../../README.md
@@ -107,8 +107,8 @@ Package build 是本 Workflow 的子过程，不是独立顶层 Workflow。
 首个本地 Release Intake 与 Package route 已实现为 Workflow-local 薄 CLI：
 
 ```bash
+pnpm install --frozen-lockfile
 cd workflows/release-candidate
-npm install
 
 node cli.mjs cache status --json
 

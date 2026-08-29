@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 recipe、identity/version、metadata、reference、validation 或输出契约变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Defined Result-only handling for Dataset Transformation Derived Result handoffs."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled Result-only Transformation handoffs with exact pnpm 11.24 and the unmocked SDK 0.2 contract."
 related:
   - README.md
   - design/result-process-and-lifecycle-model.md
@@ -26,7 +26,7 @@ related:
 
 ## 本地验证
 
-运行 `npm --prefix workflows/result-materialization test` 验证本 Workflow；仓库根目录的 `npm test` 已包含该命令。
+从仓库根运行 `pnpm --filter @tiangong-lca/release-result-materialization-workflow test` 验证本 Workflow；`pnpm test` 已包含全部 Workflow case。Process 与 LifeCycleModel 必须由真实 `@tiangong-lca/tidas-sdk@0.2.0` schema 验证，生产依赖图不得带入 TypeScript/compiler/codegen。
 
 ## Agent 的职责
 

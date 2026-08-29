@@ -13,9 +13,9 @@ whenToUpdate:
   - 当发布选择、目标差异、状态转换、写入、审批、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 1a9c21f4e66b4a3a8e949dde88404cc9fc562e98
-lastReviewedNote: "Implemented the complete Candidate-bound Publication flow from scope selection through independent readback."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed full-closure selection and payload behavior under the root pnpm 11.24 workspace without changing publication authority."
 related:
   - AGENTS.md
   - ../release-candidate/README.md
@@ -64,7 +64,7 @@ Dataset Transformation 不属于本 Workflow。任何 Process/LifeCycleModel 内
 安装并查看帮助：
 
 ```bash
-npm --prefix workflows/publication ci
+pnpm install --frozen-lockfile
 node workflows/publication/cli.mjs --help
 ```
 

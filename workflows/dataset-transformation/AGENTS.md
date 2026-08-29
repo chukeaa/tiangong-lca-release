@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 Transformation DSL、决策权限、执行器、验证或返回路径变化时
 checkPaths:
   - workflows/dataset-transformation/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Added explicit Unit Process versus Result Process selection and operation-specific handoff."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed Unit/Result Transformation semantics inside the exact pnpm 11.24 workspace."
 related:
   - README.md
   - dsl-v0.md

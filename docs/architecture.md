@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 527716567e705b5ea025a899efa7e164008db7a3
-lastReviewedNote: "Updated for Issue #70 with operation-specific Dataset Transformation routing."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled current main topology with exact pnpm 11.24, six packages, portable CI, pure JavaScript, and SDK 0.2 validation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -43,7 +43,10 @@ Repository
 │   ├── dataset-transformation/
 │   └── publication/
 ├── docs/
+├── test/                    # repository toolchain/automation contracts only
 ├── package.json
+├── pnpm-workspace.yaml
+├── pnpm-lock.yaml
 └── .github/workflows/
 ```
 
@@ -180,6 +183,9 @@ Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 
 ## 实现边界
 
 - 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
+- 全仓运行时固定为 Node `24.19.0` 和 pnpm `11.24.0`，六个 package 共用根 workspace 与唯一 lock；项目级 engine、peer、lockfile、save-prefix 和 package-manager mismatch policy 只由 `pnpm-workspace.yaml` 的 camelCase 设置拥有，并通过 pnpm 的有效配置输出验证；
+- CI 由不可变 `pnpm/setup` 提供精确 Node/pnpm，production graph audit 通过 `process.execPath + npm_execpath` 且禁用 shell，避免 Windows `.cmd` shim 差异；
+- 当前实现保持纯 JavaScript/MJS，生产依赖图不得因 SDK 或工具链迁移重新引入 TypeScript、compiler 或 schema codegen；
 - 外部 provider schema 只在 adapter 边界解析；
 - Workflow 文档拥有行为语义，adapter 不拥有业务路线；
 - 确定性计算、验证和打包不得由 Agent 模拟；

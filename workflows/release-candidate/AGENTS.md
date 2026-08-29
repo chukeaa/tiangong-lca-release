@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 intake、package、candidate qualification、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
   - workflows/release-candidate/**
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 8d48f9c44b2ba0e62666ff14cd9d3ea0bc4c8ebf
-lastReviewedNote: "Issue #68 makes exclusion review generation project-owned and gives full-closure TIDAS subprocesses an explicit Release-owned memory budget and resource recovery path."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled portable Excel review, TIDAS memory budgets, and exact pnpm 11.24 dependencies without changing Candidate authority."
 related:
   - README.md
   - ../AGENTS.md

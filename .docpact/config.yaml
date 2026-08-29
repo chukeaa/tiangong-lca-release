@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-28"
-lastReviewedCommit: "527716567e705b5ea025a899efa7e164008db7a3"
+lastReviewedAt: "2026-08-29"
+lastReviewedCommit: "67a61471502eed31af70358f86dd22be0e350d8a"
 
 catalog:
   repos:
@@ -27,6 +27,10 @@ ownership:
           - .gitignore
           - .env.example
           - package.json
+          - pnpm-workspace.yaml
+          - pnpm-lock.yaml
+          - .node-version
+          - test/**
           - .github/workflows/ci.yml
       ownerRepo: release
     - id: shared-workflow-contract
@@ -69,15 +73,18 @@ coverage:
     - .docpact/**
     - .gitignore
     - .env.example
+    - .node-version
+    - test/**
     - workflows/**
     - package.json
+    - pnpm-workspace.yaml
     - .github/workflows/ci.yml
   exclude:
     - .git/**
     - .docpact/runs/**
     - node_modules/**
     - .release/**
-    - package-lock.json
+    - pnpm-lock.yaml
     - "*.log"
 
 freshness:
@@ -115,6 +122,10 @@ routing:
     validation-and-automation:
       paths:
         - package.json
+        - pnpm-workspace.yaml
+        - pnpm-lock.yaml
+        - .node-version
+        - test/**
         - .github/workflows/ci.yml
         - .docpact/config.yaml
     repo-docs:
@@ -287,6 +298,14 @@ rules:
         kind: generated-runtime-exclusion
       - path: package.json
         kind: build-contract
+      - path: pnpm-workspace.yaml
+        kind: workspace-contract
+      - path: pnpm-lock.yaml
+        kind: dependency-lock
+      - path: .node-version
+        kind: runtime-pin
+      - path: test/**
+        kind: repository-validation-contract
       - path: .github/workflows/ci.yml
         kind: automation
     requiredDocs:
@@ -296,4 +315,4 @@ rules:
         mode: review_or_update
       - path: docs/architecture.md
         mode: review_or_update
-    reason: The documentation baseline and repository-level validation entrypoints must stay aligned.
+    reason: The exact runtime, effective pnpm workspace policy, dependency lock, documentation baseline, and repository-level validation entrypoints must stay aligned.
