@@ -1,6 +1,5 @@
 import path from "node:path";
 import {
-  HASH_PATTERN,
   UUID_PATTERN,
   VERSION_PATTERN,
   deepGet,
@@ -10,6 +9,14 @@ import {
 import { loadCandidate, loadProcessInputs } from "./candidate.mjs";
 import { validateContract } from "./contracts.mjs";
 import { readJson, writeCanonical, writeImmutableDirectory } from "./io.mjs";
+import {
+  LEGACY_UNIT_OPERATION,
+  PENDING_OPERATION,
+  SUPPORTED_OPERATIONS,
+  TARGET_OPERATIONS,
+  operationRole,
+  requiresTargetDecision,
+} from "./operations.mjs";
 
 export const DSL_VERSION = "tiangong.release.dataset-transformation-dsl.v0";
 
@@ -59,7 +66,9 @@ export async function analyzeTransformation({ candidateDir, dslFile, outDir }) {
     dslFile,
     "transformation_dsl_missing",
   );
-  const candidate = await loadCandidate(candidateDir);
+  const candidate = await loadCandidate(candidateDir, {
+    requiredRole: operationRole(draft.operation?.type) ?? null,
+  });
   const analysis = await buildAnalysis({ candidate, draft });
   const conflictReport = {
     schemaVersion: "tiangong.release.transformation-conflict-report.v0",
@@ -88,10 +97,14 @@ export async function analyzeTransformation({ candidateDir, dslFile, outDir }) {
 export async function buildAnalysis({ candidate, draft }) {
   validateContract("draft", draft);
   assertDraftEnvelope(draft);
+  if (draft.operation.type === PENDING_OPERATION)
+    return buildTargetSelectionAnalysis({ candidate, draft });
+  const role = operationRole(draft.operation.type);
   const inputKeys = draft.operation?.inputs ?? [];
-  const inputs = await loadProcessInputs(candidate, inputKeys);
+  const inputs = await loadProcessInputs(candidate, inputKeys, { role });
   const conflicts = [];
-  const compatibility = analyzeCompatibility(inputs, conflicts);
+  analyzeTargetDecision(draft, conflicts);
+  const compatibility = analyzeCompatibility(inputs, role, conflicts);
   const weights = resolveWeights(draft.operation?.weighting, inputs, conflicts);
   const familyAnalysis = analyzeFamilies(inputs, draft, conflicts);
   analyzeOutputAndPolicies(draft, inputs, weights, conflicts, candidate);
@@ -113,6 +126,7 @@ export async function buildAnalysis({ candidate, draft }) {
     },
     operation: {
       type: draft.operation.type,
+      inputRole: role,
       inputCount: inputs.length,
       inputs: inputs.map(summarizeInput),
       compatibility,
@@ -134,12 +148,13 @@ function assertDraftEnvelope(draft) {
   if (
     draft?.schemaVersion !== DSL_VERSION ||
     draft?.status !== "draft" ||
-    draft?.operation?.type !== "process.weighted-aggregate.v0" ||
-    !Array.isArray(draft.operation.inputs)
+    !SUPPORTED_OPERATIONS.has(draft?.operation?.type) ||
+    (draft.operation.type !== PENDING_OPERATION &&
+      !Array.isArray(draft.operation.inputs))
   )
     fail(
       "transformation_dsl_invalid",
-      "Expected a draft Dataset Transformation DSL v0 weighted Process aggregation",
+      "Expected a supported draft Dataset Transformation weighted aggregation",
     );
   const decisionIds = (draft.decisions ?? []).map(
     ({ conflictId }) => conflictId,
@@ -151,7 +166,71 @@ function assertDraftEnvelope(draft) {
     );
 }
 
-function analyzeCompatibility(inputs, conflicts) {
+function buildTargetSelectionAnalysis({ candidate, draft }) {
+  const recommendation = draft.operation.targetRecommendation ?? null;
+  const conflictItem = conflict({
+    id: "operation:aggregation-target",
+    category: "operation-selection",
+    summary:
+      "Choose whether weighted aggregation constructs a Unit Process or combines existing Result Processes",
+    sourceValues: [],
+    options: [...TARGET_OPERATIONS],
+    recommendation,
+    resolutionStatus: "unresolved",
+  });
+  const analysis = {
+    schemaVersion: "tiangong.release.transformation-analysis.v0",
+    status: "needs_decision",
+    transformationDraftSha256: hashJson(draft),
+    candidate: candidateSummary(candidate),
+    operation: {
+      type: PENDING_OPERATION,
+      inputRole: null,
+      inputCount: 0,
+      inputs: [],
+      targetSelection: {
+        status: "needs_confirmation",
+        options: [...TARGET_OPERATIONS],
+        recommendation,
+      },
+    },
+    fieldFamilies: [],
+    conflicts: [conflictItem],
+    unresolvedConflictIds: [conflictItem.id],
+    nextAction: "agent_recommends_and_user_selects_aggregation_target",
+  };
+  validateContract("analysis", analysis);
+  return analysis;
+}
+
+function analyzeTargetDecision(draft, conflicts) {
+  if (draft.operation.type === LEGACY_UNIT_OPERATION) return;
+  if (!requiresTargetDecision(draft.operation.type)) return;
+  const decision = decisionMap(draft.decisions).get(
+    "operation:aggregation-target",
+  );
+  const resolved = Boolean(
+    decision?.strategy === "select-operation" &&
+    decision.value === draft.operation.type &&
+    typeof decision.reason === "string" &&
+    decision.reason.trim(),
+  );
+  conflicts.push(
+    conflict({
+      id: "operation:aggregation-target",
+      category: "operation-selection",
+      summary:
+        "Confirm whether weighted aggregation targets Unit Process or Result Process semantics",
+      sourceValues: [{ selectedOperation: draft.operation.type }],
+      options: [...TARGET_OPERATIONS],
+      recommendation: draft.operation.targetRecommendation ?? null,
+      resolutionStatus: resolved ? "resolved" : "unresolved",
+      decision: resolved ? decision : null,
+    }),
+  );
+}
+
+function analyzeCompatibility(inputs, role, conflicts) {
   const references = inputs.map((input) => referenceDescriptor(input));
   const referenceIdentities = new Set(
     references.map(({ flow, version, direction }) =>
@@ -191,12 +270,166 @@ function analyzeCompatibility(inputs, conflicts) {
         resolutionStatus: "revise_dsl_required",
       }),
     );
-  return {
+  const compatibility = {
     referenceFlowCompatible: referenceIdentities.size === 1,
     datasetTypeCompatible:
       new Set(types.map(({ value }) => JSON.stringify(value))).size === 1,
     reference: references[0] ?? null,
   };
+  if (role === "result_process")
+    Object.assign(compatibility, analyzeResultCompatibility(inputs, conflicts));
+  return compatibility;
+}
+
+function analyzeResultCompatibility(inputs, conflicts) {
+  const lineages = inputs.map(resultLineageDescriptor);
+  const calculationIds = new Set(
+    lineages.map(({ calculationId }) => calculationId).filter(Boolean),
+  );
+  const calculationLineageCompatible =
+    calculationIds.size === 1 &&
+    lineages.every(({ calculationId }) => calculationId !== null);
+  if (!calculationLineageCompatible)
+    conflicts.push(
+      conflict({
+        id: "compatibility:calculation-lineage",
+        category: "compatibility",
+        summary:
+          "Selected Result Processes do not expose one shared exact Calculation lineage",
+        sourceValues: lineages,
+        options: [
+          "revise-selection",
+          "provide-materialization-lineage-evidence",
+          "switch-to-unit-process-aggregation",
+          "split-output",
+        ],
+        resolutionStatus: "revise_dsl_required",
+      }),
+    );
+
+  const exchangeSignatures = inputs.map((input) => ({
+    input: input.key,
+    identities: resultExchangeIdentities(input),
+  }));
+  const exchangeIdentityCompatible =
+    new Set(exchangeSignatures.map(({ identities }) => hashJson(identities)))
+      .size === 1;
+  if (!exchangeIdentityCompatible)
+    conflicts.push(
+      conflict({
+        id: "compatibility:result-exchanges",
+        category: "compatibility",
+        summary:
+          "Selected Result Processes do not contain one exact LCI exchange identity set",
+        sourceValues: exchangeSignatures,
+        options: [
+          "revise-selection",
+          "switch-to-unit-process-aggregation",
+          "split-output",
+        ],
+        resolutionStatus: "revise_dsl_required",
+      }),
+    );
+
+  const methodSignatures = inputs.map((input) => ({
+    input: input.key,
+    identities: resultMethodIdentities(input),
+  }));
+  const lciaMethodCompatible =
+    new Set(methodSignatures.map(({ identities }) => hashJson(identities)))
+      .size === 1;
+  if (!lciaMethodCompatible)
+    conflicts.push(
+      conflict({
+        id: "compatibility:lcia-methods",
+        category: "compatibility",
+        summary:
+          "Selected Result Processes do not contain one exact LCIA method identity/version set",
+        sourceValues: methodSignatures,
+        options: [
+          "revise-selection",
+          "materialize-a-common-method-set",
+          "switch-to-unit-process-aggregation",
+          "split-output",
+        ],
+        resolutionStatus: "revise_dsl_required",
+      }),
+    );
+  return {
+    calculationLineageCompatible,
+    calculationId: calculationLineageCompatible
+      ? lineages[0].calculationId
+      : null,
+    exchangeIdentityCompatible,
+    exchangeIdentitySha256: exchangeIdentityCompatible
+      ? hashJson(exchangeSignatures[0].identities)
+      : null,
+    lciaMethodCompatible,
+    lciaMethodIdentitySha256: lciaMethodCompatible
+      ? hashJson(methodSignatures[0].identities)
+      : null,
+    lciaMethodCount: lciaMethodCompatible
+      ? methodSignatures[0].identities.length
+      : null,
+  };
+}
+
+function resultLineageDescriptor(input) {
+  const comments = languageTexts(
+    input.document.processDataSet?.processInformation?.dataSetInformation?.[
+      "common:generalComment"
+    ],
+  ).join("\n");
+  const calculationId =
+    comments.match(
+      /under calculation\s+([0-9a-f]{8}-[0-9a-f-]{27})\b/iu,
+    )?.[1] ?? null;
+  const sourceProcess =
+    comments.match(
+      /generated for\s+([0-9a-f]{8}-[0-9a-f-]{27}@[0-9]{2}\.[0-9]{2}\.[0-9]{3})\b/iu,
+    )?.[1] ?? null;
+  return { input: input.key, calculationId, sourceProcess };
+}
+
+function resultExchangeIdentities(input) {
+  return (input.document.processDataSet?.exchanges?.exchange ?? [])
+    .map((exchange) => {
+      const reference = exchange.referenceToFlowDataSet;
+      return {
+        direction: exchange.exchangeDirection ?? null,
+        flow: reference?.["@refObjectId"] ?? null,
+        version: reference?.["@version"] ?? null,
+        location: exchange.location ?? null,
+        functionType: exchange.functionType ?? null,
+      };
+    })
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+}
+
+function resultMethodIdentities(input) {
+  return resultItems(input)
+    .map((item) => ({
+      uuid: item.referenceToLCIAMethodDataSet?.["@refObjectId"] ?? null,
+      version: item.referenceToLCIAMethodDataSet?.["@version"] ?? null,
+    }))
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+}
+
+function resultItems(input) {
+  const value = input.document.processDataSet?.LCIAResults?.LCIAResult;
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
+
+function languageTexts(value) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values
+    .map((item) => item?.["#text"])
+    .filter((text) => typeof text === "string");
 }
 
 function referenceDescriptor(input) {
@@ -602,6 +835,19 @@ function summarizeInput(input) {
       null,
     annualProduction: annualEvidence(input).value,
     reference: referenceDescriptor(input),
+    resultLineage:
+      input.entry.role === "result_process"
+        ? resultLineageDescriptor(input)
+        : null,
+  };
+}
+
+function candidateSummary(candidate) {
+  return {
+    releaseCandidateSha256: candidate.candidateSha256,
+    releaseVersion: candidate.candidate.releaseVersion,
+    canonicalDatasetIndexSha256: candidate.indexSha256,
+    packageSetHash: candidate.candidate.packageSetHash,
   };
 }
 

@@ -13,9 +13,9 @@ whenToUpdate:
   - 当支持的加工机制、DSL、冲突策略、验证或返回路径变化时
 checkPaths:
   - workflows/dataset-transformation/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Implemented DSL v0 conflict-resolution and deterministic weighted Unit Process aggregation with real three-Process evidence."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed deterministic Unit/Result routes after current-main and pnpm 11.24 reconciliation."
 related:
   - AGENTS.md
   - dsl-v0.md
@@ -27,29 +27,34 @@ related:
 
 ## 当前能力
 
-Dataset Transformation 是 Release Candidate 完成后的可选再加工入口。当前 DSL v0 已实现 Candidate-bound Unit Process 加权聚合：
+Dataset Transformation 是 Release Candidate 完成后的可选再加工入口。加权操作先由 Agent 说明并推荐目标层，用户确认后进入对应路线：
 
 ```text
 Validated Candidate v1/v2
   -> Draft DSL
+  -> choose Unit Process or Result Process semantics
   -> exact input inspection
   -> conflict report / needs_decision
   -> Agent + user decisions
   -> Frozen Spec
-  -> deterministic weighted Process
+  -> deterministic weighted Unit/Result Process
   -> validation + lineage + handoff
-  -> Calculation -> Result Materialization -> new Candidate
+  -> Unit Process: Calculation -> Result Materialization -> new Candidate
+  -> Result Process: Result Materialization -> new Candidate
 ```
 
 支持：
 
-- 两个或更多精确 Unit Process；
+- 两个或更多精确 Unit Process，或两个或更多兼容的 Result Process；
+- Draft 中的 Agent recommendation、`operation:aggregation-target` 用户确认和 Frozen operation type；
 - 显式正权重；
 - `annualSupplyOrProductionVolume` 年产量权重和有 evidence 的逐项 override；
 - 完整业务字段族比较；
 - `take-from`、`rewrite`、`drop` 和年产量 `sum-resolved` 决定；
 - 定量参考归一化后的 exchange 加权；
-- 新 identity、review reset、lineage、execution receipt 和后续 Workflow handoff；
+- Result Process 的共同 Calculation lineage、精确 exchange set 和 LCIA method UUID/version set 检查；
+- LCI exchange 与 LCIA result 的确定性加权；
+- 新 identity、review reset、lineage、execution receipt 和 operation-specific handoff；
 - Release Candidate v1/v2 读取，便于已有验证 Candidate 与新 Candidate 共同使用。
 
 DSL 详细语义见 [Dataset Transformation DSL v0](dsl-v0.md)。
@@ -93,16 +98,17 @@ exchange 按 Flow UUID/version、direction、location、function type 分组。�
 
 ## Result evidence 与返回路径
 
-v0 生成新的 Unit Process 定量语义，因此父 Candidate 中已有 Result Process/LifecycleModel evidence 一律标记 `invalidated`。完成并不表示已经形成 Candidate，也不表示发布；handoff 固定为：
+完成并不表示已经形成 Candidate，也不表示发布。返回路径由冻结的 operation 决定：
 
 ```text
-Dataset Transformation
-  -> Calculation
-  -> Result Materialization
-  -> Release Candidate
+unit-process.weighted-aggregate.v1
+  -> Calculation -> Result Materialization -> Release Candidate
+
+result-process.weighted-aggregate.v0
+  -> Result Materialization -> Release Candidate
 ```
 
-父 Candidate 不被覆盖。新 Candidate 必须绑定 Transformation Frozen Spec、Execution Receipt 和新的计算/物化证据。
+Unit Process 路线改变过程清单语义，因此父 Candidate 中已有 Result Process/LifecycleModel evidence 标记为 `invalidated`。Result Process 路线把输入 Result evidence 标记为 `derived`，不重新调用 Worker，也不隐式聚合 LifecycleModel。父 Candidate 不被覆盖；新 Candidate 必须绑定 Transformation Frozen Spec、Execution Receipt 和对应的新计算或物化证据。
 
 ## CLI
 
@@ -121,13 +127,13 @@ node workflows/dataset-transformation/cli.mjs transform execute \
 
 ## 验证与示例
 
-自动测试覆盖 business conflict、三 Process 归一化加权、年产量缺失/sentinel 与 evidenced override、Candidate drift、CLI 有界输出和回复模板。
+自动测试覆盖 aggregation-target 选择、business conflict、Unit/Result 三 Process 归一化加权、LCIA method 对齐、年产量缺失/sentinel 与 evidenced override、Candidate drift、条件 handoff、CLI 有界输出和回复模板。
 
-真实 Candidate 试验见 [三个相近 Process 的聚合示例](examples/three-process-electricity/README.md)。该试验完成 runtime checks、TIDAS JSON validation、eILCD projection/validation 和 semantic round-trip。
+真实 Candidate 试验见 [三个相近 Process 的聚合示例](examples/three-process-electricity/README.md)。同一组三省数据同时覆盖 Unit Process 路线和具有 405 个 exchanges、25 个 LCIA methods 的 Result Process 路线。
 
 ## 暂不支持
 
-- LifecycleModel 或 Result Process 聚合执行；
+- LifecycleModel 聚合或 composite model；
 - reference Flow mapping 和单位换算；
 - 任意表达式、脚本或 JSON patch；
 - 通用 uncertainty 合并；

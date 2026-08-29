@@ -2,4 +2,4 @@ Transformation 没有失败；当前有 {{unresolvedCount}} 个语义问题等�
 
 冲突报告：{{artifacts.conflictReport}}
 
-请确认取值、重写、排除或拆分策略。决定写回 DSL 后会重新检查并冻结。
+请先确认聚合目标，或继续确认取值、重写、排除和拆分策略。决定写回 DSL 后会重新检查并冻结。

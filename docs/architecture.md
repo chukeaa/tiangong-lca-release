@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Added the Candidate-bound Dataset Transformation DSL, semantic decision loop, deterministic execution, and Calculation return path."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled current main topology with exact pnpm 11.24, six packages, portable CI, pure JavaScript, and SDK 0.2 validation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -43,7 +43,10 @@ Repository
 │   ├── dataset-transformation/
 │   └── publication/
 ├── docs/
+├── test/                    # repository toolchain/automation contracts only
 ├── package.json
+├── pnpm-workspace.yaml
+├── pnpm-lock.yaml
 └── .github/workflows/
 ```
 
@@ -83,9 +86,11 @@ Release Candidate
   |      -> resumable execution -> independent readback
   |
   +--> Dataset Transformation
-         exact Candidate data -> transformed canonical data
+         choose Unit Process or Result Process semantics
+         -> exact Candidate data -> transformed canonical data
+         -> Unit Process: Calculation -> Result Materialization
+         -> Result Process: Result Materialization
          -> new Candidate
-         or -> Calculation / Result Materialization when prior Result evidence is invalid
 ```
 
 这些路径不共享 mutable `currentStage`。每个节点通过精确 identity、version、hash、artifact 和决定证据恢复。
@@ -151,9 +156,9 @@ Candidate v2 在构建时生成 `publication-catalog.json`，把 canonical index
 
 ## Dataset Transformation 边界
 
-Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 为输入。DSL v0 的 Draft 与 conflict report 保留 Agent/用户语义协商，Frozen Spec 展开为确定性权重、业务字段值和 metadata policy；执行器只消费 Frozen Spec，输出新 Unit Process、validation receipt 和 lineage handoff。
+Dataset Transformation 以父 Candidate 和精确 dataset identity/version/hash 为输入。DSL v0 的 Draft 与 conflict report 先保留 Agent 对 Unit/Result 路线的推荐和用户确认，再处理权重与业务字段语义；Frozen Spec 用明确 operation type 展开确定性权重、业务字段值和 metadata policy。
 
-业务字段差异属于 `needs_decision`，不是 terminal failure。加权 Unit Process 改变定量语义，v0 固定把旧 Result evidence 标记为 invalidated，并返回 Calculation/Result Materialization；只有重新生成 Result evidence 后才能构建新 Candidate。
+业务字段差异和 aggregation-target 未确认属于 `needs_decision`，不是 terminal failure。加权 Unit Process 改变过程清单语义，把旧 Result evidence 标记为 invalidated，并返回 Calculation。加权 Result Process 只接受共同 Calculation lineage、相同 exchange identity set 和 LCIA method set，生成 Derived Result 后返回 Result Materialization；它不重新求解供应链，也不隐式生成 LifecycleModel。
 
 ## Publication 边界
 
@@ -180,17 +185,20 @@ Publication 内另有独立的 Portal LCIA projection recipe。它从 ready V3 p
 ## 实现边界
 
 - 外部 API、CLI 和 executable 通过本仓库 adapter 调用；
+- 全仓运行时固定为 Node `24.19.0` 和 pnpm `11.24.0`，六个 package 共用根 workspace 与唯一 lock；项目级 engine、peer、lockfile、save-prefix 和 package-manager mismatch policy 只由 `pnpm-workspace.yaml` 的 camelCase 设置拥有，并通过 pnpm 的有效配置输出验证；
+- CI 由不可变 `pnpm/setup` 提供精确 Node/pnpm，production graph audit 通过 `process.execPath + npm_execpath` 且禁用 shell，避免 Windows `.cmd` shim 差异；
+- 当前实现保持纯 JavaScript/MJS，生产依赖图不得因 SDK 或工具链迁移重新引入 TypeScript、compiler 或 schema codegen；
 - 外部 provider schema 只在 adapter 边界解析；
 - Workflow 文档拥有行为语义，adapter 不拥有业务路线；
 - 确定性计算、验证和打包不得由 Agent 模拟；
 - 共享代码只提取已被多个 Workflow 实际复用的机制；
 - 不为目录对称创建空运行时抽象；
-- Dataset Transformation 只实现已确认的 `process.weighted-aggregate.v0`，不通过通用 patch 或表达式扩大语义；Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter、状态 mapping，以及 Database-owned Portal LCIA V3 package publish 和 projection finalize/readback/revoke 契约。
+- Dataset Transformation 只实现已确认的 Unit/Result weighted-aggregate operations，不通过通用 patch、隐式 LifecycleModel 聚合或表达式扩大语义；Publication 只实现已确认的 exact-plan-hash、actor-scoped 平台 adapter、状态 mapping，以及 Database-owned Portal LCIA V3 package publish 和 projection finalize/readback/revoke 契约。
 
 ## 当前实现基线
 
 - Calculation 已实现 ResultSet、Closure/Calculation 提交、任务查询和数据库/S3 Calculation Bundle 数据面。
 - Result Materialization 已实现 intake、Result Process/LifecycleModel 生成、验证和本地后台 Job。
 - Release Candidate 已实现 Elementary Flow cache、Release Intake、Package build、失败影响分析、人工审核和 Candidate qualification。
-- Dataset Transformation 已实现 Draft inspect、conflict/decision、Frozen Spec、加权 Unit Process、validation/handoff、CLI、schemas、测试和真实三 Process 试验。
+- Dataset Transformation 已实现 aggregation-target recommendation/decision、Draft inspect、conflict/decision、Frozen Spec、加权 Unit/Result Process、validation/conditional handoff、CLI、schemas、测试和真实三 Process 试验。
 - Publication 已实现 Candidate v2 handoff、范围解析、exact payload、Target Snapshot、Approval、可恢复执行、独立回读，以及 opt-in Portal LCIA V3 package plan/publish、projection prepare/finalize/verify/revoke、CLI 和测试。

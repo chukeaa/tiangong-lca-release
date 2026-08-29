@@ -19,12 +19,12 @@ const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
 const HELP = `release-transform <command> [options]
 
-Candidate-bound Dataset Transformation DSL v0.
+Candidate-bound Dataset Transformation weighted aggregation.
 
 Commands:
   dsl inspect        Analyze exact inputs and emit structured decision requests
   dsl freeze         Freeze a fully resolved, hash-bound executable DSL
-  transform execute Execute and validate the frozen weighted Process aggregation
+  transform execute Execute and validate the selected frozen aggregation
 
 Options:
   --candidate <path>       Validated Release Candidate v1 or v2 directory
@@ -89,6 +89,8 @@ async function inspectDsl(options) {
         ? "decision_complete_freeze_pending"
         : "semantic_decisions_pending",
     inputCount: result.analysis.operation.inputCount,
+    operationType: result.analysis.operation.type,
+    targetSelection: result.analysis.operation.targetSelection ?? null,
     conflictCount: result.analysis.conflicts.length,
     unresolvedCount: result.analysis.unresolvedConflictIds.length,
     unresolvedConflictIds: result.analysis.unresolvedConflictIds,
@@ -188,9 +190,12 @@ async function execute(options) {
     specDir: path.resolve(options["spec-dir"]),
     outDir: path.resolve(options["out-dir"]),
   });
+  const resultRoute = result.dataset.role === "result_process";
   return success("transform execute", "transformation_executed", {
     status: result.receipt.status,
-    completeness: "transformed_unit_process_ready_for_calculation",
+    completeness: resultRoute
+      ? "derived_result_ready_for_result_materialization"
+      : "transformed_unit_process_ready_for_calculation",
     output: result.dataset,
     receiptSha256: result.receiptSha256,
     nextWorkflow: result.handoff.nextWorkflow,
@@ -207,14 +212,23 @@ async function execute(options) {
       ),
       handoff: path.join(result.path, "transformation-handoff.json"),
     },
-    nextActions: [
-      {
-        id: "enter_calculation",
-        kind: "workflow_handoff",
-        instruction:
-          "Use transformation-handoff.json and the transformed Unit Process as the next Calculation input; after Result Materialization, build a new Release Candidate",
-      },
-    ],
+    nextActions: resultRoute
+      ? [
+          {
+            id: "enter_result_materialization",
+            kind: "workflow_handoff",
+            instruction:
+              "Use transformation-handoff.json and the hash-bound Derived Result as Result Materialization input; materialize only a Result Process unless a separate LifecycleModel operation is designed and confirmed",
+          },
+        ]
+      : [
+          {
+            id: "enter_calculation",
+            kind: "workflow_handoff",
+            instruction:
+              "Use transformation-handoff.json and the transformed Unit Process as the next Calculation input; after Result Materialization, build a new Release Candidate",
+          },
+        ],
   });
 }
 

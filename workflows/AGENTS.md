@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Reviewed shared decision and artifact boundaries after activating Dataset Transformation DSL v0 and weighted Unit Process execution."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reviewed shared Workflow decisions and exact pnpm 11.24 installation after current-main reconciliation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -38,6 +38,7 @@ related:
 
 ## 共享执行原则
 
+- 所有已实现的 JavaScript/MJS Workflow 都属于根 pnpm workspace；只在仓库根执行 `pnpm install --frozen-lockfile`，不得恢复 Workflow-local lockfile 或嵌套 npm 安装树。
 - 先 `inspect`，再提出可执行动作；不默认从第一步开始。
 - 精确资源 ID、版本、hash 和 target 优先于名称或 `latest`。
 - 已有证据只有在覆盖范围、依赖和有效期匹配时才能复用。
@@ -55,7 +56,7 @@ related:
 
 - 创建或采用哪个业务工作对象；
 - 启动可能耗时或产生远程副作用的验证和计算；
-- Dataset Transformation 的具体加工规则、语义、权重、功能单位和重要字段；
+- Dataset Transformation 的 aggregation target、具体加工规则、语义、权重、功能单位和重要字段；
 - Release Candidate 内容与正式发布授权。
 - Portal LCIA V3 package 的 exact publication、Projection Plan finalize 与 exact Finalization Receipt revoke。
 

@@ -4,6 +4,7 @@ import { loadCandidate, loadProcessInputs } from "./candidate.mjs";
 import { fail, hashJson } from "./common.mjs";
 import { validateContract } from "./contracts.mjs";
 import { readJson, writeCanonical, writeImmutableDirectory } from "./io.mjs";
+import { operationRole } from "./operations.mjs";
 
 export async function freezeTransformation({
   candidateDir,
@@ -19,7 +20,8 @@ export async function freezeTransformation({
     path.join(analysisDir, "transformation-analysis.json"),
     "transformation_analysis_missing",
   );
-  const candidate = await loadCandidate(candidateDir);
+  const role = operationRole(draft.operation?.type);
+  const candidate = await loadCandidate(candidateDir, { requiredRole: role });
   if (
     priorAnalysis.transformationDraftSha256 !== hashJson(draft) ||
     priorAnalysis.candidate?.releaseCandidateSha256 !==
@@ -43,13 +45,16 @@ export async function freezeTransformation({
       path: null,
     };
 
-  const inputs = await loadProcessInputs(candidate, draft.operation.inputs);
+  const inputs = await loadProcessInputs(candidate, draft.operation.inputs, {
+    role,
+  });
   const fields = resolveFamilyValues(inputs, draft);
   const frozen = {
     schemaVersion: "tiangong.release.dataset-transformation-frozen-spec.v0",
     status: "frozen",
     operation: {
       type: draft.operation.type,
+      inputRole: role,
       candidate: analysis.candidate,
       inputs: analysis.operation.inputs.map((input) => ({
         key: input.key,
@@ -66,12 +71,20 @@ export async function freezeTransformation({
     policies: structuredClone(draft.policies),
     resolvedFields: fields,
     decisions: structuredClone(draft.decisions ?? []),
-    resultEvidence: {
-      disposition: "invalidated",
-      reason:
-        "Weighted Unit Process aggregation creates new quantitative inventory semantics",
-      nextWorkflow: "calculation",
-    },
+    resultEvidence:
+      role === "result_process"
+        ? {
+            disposition: "derived",
+            reason:
+              "Weighted Result Process aggregation creates new hash-bound LCI/LCIA result semantics without a new Worker solve",
+            nextWorkflow: "result-materialization",
+          }
+        : {
+            disposition: "invalidated",
+            reason:
+              "Weighted Unit Process aggregation creates new quantitative inventory semantics",
+            nextWorkflow: "calculation",
+          },
     lineage: {
       transformationDraftSha256: hashJson(draft),
       transformationAnalysisSha256: hashJson(analysis),

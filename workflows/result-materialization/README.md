@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 materialization recipe、身份版本、数据集关系、验证或输出变化时
 checkPaths:
   - workflows/result-materialization/**
-lastReviewedAt: 2026-08-24
-lastReviewedCommit: 0ef3a884051158f1bf55ca2828c81e498fb83e79
-lastReviewedNote: "Documented how exact Materialization lineage supports Release exclusion impact without mutating outputs."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Documented Result-only Transformation handoffs and root pnpm 11.24 SDK 0.2 validation."
 related:
   - AGENTS.md
   - design/result-process-and-lifecycle-model.md
@@ -36,6 +36,8 @@ related:
 - 已冻结的 source closure、graph evidence 和 result arrays；
 - 已有 Materialization Request、Identity Plan、Version Plan 或部分生成结果；
 - 已完成 materialization、但需要针对新 recipe 或上一版 manifest 重新生成的 dataset collection。
+
+Dataset Transformation 的 Result weighted aggregation handoff 使用 `status=ready_for_result_materialization`，绑定 Frozen Spec、Execution Receipt、Derived Result identity/version/hash 和父 Candidate。该入口默认只物化 Result Process；它不会因为父 Candidate 中存在 LifecycleModel 就自动聚合、复制或补造新 Model。
 
 ## 为什么是独立 Workflow
 
@@ -119,8 +121,8 @@ CLI 默认使用 `.release/` 下的内容寻址路径，不再要求用户手写
 第一阶段已经提供 workflow-local 薄 CLI，不增加 `tiangong-release` 顶层命令：
 
 ```bash
+pnpm install --frozen-lockfile
 cd workflows/result-materialization
-npm install
 
 # 一次性导入本地 Calculation Bundle；支持 evidence ZIP 或解压目录
 node cli.mjs intake \
@@ -145,6 +147,8 @@ node cli.mjs materialize \
   --first-generation \
   --json
 ```
+
+依赖只从仓库根唯一 `pnpm-lock.yaml` 安装。Process 和 LifeCycleModel 的 schema 门禁使用发布版 `@tiangong-lca/tidas-sdk@0.2.0`；本 Workflow 保持纯 JavaScript/MJS，不携带 TypeScript compiler 或 schema codegen 运行时。
 
 大批量任务使用同一个 materialization engine 的薄 `nohup` 包装：
 

@@ -19,11 +19,15 @@ checkPaths:
   - .docpact/config.yaml
   - docs/architecture.md
   - workflows/**
+  - test/**
   - package.json
+  - pnpm-workspace.yaml
+  - pnpm-lock.yaml
+  - .node-version
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 9e913af4e3811160beb279cc9fb6309bb6fb5f8e
-lastReviewedNote: "Activated Dataset Transformation DSL v0 and weighted Unit Process execution while retaining Calculation as the required Result-evidence return path."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled current main's Transformation/Release Candidate work into one exact pnpm 11.24 workspace while preserving pure-JavaScript and security boundaries."
 related:
   - README.md
   - .docpact/config.yaml
@@ -37,9 +41,9 @@ related:
 
 ## 当前实施基线
 
-旧 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。不得恢复旧 20-stage runtime、默认兼容层或长期 legacy 目录。
+旧业务 `src/`、`scripts/`、`specs/`、`test/`、tsconfig 和 operator skill 已删除。根 `test/` 现在只拥有仓库级工具链、CI 和生产依赖图契约；不得在其中恢复旧 20-stage runtime、业务测试、默认兼容层或长期 legacy 目录。
 
-后续工作一次只优化一个根 Workflow。新增实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
+后续工作一次只优化一个根 Workflow。新增业务实现、schema、fixture 或测试必须放在对应 `workflows/<name>/` 下，并遵守该目录的 README/AGENTS；只有跨 Workflow 的仓库工具链/自动化 contract test 放在根 `test/`。Calculation 的 ResultSet create/list/get 已按此结构实现；不得把它重新聚合到仓库级 CLI。
 
 ## 加载顺序
 
@@ -58,7 +62,7 @@ related:
 - `workflows/calculation`：ResultSet、Closure、计算任务和 Calculation Bundle；
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
 - `workflows/release-candidate`：Release Intake、Package Plan、validation、失败修复范围决定和不可变 Candidate v2 handoff；
-- `workflows/dataset-transformation`：Candidate-bound DSL v0、业务字段冲突决策、加权 Unit Process 执行、验证和 Calculation handoff；
+- `workflows/dataset-transformation`：Candidate-bound DSL v0、Unit/Result aggregation-target 决策、业务字段冲突、确定性加权执行、验证和条件 handoff；
 - `workflows/publication`：Candidate-bound 范围解析、精确 payload、target inspection、hash-bound Approval、可恢复平台写入、状态转换和独立回读；另有显式 opt-in 的 Portal LCIA V3 package plan/publish 与 projection finalize/verify/revoke 编排，只调用 Database-owned actor RPC，不读取 private artifact；Candidate adapter 继续发布到 state code `100`。
 
 完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 和 Candidate qualification 属于 Release Candidate。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。Publication 不得在远程执行期间改变 Candidate 内容。
@@ -102,18 +106,20 @@ related:
 - 大型 artifacts 写入文件或对象存储，stdout 只返回有界摘要和引用。
 - 未经精确内容和 target 审批不得远程发布。
 - Release Candidate 一经冻结不得原地改写；Publication 可以用 hash-bound plan 选择引用完整的子集，但数据内容、identity、version 或 package 变化必须产生新 Candidate。
-- Dataset Transformation 的业务字段差异必须进入 `needs_decision`，不得作为 terminal failure；只有 hash drift、malformed contract、系统故障或生成结果缺陷使用技术异常。Publication 远程执行只能使用其 Workflow 已冻结的 actor-scoped、exact-plan-hash 和 independent-readback 契约，不得从根文档另行拼装写入。
+- Dataset Transformation 的 aggregation-target 未确认、业务字段差异和不兼容 selection 必须进入 `needs_decision`，不得作为 terminal failure；只有 hash drift、malformed contract、系统故障或生成结果缺陷使用技术异常。Publication 远程执行只能使用其 Workflow 已冻结的 actor-scoped、exact-plan-hash 和 independent-readback 契约，不得从根文档另行拼装写入。
 
 ## Runtime 与分支事实
 
-- Node：`>=24 <25`
-- package manager：`npm`
+- Node：精确 `24.19.0`
+- package manager：精确 `pnpm@11.24.0`，六个 package 共用根 `pnpm-workspace.yaml` 和唯一 `pnpm-lock.yaml`；`engineStrict=true`、`strictPeerDependencies=true`、`sharedWorkspaceLockfile=true`、`savePrefix=""` 与 `pmOnFail=error` 必须由 workspace YAML 形成可被 `pnpm config list --location=project --json` 观察到的有效项目配置，不保留无效的项目 `.npmrc`
+- 运行时：纯 JavaScript/MJS；不得为了工具链命名对齐引入 TypeScript、compiler 或 codegen
+- CI：使用不可变提交的 `pnpm/setup` 一次安装精确 Node/pnpm，随后显式执行 frozen install；生产图审计只通过当前 pnpm JavaScript entry 和 `shell:false` 运行
 - branch model：M1
 - daily trunk / routine PR base：`main`
 - 当前工作分支：`feature/issue-59`
 - 跟踪 Issue：`chukeaa/tiangong-lca-release#59`
 - 本地运行产物根目录：`.release/`，必须 gitignored
-- 当前文档基线验证门：`npm run prepush:gate`
+- 当前仓库验证门：`pnpm run prepush:gate`
 
 ## 文档规则
 
@@ -135,7 +141,7 @@ related:
 - Result Materialization 输出并由 manifest hash 绑定 canonical dataset index；Release Candidate 从不可变的 Materialization Intake 准备独立 Release Intake，按精确版本补齐 LCIA Method characterisation Flow，再组装本地 TIDAS 输入并委托 `tidas-tools` 验证、转换和生成四个 ZIP；
 - Release Candidate 显式保持 `publicationAuthorized=false`，本地 package build 不构成审批或发布授权；
 - preserved failed build 可生成完整 exclusion impact report；范围排除必须由 hash-bound decision 明确确认，并通过新的 Package Plan 重跑全部 validator，不能绕过错误或修改失败 Candidate；
-- Dataset Transformation 的 inspect、`needs_decision`、Frozen DSL、加权 Unit Process、validation receipt 和 Calculation handoff 真实可执行；旧 Result evidence 不得复用；
+- Dataset Transformation 的 aggregation-target recommendation/confirmation、inspect、`needs_decision`、Frozen DSL、加权 Unit/Result Process、validation receipt 和条件 handoff 真实可执行；Unit Process 路线不得复用旧 Result evidence，Result Process 路线只组合 hash-bound 兼容 Result；
 - Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；
 - 当前变更通过仓库门禁并形成独立 Git commit。
 - Portal LCIA projection 在 exact Package Publication/Projection Plan 两次 confirmation、幂等远程写入和独立 current + publicly-visible readback 后才完成；revoke 在 exact Finalization Receipt confirmation 和 revoked readback 后才完成，既有 Candidate Publication 回归保持全绿。

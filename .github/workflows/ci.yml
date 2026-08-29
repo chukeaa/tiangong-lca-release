@@ -16,29 +16,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Setup Node 24
-        uses: actions/setup-node@v6
+      - name: Setup Node 24.19.0 and pnpm 11.24.0
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2.0.2
         with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            workflows/calculation/package-lock.json
-            workflows/result-materialization/package-lock.json
-            workflows/release-candidate/package-lock.json
-            workflows/dataset-transformation/package-lock.json
-            workflows/publication/package-lock.json
+          version: 11.24.0
+          runtime: node@24.19.0
+          cache: true
+          install: false
 
       - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix workflows/calculation ci
-          npm --prefix workflows/result-materialization ci
-          npm --prefix workflows/release-candidate ci
-          npm --prefix workflows/dataset-transformation ci
-          npm --prefix workflows/publication ci
+        run: pnpm install --frozen-lockfile
 
       - name: Validate workflow documentation baseline
-        run: npm run prepush:gate
+        run: pnpm run prepush:gate

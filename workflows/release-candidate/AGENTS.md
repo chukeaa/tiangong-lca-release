@@ -12,9 +12,9 @@ whenToUpdate:
   - 当 intake、package、candidate qualification、scope refinement 或 Candidate 后继路径变化时
 checkPaths:
   - workflows/release-candidate/**
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: ae317c02e73e9e3d14e6aa5e8aa4685b80d1cb8a
-lastReviewedNote: "Focused the Workflow on immutable Candidate construction and moved remote publication to a separate deferred boundary."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
+lastReviewedNote: "Reconciled portable Excel review, TIDAS memory budgets, and exact pnpm 11.24 dependencies without changing Candidate authority."
 related:
   - README.md
   - ../AGENTS.md
@@ -49,7 +49,7 @@ related:
 - 慢速本机数据库流式刷新只可通过显式 `--execution local` 使用；远端路径失败时不得静默降级。
 - `package build` 只接受已准备并重新验证上游 hash 的 Release Intake，以及 `standalone-lifecyclemodel-result-full-closure.v1`。
 - `failure analyze` 只接受 preserved failed build、其原始 Release Intake 和可验证的 TIDAS issue spool。它必须同时遍历 exact Process axis、technosphere 反向依赖、Materialization `processIndex/sourceProcess` lineage 和 canonical 文档引用；canonical 引用必须保留字段路径和 TIDAS 语义角色，`referenceToPrecedingDataSetVersion` 只作为 lineage，不参与包内可达性或剩余引用冲突。输出中分别列出初始错误、受影响 Process roots、派生 Result/Model、变得不可达的 support datasets 和剩余引用冲突。
-- `failure review` 使用客户端 Agent workspace dependency runtime 提供的 `@oai/artifact-tool`，从 exact impact report 生成 `exclusion-impact-review.xlsx` 与 review receipt。工作簿必须包含 Summary、Invalid Data、Affected Roots、Derived Data、Unreachable Support、Complete Exclusion Set 和 Reference Conflicts 七个工作表，并在回复用户前完成关键范围、公式错误和全部工作表的视觉检查。
+- `failure review` 使用 Workflow 声明的公开 spreadsheet dependency，从 exact impact report 生成 `exclusion-impact-review.xlsx`、七张 project-owned SVG 预览与 review receipt；不得要求客户端 Agent 提供私有 runtime 或额外 `node_modules` 路径。工作簿必须包含 Summary、Invalid Data、Affected Roots、Derived Data、Unreachable Support、Complete Exclusion Set 和 Reference Conflicts 七个工作表，并在回复用户前完成 XLSX 回读、关键范围、公式错误和全部工作表的视觉检查。
 - 没有 inbound reference 不能单独证明 orphan。只要一个数据集本身是冻结发布 root，就必须标记为 `invalid_selected_root`，并将删除它视为发布范围变化。
 - `failure decide` 必须记录非空 `--reason` 和 `--decided-by`；`--action exclude` 还必须携带与报告 canonical SHA-256 完全一致的 `--confirm-impact-sha256`。确认对象是完整 `excludedSetHash`，不是最初报错的 UUID 列表。`repair` 保持推荐动作，`stop` 保留 failed build 而不创建 Candidate。
 - Exclusion impact report 是稳定的 F3 Workflow contract；改变发布内容的 scope decision 是 F4 审计证据。Excel 是可编辑的 F2 派生审核视图，只通过 receipt 绑定源报告 hash 和当前 workbook hash，不参与 scope decision hash。权威报告和决定均不可原地修改，运行时绝对路径单独保存在权限受限 locator 中。
@@ -59,6 +59,7 @@ related:
 - Package Plan 不记录机器绝对路径；它只绑定 manifest/index/bundle hashes 和 canonical input summary，保证换目录重放不改变计划语义。
 - Release 只遍历当前契约明确声明的 LCIA Method -> Flow 依赖；通用引用闭合、TIDAS/eILCD validation、conversion、round-trip 和四包构建必须委托 `tidas-tools release build-packages`，不得在本 Workflow 重写。
 - 委托前必须对所选 `TIDAS_BIN` 执行 `version` 与 `validate --describe` 握手，并精确要求已治理的 `tidas v0.2.0` 与 `document-validation-batch.v1`；不得用 PATH 中的旧二进制静默降级。
+- Release Candidate 的完整闭包构建和逐包 qualification 必须显式向全部 TIDAS 子进程传递同一内存预算。默认值由本 Workflow 拥有并设为 `2048 MiB`；调用者可通过 `--tidas-memory-budget-mib` 或 `TIDAS_MEMORY_BUDGET_MIB` 覆盖。`memory_budget_exceeded` 是可恢复的资源配置失败，必须保留失败证据并返回同一冻结输入、提高预算的精确重试命令，不得建议 `failure analyze` 或数据排除。
 - Candidate 必须正好包含四个 ZIP、每个文件的 byte size/SHA-256、完整工具报告、hash-bound `publication-catalog.json`，并显式记录 `publicationAuthorized=false`。
 - Candidate v2 的 Publication catalog 必须从当前 canonical bytes 确定性提取 exact required references，绑定 canonical index hash，并冻结 Unit Process/Result roots 与 component closure；不得从 ZIP 名称推断。
 - 四个分发包必须使用显式 release version 和产品级数据库名称；内部 profile ID 只保留在机器证据中。每个最终 ZIP 必须在候选冻结前重新列举、隔离解压，并分别通过 TIDAS 或 eILCD validation。

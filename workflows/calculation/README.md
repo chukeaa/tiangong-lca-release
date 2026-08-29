@@ -12,8 +12,8 @@ whenToUpdate:
   - 当 Calculation 的入口、用户决定、远程能力或产物变化时
 checkPaths:
   - workflows/calculation/**
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: f8d37018d898d23a51655272d129417eb9fad13a
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 8d9bd8d89aa14ecadab385422ed797e63fc3de44
 lastReviewedNote: "Isolated provider ResultSet payloads behind a workflow-local compatibility adapter and stable internal reference."
 related:
   - AGENTS.md
