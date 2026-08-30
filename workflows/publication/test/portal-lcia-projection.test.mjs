@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import {
   revokePortalLciaProjectionPublication,
   verifyPortalLciaProjectionPublication,
 } from "../lib/portal-lcia-projection.mjs";
+import { replyTemplateFor } from "../reply-template-registry.mjs";
 
 const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PROJECTION_ID = "11111111-1111-4111-8111-111111111111";
@@ -413,17 +414,46 @@ test("Portal LCIA package/projection contracts are strict Draft 2020-12 schemas"
   }
 });
 
-test("Projection CLI exposes the opt-in stages and maps local failures to its safe template", async () => {
+test("Projection CLI exposes the opt-in stages and groups reply guidance by semantics", async () => {
   const { stdout } = await execFileAsync(process.execPath, [CLI, "--help"]);
-  for (const command of [
+  const commands = [
     "projection package-plan",
     "projection package-publish",
     "projection prepare",
     "projection finalize",
     "projection verify",
     "projection revoke",
-  ])
+  ];
+  for (const command of commands)
     assert.match(stdout, new RegExp(command, "u"));
+
+  for (const command of ["projection package-plan", "projection prepare"])
+    assert.equal(
+      replyTemplateFor(command, { ok: true }).id,
+      "portal-lcia-plan-prepared",
+    );
+  for (const command of [
+    "projection package-publish",
+    "projection finalize",
+    "projection verify",
+    "projection revoke",
+  ])
+    assert.equal(
+      replyTemplateFor(command, { ok: true }).id,
+      "portal-lcia-publication-event",
+    );
+
+  assert.deepEqual(
+    (await readdir(new URL("../reply-templates/", import.meta.url)))
+      .filter((file) => file.startsWith("portal-lcia-"))
+      .sort(),
+    [
+      "portal-lcia-command-failed.md",
+      "portal-lcia-plan-prepared.md",
+      "portal-lcia-publication-event.md",
+    ],
+  );
+
   await assert.rejects(
     execFileAsync(process.execPath, [
       CLI,
@@ -434,10 +464,7 @@ test("Projection CLI exposes the opt-in stages and maps local failures to its sa
     (error) => {
       const payload = JSON.parse(error.stderr);
       assert.equal(payload.error.code, "invalid_arguments");
-      assert.equal(
-        payload.replyTemplate.id,
-        "portal-lcia-projection-command-failed",
-      );
+      assert.equal(payload.replyTemplate.id, "portal-lcia-command-failed");
       return true;
     },
   );

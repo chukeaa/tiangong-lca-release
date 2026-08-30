@@ -13,7 +13,7 @@ whenToUpdate:
 checkPaths:
   - workflows/**
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
 lastReviewedNote: "Reviewed for Release #59: Publication exposes Portal LCIA Plans and one Lifecycle Event contract without changing the five Workflow routes."
 related:
   - ../README.md

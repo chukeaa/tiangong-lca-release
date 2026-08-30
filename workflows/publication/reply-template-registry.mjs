@@ -1,5 +1,23 @@
 const ROOT = "workflows/publication/reply-templates";
 
+const portalPlanPrepared = [
+  "portal-lcia-plan-prepared",
+  "portal-lcia-plan-prepared.md",
+  ["command", "outcome", "completeness", "artifacts", "nextActions"],
+];
+
+const portalPublicationEvent = [
+  "portal-lcia-publication-event",
+  "portal-lcia-publication-event.md",
+  ["command", "outcome", "completeness", "artifacts", "nextActions"],
+];
+
+const portalCommandFailed = [
+  "portal-lcia-command-failed",
+  "portal-lcia-command-failed.md",
+  ["command", "outcome", "completeness", "error", "nextActions"],
+];
+
 const templates = Object.freeze({
   "plan prepare": [
     "publish-plan-prepared",
@@ -76,128 +94,19 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
-  "projection prepare": [
-    "portal-lcia-projection-plan-prepared",
-    "portal-lcia-projection-plan-prepared.md",
-    [
-      "projectionId",
-      "packageId",
-      "lciaResultPublicationId",
-      "packageVersion",
-      "packageResultHash",
-      "projectionContentHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "projectionPlanSha256",
-      "projectionFinalizationAuthorized",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
-  "projection package-plan": [
-    "portal-lcia-package-publication-plan-prepared",
-    "portal-lcia-package-publication-plan-prepared.md",
-    [
-      "packageId",
-      "packageVersion",
-      "packageResultHash",
-      "projectionId",
-      "projectionContentHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "databasePublishPlanHash",
-      "displayDefaultImpactCategory",
-      "requestedReason",
-      "currentPublicationPrecondition",
-      "packagePublicationPlanSha256",
-      "packagePublicationAuthorized",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
-  "projection package-publish": [
-    "portal-lcia-package-published",
-    "portal-lcia-package-published.md",
-    [
-      "publicationId",
-      "packageId",
-      "packageVersion",
-      "packageResultHash",
-      "projectionId",
-      "projectionContentHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "disposition",
-      "reasonPersistence",
-      "packagePublishedEventSha256",
-      "independentlyReadBack",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
-  "projection finalize": [
-    "portal-lcia-projection-finalized",
-    "portal-lcia-projection-finalized.md",
-    [
-      "projectionPublicationId",
-      "lciaResultPublicationId",
-      "projectionContentHash",
-      "evidenceHash",
-      "disposition",
-      "finalizedEventSha256",
-      "independentReadbackVerified",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
-  "projection verify": [
-    "portal-lcia-projection-readback-verified",
-    "portal-lcia-projection-readback-verified.md",
-    [
-      "projectionPublicationId",
-      "lciaResultPublicationId",
-      "projectionContentHash",
-      "evidenceHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "isCurrent",
-      "isPubliclyVisible",
-      "verifiedEventSha256",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
-  "projection revoke": [
-    "portal-lcia-projection-revoked",
-    "portal-lcia-projection-revoked.md",
-    [
-      "projectionPublicationId",
-      "lciaResultPublicationId",
-      "projectionContentHash",
-      "disposition",
-      "reasonPersistence",
-      "isCurrent",
-      "isPubliclyVisible",
-      "revokedEventSha256",
-      "artifacts",
-      "nextActions",
-    ],
-  ],
+  "projection prepare": portalPlanPrepared,
+  "projection package-plan": portalPlanPrepared,
+  "projection package-publish": portalPublicationEvent,
+  "projection finalize": portalPublicationEvent,
+  "projection verify": portalPublicationEvent,
+  "projection revoke": portalPublicationEvent,
 });
 
 export function replyTemplateFor(command, { ok } = {}) {
   const entry = ok
     ? templates[command]
     : command.startsWith("projection ")
-      ? [
-          "portal-lcia-projection-command-failed",
-          "portal-lcia-projection-command-failed.md",
-          ["command", "error", "nextActions"],
-        ]
+      ? portalCommandFailed
       : [
           "publication-command-failed",
           "publication-command-failed.md",

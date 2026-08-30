@@ -14,8 +14,8 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
-lastReviewedNote: "Reviewed for Release #59: Portal LCIA retains exact authorization and independent readback with a reduced Plan/Event representation."
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA retains exact Plan/Event contracts and uses three lightweight reply semantics."
 related:
   - AGENTS.md
   - ../release-candidate/README.md
@@ -198,6 +198,8 @@ Database publication/projection 状态是远程权威真相。Release 只拥有�
 - Lifecycle Event：严格、只追加的恢复/终态观察，统一表达 `package_published`、`projection_finalized`、`projection_verified`、`projection_revoked`。
 
 Lifecycle Event 只记录 immutable parent artifact SHA-256、target、actor、精确 subject 和该阶段新增 observation。它不复制完整上游 package/projection/artifact evidence，也不保存临时 prepare/publish/readback response body hash。
+
+Agent 回复模板不是第四类契约。它们只提供 F1 表达指导，并按三种沟通语义复用：两个 prepare 命令使用 Plan prepared，四个写入/回读结果使用 Lifecycle result，所有失败使用 Command failed。模板只要求共同的 outcome、completeness、artifact 和 next action；exact identity/hash 直接来自当前 CLI JSON 与 Plan/Event artifact，不在每个命令模板中重复声明。
 
 ```text
 ready V3 LCIA package + Worker prepared typed projection

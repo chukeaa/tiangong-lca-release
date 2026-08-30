@@ -26,7 +26,7 @@ checkPaths:
   - .node-version
   - .github/workflows/ci.yml
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
 lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps two exact authorization plans while local recovery/readback evidence uses one minimal lifecycle-event contract."
 related:
   - README.md

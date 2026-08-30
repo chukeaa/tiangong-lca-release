@@ -14,8 +14,8 @@ whenToUpdate:
 checkPaths:
   - workflows/publication/**
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
-lastReviewedNote: "Reviewed for Release #59: Portal LCIA uses two exact plans plus one minimal lifecycle-event contract while Candidate Publication remains unchanged."
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps strict Plan/Event artifacts while Agent reply guidance is grouped into three F1 communication semantics."
 related:
   - README.md
   - ../AGENTS.md
@@ -41,6 +41,7 @@ related:
 - Scope Resolution、Payload Manifest、Target Snapshot：F3；
 - Draft Plan、Executable Plan、Approval、Execution Intent/Event/Receipt、Readback Receipt：F4。
 - Portal LCIA Package Publication Plan 与 Projection Plan：F4 授权边界；统一 Portal LCIA Lifecycle Event：F3/F4 严格、只追加的恢复与终态观察。Event 只保存 immutable parent hash、目标、actor、精确主体和该阶段新增观察，不复制完整上游 evidence，不保存临时 RPC response hash、远端 URL 或 artifact locator；Database publication/projection 状态仍是权威真相。
+- Portal LCIA 回复模板：F1 Agent 表达指导，只按 Plan prepared、Lifecycle result、Command failed 三种沟通语义分组；exact truth 继续来自 CLI JSON 与 Plan/Event artifact，不为每个命令复制字段契约。
 
 F4 artifact 必须拒绝未知字段、绑定所有上游 hash，并保存在新的输出目录。Execution events 是唯一例外：同一 execution 目录中只追加有序、前向 hash-linked 文件，不修改旧 event。
 

@@ -20,8 +20,8 @@ checkPaths:
   - workflows/**
   - .docpact/config.yaml
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
-lastReviewedNote: "Reviewed for Release #59: Portal LCIA authorization plans and lifecycle events preserve Release orchestration without duplicating Database truth."
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps strict authorization/evidence artifacts and lightweight three-semantic Agent reply guidance."
 related:
   - AGENTS.md
   - docs/architecture.md
