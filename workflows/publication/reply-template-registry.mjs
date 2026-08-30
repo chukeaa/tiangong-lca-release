@@ -1,5 +1,23 @@
 const ROOT = "workflows/publication/reply-templates";
 
+const portalPlanPrepared = [
+  "portal-lcia-plan-prepared",
+  "portal-lcia-plan-prepared.md",
+  ["command", "outcome", "completeness", "artifacts", "nextActions"],
+];
+
+const portalPublicationEvent = [
+  "portal-lcia-publication-event",
+  "portal-lcia-publication-event.md",
+  ["command", "outcome", "completeness", "artifacts", "nextActions"],
+];
+
+const portalCommandFailed = [
+  "portal-lcia-command-failed",
+  "portal-lcia-command-failed.md",
+  ["command", "outcome", "completeness", "error", "nextActions"],
+];
+
 const templates = Object.freeze({
   "plan prepare": [
     "publish-plan-prepared",
@@ -76,16 +94,24 @@ const templates = Object.freeze({
       "nextActions",
     ],
   ],
+  "projection prepare": portalPlanPrepared,
+  "projection package-plan": portalPlanPrepared,
+  "projection package-publish": portalPublicationEvent,
+  "projection finalize": portalPublicationEvent,
+  "projection verify": portalPublicationEvent,
+  "projection revoke": portalPublicationEvent,
 });
 
 export function replyTemplateFor(command, { ok } = {}) {
   const entry = ok
     ? templates[command]
-    : [
-        "publication-command-failed",
-        "publication-command-failed.md",
-        ["command", "error", "nextActions"],
-      ];
+    : command.startsWith("projection ")
+      ? portalCommandFailed
+      : [
+          "publication-command-failed",
+          "publication-command-failed.md",
+          ["command", "error", "nextActions"],
+        ];
   if (!entry) return undefined;
   const [id, filename, requiredFacts] = entry;
   return {

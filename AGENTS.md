@@ -25,9 +25,9 @@ checkPaths:
   - pnpm-lock.yaml
   - .node-version
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reconciled current main's Transformation/Release Candidate work into one exact pnpm 11.24 workspace while preserving pure-JavaScript and security boundaries."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps two exact authorization plans while local recovery/readback evidence uses one minimal lifecycle-event contract."
 related:
   - README.md
   - .docpact/config.yaml
@@ -63,7 +63,7 @@ related:
 - `workflows/result-materialization`：Result Process、LifecycleModel、identity/version 和 canonical dataset collection；
 - `workflows/release-candidate`：Release Intake、Package Plan、validation、失败修复范围决定和不可变 Candidate v2 handoff；
 - `workflows/dataset-transformation`：Candidate-bound DSL v0、Unit/Result aggregation-target 决策、业务字段冲突、确定性加权执行、验证和条件 handoff；
-- `workflows/publication`：Candidate-bound 范围解析、精确 payload、target inspection、hash-bound Approval、可恢复平台写入、状态转换和独立回读；当前平台 adapter 发布到 state code `100`。
+- `workflows/publication`：Candidate-bound 范围解析、精确 payload、target inspection、hash-bound Approval、可恢复平台写入、状态转换和独立回读；另有显式 opt-in 的 Portal LCIA V3 package plan/publish 与 projection finalize/verify/revoke 编排，只调用 Database-owned actor RPC，不读取 private artifact；Candidate adapter 继续发布到 state code `100`。
 
 完整性验证属于 Calculation；LCI/LCIA Result Process 生成和 LifecycleModel 组合属于 Result Materialization；Packaging 和 Candidate qualification 属于 Release Candidate。它们可以作为独立恢复节点或 recipe，但不是额外顶层 Workflow。Publication 不得在远程执行期间改变 Candidate 内容。
 
@@ -116,8 +116,8 @@ related:
 - CI：使用不可变提交的 `pnpm/setup` 一次安装精确 Node/pnpm，随后显式执行 frozen install；生产图审计只通过当前 pnpm JavaScript entry 和 `shell:false` 运行
 - branch model：M1
 - daily trunk / routine PR base：`main`
-- 当前工作分支：`feature/issue-57`
-- 跟踪 Issue：`chukeaa/tiangong-lca-release#57`
+- 当前工作分支：`feature/issue-59`
+- 跟踪 Issue：`chukeaa/tiangong-lca-release#59`
 - 本地运行产物根目录：`.release/`，必须 gitignored
 - 当前仓库验证门：`pnpm run prepush:gate`
 
@@ -144,3 +144,4 @@ related:
 - Dataset Transformation 的 aggregation-target recommendation/confirmation、inspect、`needs_decision`、Frozen DSL、加权 Unit/Result Process、validation receipt 和条件 handoff 真实可执行；Unit Process 路线不得复用旧 Result evidence，Result Process 路线只组合 hash-bound 兼容 Result；
 - Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；
 - 当前变更通过仓库门禁并形成独立 Git commit。
+- Portal LCIA projection 在 exact Package Publication/Projection Plan 两次 confirmation、幂等远程写入和独立 current + publicly-visible readback 后才完成；中间和终态只追加统一 lifecycle event，revoke 绑定 exact finalized event 并以 revoked readback 完成，既有 Candidate Publication 回归保持全绿。

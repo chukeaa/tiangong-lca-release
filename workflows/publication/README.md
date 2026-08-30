@@ -13,9 +13,9 @@ whenToUpdate:
   - 当发布选择、目标差异、状态转换、写入、审批、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 67a61471502eed31af70358f86dd22be0e350d8a
-lastReviewedNote: "Reviewed full-closure selection and payload behavior under the root pnpm 11.24 workspace without changing publication authority."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: a45cd93413f2459fd5eaacf6b24643859b033206
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA retains exact Plan/Event contracts and uses three lightweight reply semantics."
 related:
   - AGENTS.md
   - ../release-candidate/README.md
@@ -24,7 +24,7 @@ related:
 
 # Publication Workflow
 
-Publication 消费不可变 Release Candidate v2，在不修改 Candidate 的前提下完成选择、精确载荷物化、目标检查、明确批准、远程发布和独立回读。
+Publication 消费不可变 Release Candidate v2，在不修改 Candidate 的前提下完成选择、精确载荷物化、目标检查、明确批准、远程发布和独立回读。它还提供一个独立、显式 opt-in 的 Portal LCIA projection recipe：先按 Database-computed exact plan hash 发布具备 prepared typed projection 的 V3 LCIA package，再 finalize、独立验证或撤回公开 projection binding。
 
 ```text
 Release Candidate v2
@@ -186,3 +186,103 @@ node workflows/publication/cli.mjs readback verify \
 - Scope Resolution、Payload Manifest、Target Snapshot：F3 稳定、hash-bound 证据；
 - Draft Plan、Executable Plan、Approval、Execution Intent/Event/Receipt、Readback Receipt：F4 严格审计与授权边界；
 - 所有计划、批准和终态 receipt 都不可原地覆盖；Execution event 只追加。
+
+## Portal LCIA projection recipe
+
+这个显式 opt-in recipe 不属于 Candidate dataset create/publish 链，也不改变 V1/V2 请求、artifact、signed download 或回读行为。它只编排 Database-owned actor RPC，使用 publishable key + actor session；不接受 service-role，不读取 private artifact，也不把 URL、bucket、object path 或 locator 写入本地产物。
+
+Database publication/projection 状态是远程权威真相。Release 只拥有三个本地契约：
+
+- Package Publication Plan：F4，绑定 Database `publishPlanHash`、exact package/projection/artifact evidence、当前 Process set、current-publication 前置条件和请求理由；
+- Projection Plan：F4，在 package publish 后绑定 exact publication、projection evidence、source `publishedAt` 和 idempotency key；
+- Lifecycle Event：严格、只追加的恢复/终态观察，统一表达 `package_published`、`projection_finalized`、`projection_verified`、`projection_revoked`。
+
+Lifecycle Event 只记录 immutable parent artifact SHA-256、target、actor、精确 subject 和该阶段新增 observation。它不复制完整上游 package/projection/artifact evidence，也不保存临时 prepare/publish/readback response body hash。
+
+Agent 回复模板不是第四类契约。它们只提供 F1 表达指导，并按三种沟通语义复用：两个 prepare 命令使用 Plan prepared，四个写入/回读结果使用 Lifecycle result，所有失败使用 Command failed。模板只要求共同的 outcome、completeness、artifact 和 next action；exact identity/hash 直接来自当前 CLI JSON 与 Plan/Event artifact，不在每个命令模板中重复声明。
+
+```text
+ready V3 LCIA package + Worker prepared typed projection
+  -> Package Publication Plan + exact confirmation
+  -> idempotent package publish + independent projection-prepare readback
+  -> package_published Event
+  -> Projection Plan + exact confirmation
+  -> idempotent finalize
+  -> projection_finalized Event
+  -> independent current + publicly-visible readback
+  -> projection_verified Event
+```
+
+### 1. 准备并确认 V3 package publication
+
+```bash
+node workflows/publication/cli.mjs projection package-plan \
+  --package-id <package-uuid> \
+  --default-impact-category <impact-category-id> \
+  --reason "publish Portal LCIA projection" \
+  --out-dir .release/publication/<run>/package-publication-plan \
+  --json
+
+node workflows/publication/cli.mjs projection package-publish \
+  --package-plan-dir .release/publication/<run>/package-publication-plan \
+  --confirm <exact-local-package-publication-plan-sha256> \
+  --out-dir .release/publication/<run>/package-publication \
+  --json
+```
+
+Prepare 是只读操作。写入前 CLI 重新读取 exact evidence；Database 在 publication lock 内重新计算并要求相同 `publishPlanHash`。Commit 后 response 丢失时，只允许相同 expected hash 的幂等 retry，再以 `api.qry_portal_lcia_projection_prepare_v1` 独立核对 publication/package/projection。
+
+Package publish 会立即 supersede 旧 current publication，而新 projection 尚未 finalize。这个 durable partial state 由 `package_published` Event 表示；两步之间 Portal LCIA 数值可以暂时 unavailable，但旧 projection 不能冒充新 publication。
+
+### 2. 准备并确认 projection finalize
+
+```bash
+node workflows/publication/cli.mjs projection prepare \
+  --package-publication-dir .release/publication/<run>/package-publication \
+  --out-dir .release/publication/<run>/projection-plan \
+  --json
+
+node workflows/publication/cli.mjs projection finalize \
+  --plan-dir .release/publication/<run>/projection-plan \
+  --confirm <exact-projection-plan-sha256> \
+  --out-dir .release/publication/<run>/projection-finalization \
+  --json
+```
+
+Projection Plan 绑定 `package_published` Event SHA-256，并冻结 Database 返回的 exact publication/package/projection evidence。Finalize 前重新 prepare；任一 identity、version、content/evidence/axis/count 或 source timestamp 漂移都会拒绝写入。Finalize response 丢失时，只有新的 exact readback 已证明同一 binding 为 current/finalized，才生成 `projection_finalized` Event；否则返回可重试状态，不猜测结果。
+
+`projection_finalized` 仍记录 `independentReadbackVerified=false`，所以此时不能声称公开投影闭环完成。
+
+### 3. 独立验证公开终态
+
+```bash
+node workflows/publication/cli.mjs projection verify \
+  --finalization-dir .release/publication/<run>/projection-finalization \
+  --out-dir .release/publication/<run>/projection-readback \
+  --json
+```
+
+新的 actor-scoped readback 必须匹配 exact projection/publication/package identity、package version、projection content/evidence hash、process/impact/value count 和 finalized timestamp，并同时满足 `status=finalized`、`isCurrent=true`、`isPubliclyVisible=true`。只有成功写出的 `projection_verified` Event 表示 Portal LCIA projection publication 完成。
+
+### 4. 精确撤回
+
+```bash
+node workflows/publication/cli.mjs projection revoke \
+  --finalization-dir .release/publication/<run>/projection-finalization \
+  --confirm <exact-finalized-event-sha256> \
+  --reason "withdraw public projection" \
+  --out-dir .release/publication/<run>/projection-revocation \
+  --json
+```
+
+Revoke 只作用于 finalized Event 绑定的 exact publication + projection content hash。成功响应或 response loss 后都必须独立回读；只有 `status=revoked`、`isCurrent=false`、`isPubliclyVisible=false` 才生成 `projection_revoked` Event。请求理由的 `reasonPersistence` 区分首次记录、reused 未重写和 response-loss 后未知，Database audit 继续是理由持久化的权威记录。
+
+### 完成和非回归边界
+
+- 三个契约均使用 Draft 2020-12 strict schema，未知字段被拒绝；
+- package publish 和 projection finalize 是两个独立远程写入，不虚构跨 RPC 事务；
+- supersession/unpublish 通过 Database current-publication 事实即时使旧 projection 不再可验证/可见；
+- transport success 不代表完成；verified/revoked Event 必须来自独立 readback；
+- 所有输出目录不可覆盖，Plan/Event locator-free，stdout 只返回有界 identity/hash/count 和本地 artifact path；
+- 所有 RPC 显式发送 `Content-Profile: api`，不依赖默认 `public` schema；
+- recipe 不改 package/artifact bytes、Candidate dataset publication 或 private artifact ACL。

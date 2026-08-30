@@ -6,6 +6,14 @@ import { executePublication } from "./lib/execution.mjs";
 import { inspectPublicationTarget } from "./lib/inspection.mjs";
 import { materializePublicationPayload } from "./lib/payload.mjs";
 import { preparePublicationPlan } from "./lib/plan.mjs";
+import {
+  finalizePortalLciaProjection,
+  preparePortalLciaPackagePublicationPlan,
+  preparePortalLciaProjectionPlan,
+  publishPortalLciaPackage,
+  revokePortalLciaProjectionPublication,
+  verifyPortalLciaProjectionPublication,
+} from "./lib/portal-lcia-projection.mjs";
 import { verifyPublicationReadback } from "./lib/readback.mjs";
 import { replyTemplateFor } from "./reply-template-registry.mjs";
 
@@ -22,6 +30,11 @@ const VALUE_OPTIONS = new Set([
   "inspection-dir",
   "approval-dir",
   "execution-dir",
+  "finalization-dir",
+  "package-plan-dir",
+  "package-publication-dir",
+  "package-id",
+  "default-impact-category",
   "published-state-code",
   "confirm",
   "approved-by",
@@ -34,7 +47,7 @@ const BOOLEAN_OPTIONS = new Set(["json", "help"]);
 
 const HELP = `release-publication <command> [options]
 
-Complete Candidate-bound Publication workflow. Remote reads and writes always use an actor-scoped session; service-role secrets are not accepted.
+Candidate-bound dataset Publication plus an opt-in Portal LCIA package/projection workflow. Remote reads and writes always use an actor-scoped session; service-role secrets are not accepted.
 
 Commands:
   plan prepare          Resolve dependency-safe scope into an unapproved Draft Plan
@@ -43,6 +56,12 @@ Commands:
   approval create       Approve the exact executable-plan SHA-256
   publish execute       Recheck the target, create missing rows, and publish exact rows
   readback verify       Independently re-read every approved row and emit a receipt
+  projection package-plan     Prepare an exact V3 LCIA package publication plan
+  projection package-publish  Publish that package and independently read it back
+  projection prepare    Prepare an exact public LCIA projection finalization plan
+  projection finalize   Confirm and idempotently bind the projection to a publication
+  projection verify     Independently verify the finalized projection is current
+  projection revoke     Confirm, revoke, and independently verify the exact binding
 
 Core options:
   --candidate <path>              Release Candidate v2 directory
@@ -51,6 +70,9 @@ Core options:
   --inspection-dir <path>         Target inspection directory
   --approval-dir <path>           Publication approval directory
   --execution-dir <path>          Publication execution directory
+  --finalization-dir <path>       Portal LCIA projection finalization directory
+  --package-plan-dir <path>       Portal LCIA package publication plan directory
+  --package-publication-dir <path>  Verified package publication directory
   --out-dir <path>                New output directory (execution reuses it for resume)
   --published-state-code <int>    Semantic published-state mapping (default: 100)
   --json                          Emit one bounded JSON object
@@ -75,6 +97,25 @@ publish execute:
 readback verify:
   --execution-dir <path> --payload-dir <path> --out-dir <path>
 
+projection package-plan:
+  --package-id <uuid> --default-impact-category <id> --reason <text> --out-dir <path>
+
+projection package-publish:
+  --package-plan-dir <path> --confirm <package-publication-plan-sha256> --out-dir <path>
+
+projection prepare:
+  --package-publication-dir <path> --out-dir <path>
+
+projection finalize:
+  --plan-dir <path> --confirm <projection-plan-sha256> --out-dir <path>
+
+projection verify:
+  --finalization-dir <path> --out-dir <path>
+
+projection revoke:
+  --finalization-dir <path> --confirm <finalized-event-sha256>
+  --reason <text> --out-dir <path>
+
 Required remote environment:
   TIANGONG_LCA_API_BASE_URL
   TIANGONG_LCA_SUPABASE_PUBLISHABLE_KEY
@@ -95,6 +136,12 @@ async function main() {
     "approval create": approvalCreate,
     "publish execute": publishExecute,
     "readback verify": readbackVerify,
+    "projection package-plan": projectionPackagePlan,
+    "projection package-publish": projectionPackagePublish,
+    "projection prepare": projectionPrepare,
+    "projection finalize": projectionFinalize,
+    "projection verify": projectionVerify,
+    "projection revoke": projectionRevoke,
   };
   if (!handlers[commandName])
     throw coded("unknown_command", `Unknown command: ${commandName}`);
@@ -328,6 +375,249 @@ async function readbackVerify(options) {
       readbackReceipt: path.join(
         result.path,
         "publication-readback-receipt.json",
+      ),
+    },
+    nextActions: [],
+  });
+}
+
+async function projectionPrepare(options) {
+  requireOptions(options, ["package-publication-dir", "out-dir"]);
+  const result = await preparePortalLciaProjectionPlan({
+    packagePublicationDir: path.resolve(options["package-publication-dir"]),
+    outDir: path.resolve(options["out-dir"]),
+  });
+  const projection = result.plan.projection;
+  return success("projection prepare", "portal_lcia_projection_plan_prepared", {
+    completeness: "projection_ready_for_exact_confirmation",
+    projectionId: projection.projectionId,
+    packageId: projection.packageId,
+    lciaResultPublicationId: projection.lciaResultPublicationId,
+    packageVersion: projection.packageVersion,
+    packageResultHash: projection.packageResultHash,
+    projectionContentHash: projection.projectionContentHash,
+    processCount: projection.processCount,
+    impactCount: projection.impactCount,
+    valueCount: projection.valueCount,
+    projectionPlanSha256: result.planSha256,
+    projectionFinalizationAuthorized: false,
+    artifacts: {
+      projectionPlan: path.join(
+        result.path,
+        "portal-lcia-projection-plan.json",
+      ),
+    },
+    nextActions: [
+      nextAction("confirm_projection_finalization", [
+        "projection",
+        "finalize",
+        "--plan-dir",
+        result.path,
+        "--confirm",
+        result.planSha256,
+        "--out-dir",
+        `${result.path}-finalization`,
+        "--json",
+      ]),
+    ],
+  });
+}
+
+async function projectionPackagePlan(options) {
+  requireOptions(options, [
+    "package-id",
+    "default-impact-category",
+    "reason",
+    "out-dir",
+  ]);
+  const result = await preparePortalLciaPackagePublicationPlan({
+    packageId: options["package-id"],
+    displayDefaultImpactCategory: options["default-impact-category"],
+    reason: options.reason,
+    outDir: path.resolve(options["out-dir"]),
+  });
+  return success(
+    "projection package-plan",
+    "portal_lcia_package_publication_plan_prepared",
+    {
+      completeness: "package_publication_ready_for_exact_confirmation",
+      packageId: result.plan.package.id,
+      packageVersion: result.plan.package.version,
+      packageResultHash: result.plan.package.resultHash,
+      projectionId: result.plan.projection.id,
+      projectionContentHash: result.plan.projection.contentHash,
+      processCount: result.plan.package.processCount,
+      impactCount: result.plan.package.impactCount,
+      valueCount: result.plan.package.valueCount,
+      databasePublishPlanHash: result.plan.publishPlanHash,
+      displayDefaultImpactCategory: result.plan.displayDefaultImpactCategory,
+      requestedReason: result.plan.requestedReason,
+      currentPublicationPrecondition: result.plan.currentPublication,
+      packagePublicationPlanSha256: result.planSha256,
+      packagePublicationAuthorized: false,
+      artifacts: {
+        packagePublicationPlan: path.join(
+          result.path,
+          "portal-lcia-package-publication-plan.json",
+        ),
+      },
+      nextActions: [
+        nextAction("confirm_lcia_package_publication", [
+          "projection",
+          "package-publish",
+          "--package-plan-dir",
+          result.path,
+          "--confirm",
+          result.planSha256,
+          "--out-dir",
+          `${result.path}-published`,
+          "--json",
+        ]),
+      ],
+    },
+  );
+}
+
+async function projectionPackagePublish(options) {
+  requireOptions(options, ["package-plan-dir", "confirm", "out-dir"]);
+  const result = await publishPortalLciaPackage({
+    packagePlanDir: path.resolve(options["package-plan-dir"]),
+    confirmPlanSha256: options.confirm,
+    outDir: path.resolve(options["out-dir"]),
+  });
+  const subject = result.event.subject;
+  return success(
+    "projection package-publish",
+    "portal_lcia_package_published",
+    {
+      completeness: "package_publication_current_projection_plan_pending",
+      publicationId: subject.lciaResultPublicationId,
+      packageId: subject.packageId,
+      packageVersion: subject.packageVersion,
+      packageResultHash: result.plan.package.resultHash,
+      projectionId: subject.projectionId,
+      projectionContentHash: subject.projectionContentHash,
+      processCount: result.plan.package.processCount,
+      impactCount: result.plan.package.impactCount,
+      valueCount: result.plan.package.valueCount,
+      disposition: result.disposition,
+      reasonPersistence: result.event.observation.reasonPersistence,
+      packagePublishedEventSha256: result.eventSha256,
+      independentlyReadBack: true,
+      artifacts: {
+        packagePublishedEvent: path.join(
+          result.path,
+          "portal-lcia-package-published-event.json",
+        ),
+      },
+      nextActions: [
+        nextAction("prepare_projection_finalization", [
+          "projection",
+          "prepare",
+          "--package-publication-dir",
+          result.path,
+          "--out-dir",
+          `${result.path}-projection-plan`,
+          "--json",
+        ]),
+      ],
+    },
+  );
+}
+
+async function projectionFinalize(options) {
+  requireOptions(options, ["plan-dir", "confirm", "out-dir"]);
+  const result = await finalizePortalLciaProjection({
+    planDir: path.resolve(options["plan-dir"]),
+    confirmPlanSha256: options.confirm,
+    outDir: path.resolve(options["out-dir"]),
+  });
+  const subject = result.event.subject;
+  return success("projection finalize", "portal_lcia_projection_finalized", {
+    completeness: "projection_finalized_independent_readback_pending",
+    projectionPublicationId: subject.projectionPublicationId,
+    lciaResultPublicationId: subject.lciaResultPublicationId,
+    projectionContentHash: subject.projectionContentHash,
+    evidenceHash: result.event.observation.evidenceHash,
+    disposition: result.disposition,
+    finalizedEventSha256: result.eventSha256,
+    independentReadbackVerified: false,
+    artifacts: {
+      finalizedEvent: path.join(
+        result.path,
+        "portal-lcia-projection-finalized-event.json",
+      ),
+    },
+    nextActions: [
+      nextAction("verify_projection_readback", [
+        "projection",
+        "verify",
+        "--finalization-dir",
+        result.path,
+        "--out-dir",
+        `${result.path}-readback`,
+        "--json",
+      ]),
+    ],
+  });
+}
+
+async function projectionVerify(options) {
+  requireOptions(options, ["finalization-dir", "out-dir"]);
+  const result = await verifyPortalLciaProjectionPublication({
+    finalizationDir: path.resolve(options["finalization-dir"]),
+    outDir: path.resolve(options["out-dir"]),
+  });
+  const subject = result.event.subject;
+  return success(
+    "projection verify",
+    "portal_lcia_projection_readback_verified",
+    {
+      completeness: "portal_lcia_projection_publication_complete",
+      projectionPublicationId: subject.projectionPublicationId,
+      lciaResultPublicationId: subject.lciaResultPublicationId,
+      projectionContentHash: subject.projectionContentHash,
+      evidenceHash: result.event.observation.evidenceHash,
+      processCount: result.plan.projection.processCount,
+      impactCount: result.plan.projection.impactCount,
+      valueCount: result.plan.projection.valueCount,
+      isCurrent: true,
+      isPubliclyVisible: true,
+      verifiedEventSha256: result.eventSha256,
+      artifacts: {
+        verifiedEvent: path.join(
+          result.path,
+          "portal-lcia-projection-verified-event.json",
+        ),
+      },
+      nextActions: [],
+    },
+  );
+}
+
+async function projectionRevoke(options) {
+  requireOptions(options, ["finalization-dir", "confirm", "reason", "out-dir"]);
+  const result = await revokePortalLciaProjectionPublication({
+    finalizationDir: path.resolve(options["finalization-dir"]),
+    confirmFinalizedEventSha256: options.confirm,
+    reason: options.reason,
+    outDir: path.resolve(options["out-dir"]),
+  });
+  const subject = result.event.subject;
+  return success("projection revoke", "portal_lcia_projection_revoked", {
+    completeness: "portal_lcia_projection_revoked_and_verified",
+    projectionPublicationId: subject.projectionPublicationId,
+    lciaResultPublicationId: subject.lciaResultPublicationId,
+    projectionContentHash: subject.projectionContentHash,
+    disposition: result.event.disposition,
+    reasonPersistence: result.event.observation.reasonPersistence,
+    isCurrent: false,
+    isPubliclyVisible: false,
+    revokedEventSha256: result.eventSha256,
+    artifacts: {
+      revokedEvent: path.join(
+        result.path,
+        "portal-lcia-projection-revoked-event.json",
       ),
     },
     nextActions: [],

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-package-publication-plan.v1.schema.json",
+  "title": "Portal LCIA Package Publication Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "packagePublicationAuthorized",
+    "targetEndpointFingerprint",
+    "preparedByActorUserId",
+    "publishPlanHash",
+    "package",
+    "projection",
+    "artifacts",
+    "displayDefaultImpactCategory",
+    "currentProcessSetHash",
+    "currentPublication",
+    "requestedReason",
+    "preparedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-package-publication-plan.v1"
+    },
+    "status": { "const": "ready_for_confirmation" },
+    "packagePublicationAuthorized": { "const": false },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "preparedByActorUserId": { "$ref": "#/$defs/uuid" },
+    "publishPlanHash": { "$ref": "#/$defs/hash" },
+    "package": { "$ref": "#/$defs/package" },
+    "projection": { "$ref": "#/$defs/projection" },
+    "artifacts": { "$ref": "#/$defs/artifacts" },
+    "displayDefaultImpactCategory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "currentProcessSetHash": { "$ref": "#/$defs/hash" },
+    "currentPublication": {
+      "anyOf": [{ "$ref": "#/$defs/currentPublication" }, { "type": "null" }]
+    },
+    "requestedReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "preparedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "count": { "type": "integer", "minimum": 1 },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "resultHash",
+        "inputManifestHash",
+        "closureCertificateHash",
+        "snapshotHash",
+        "processCount",
+        "impactCount",
+        "valueCount"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "resultHash": { "$ref": "#/$defs/hash" },
+        "inputManifestHash": { "$ref": "#/$defs/hash" },
+        "closureCertificateHash": { "$ref": "#/$defs/hash" },
+        "snapshotHash": { "$ref": "#/$defs/hash" },
+        "processCount": { "$ref": "#/$defs/count" },
+        "impactCount": { "$ref": "#/$defs/count" },
+        "valueCount": { "$ref": "#/$defs/count" }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "contentHash",
+        "processAxisHash",
+        "impactAxisHash",
+        "valueGridHash",
+        "relationHash"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "contentHash": { "$ref": "#/$defs/hash" },
+        "processAxisHash": { "$ref": "#/$defs/hash" },
+        "impactAxisHash": { "$ref": "#/$defs/hash" },
+        "valueGridHash": { "$ref": "#/$defs/hash" },
+        "relationHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundleContentHash",
+        "bundleManifestSha256",
+        "lciaChunkSetSha256",
+        "resultArtifactSha256",
+        "queryArtifactSha256"
+      ],
+      "properties": {
+        "bundleContentHash": { "$ref": "#/$defs/hash" },
+        "bundleManifestSha256": { "$ref": "#/$defs/hash" },
+        "lciaChunkSetSha256": { "$ref": "#/$defs/hash" },
+        "resultArtifactSha256": { "$ref": "#/$defs/hash" },
+        "queryArtifactSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "currentPublication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicationId",
+        "packageId",
+        "packageVersion",
+        "publishedAt"
+      ],
+      "properties": {
+        "publicationId": { "$ref": "#/$defs/uuid" },
+        "packageId": { "$ref": "#/$defs/uuid" },
+        "packageVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

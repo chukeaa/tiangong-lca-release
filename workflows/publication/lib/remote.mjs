@@ -133,6 +133,7 @@ export async function requestJson({
   fetchImpl,
   body,
   timeoutMs = 30_000,
+  schema,
 }) {
   const endpoint = new URL(url).pathname;
   let response;
@@ -143,6 +144,7 @@ export async function requestJson({
         apikey: runtime.publishableKey,
         Authorization: `Bearer ${runtime.accessToken}`,
         Accept: "application/json",
+        ...(schema ? { "Content-Profile": schema } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -157,7 +159,19 @@ export async function requestJson({
       },
     );
   }
-  const text = await response.text();
+  let text;
+  try {
+    text = await response.text();
+  } catch (error) {
+    fail(
+      "publication_remote_unavailable",
+      `Publication response body was unavailable: ${method} ${endpoint}`,
+      {
+        cause: error instanceof Error ? error.name : "unknown",
+        status: response.status,
+      },
+    );
+  }
   let payload = null;
   if (text)
     try {
