@@ -8,26 +8,10 @@
     "schemaVersion",
     "status",
     "projectionFinalizationAuthorized",
-    "packagePublicationReceiptSha256",
+    "packagePublishedEventSha256",
     "targetEndpointFingerprint",
     "preparedByActorUserId",
-    "projectionId",
-    "buildWorkerJobId",
-    "packageId",
-    "lciaResultPublicationId",
-    "packageVersion",
-    "packageResultHash",
-    "projectionContractVersion",
-    "hashContractVersion",
-    "processCount",
-    "impactCount",
-    "valueCount",
-    "processAxisHash",
-    "impactAxisHash",
-    "valueGridHash",
-    "relationHash",
-    "projectionContentHash",
-    "sourcePublishedAt",
+    "projection",
     "idempotencyKey",
     "preparedAt"
   ],
@@ -37,28 +21,10 @@
     },
     "status": { "const": "ready_for_confirmation" },
     "projectionFinalizationAuthorized": { "const": false },
-    "packagePublicationReceiptSha256": { "$ref": "#/$defs/hash" },
+    "packagePublishedEventSha256": { "$ref": "#/$defs/hash" },
     "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
     "preparedByActorUserId": { "$ref": "#/$defs/uuid" },
-    "projectionId": { "$ref": "#/$defs/uuid" },
-    "buildWorkerJobId": { "$ref": "#/$defs/uuid" },
-    "packageId": { "$ref": "#/$defs/uuid" },
-    "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
-    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "packageResultHash": { "$ref": "#/$defs/hash" },
-    "projectionContractVersion": { "const": "portal.lcia-projection.v1" },
-    "hashContractVersion": {
-      "const": "portal.lcia-projection.int32be-frame-sha256.v1"
-    },
-    "processCount": { "$ref": "#/$defs/count" },
-    "impactCount": { "$ref": "#/$defs/count" },
-    "valueCount": { "$ref": "#/$defs/count" },
-    "processAxisHash": { "$ref": "#/$defs/hash" },
-    "impactAxisHash": { "$ref": "#/$defs/hash" },
-    "valueGridHash": { "$ref": "#/$defs/hash" },
-    "relationHash": { "$ref": "#/$defs/hash" },
-    "projectionContentHash": { "$ref": "#/$defs/hash" },
-    "sourcePublishedAt": { "type": "string", "format": "date-time" },
+    "projection": { "$ref": "#/$defs/projection" },
     "idempotencyKey": {
       "type": "string",
       "pattern": "^portal-lcia-finalize-v1:[0-9a-f]{64}$"
@@ -68,6 +34,56 @@
   "$defs": {
     "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "uuid": { "type": "string", "format": "uuid" },
-    "count": { "type": "integer", "minimum": 1 }
+    "count": { "type": "integer", "minimum": 1 },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectionId",
+        "buildWorkerJobId",
+        "packageId",
+        "lciaResultPublicationId",
+        "packageVersion",
+        "packageResultHash",
+        "projectionContractVersion",
+        "hashContractVersion",
+        "processCount",
+        "impactCount",
+        "valueCount",
+        "processAxisHash",
+        "impactAxisHash",
+        "valueGridHash",
+        "relationHash",
+        "projectionContentHash",
+        "sourcePublishedAt"
+      ],
+      "properties": {
+        "projectionId": { "$ref": "#/$defs/uuid" },
+        "buildWorkerJobId": { "$ref": "#/$defs/uuid" },
+        "packageId": { "$ref": "#/$defs/uuid" },
+        "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
+        "packageVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "packageResultHash": { "$ref": "#/$defs/hash" },
+        "projectionContractVersion": {
+          "const": "portal.lcia-projection.v1"
+        },
+        "hashContractVersion": {
+          "const": "portal.lcia-projection.int32be-frame-sha256.v1"
+        },
+        "processCount": { "$ref": "#/$defs/count" },
+        "impactCount": { "$ref": "#/$defs/count" },
+        "valueCount": { "$ref": "#/$defs/count" },
+        "processAxisHash": { "$ref": "#/$defs/hash" },
+        "impactAxisHash": { "$ref": "#/$defs/hash" },
+        "valueGridHash": { "$ref": "#/$defs/hash" },
+        "relationHash": { "$ref": "#/$defs/hash" },
+        "projectionContentHash": { "$ref": "#/$defs/hash" },
+        "sourcePublishedAt": { "type": "string", "format": "date-time" }
+      }
+    }
   }
 }

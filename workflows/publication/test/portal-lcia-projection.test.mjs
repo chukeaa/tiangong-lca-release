@@ -68,12 +68,18 @@ test("V3 package publication freezes exact evidence before projection finalize a
     packagePlan,
     "package-publication",
   );
-  assert.equal(packagePublication.receipt.disposition, "published");
-  assert.equal(packagePublication.receipt.independentlyReadBack, true);
-  assert.equal(packagePublication.receipt.reasonPersistence, "recorded");
-  assert.equal(packagePublication.receipt.publishedAt, PUBLISHED_AT);
+  assert.equal(packagePublication.event.disposition, "published");
   assert.equal(
-    packagePublication.receipt.databasePublishPlanHash,
+    packagePublication.event.observation.independentlyReadBack,
+    true,
+  );
+  assert.equal(
+    packagePublication.event.observation.reasonPersistence,
+    "recorded",
+  );
+  assert.equal(packagePublication.event.observation.publishedAt, PUBLISHED_AT);
+  assert.equal(
+    packagePublication.event.observation.databasePublishPlanHash,
     packagePlan.plan.publishPlanHash,
   );
 
@@ -84,8 +90,8 @@ test("V3 package publication freezes exact evidence before projection finalize a
     "projection-plan",
   );
   assert.equal(
-    projectionPlan.plan.packagePublicationReceiptSha256,
-    packagePublication.receiptSha256,
+    projectionPlan.plan.packagePublishedEventSha256,
+    packagePublication.eventSha256,
   );
   const finalized = await finalizeProjection(
     root,
@@ -93,7 +99,7 @@ test("V3 package publication freezes exact evidence before projection finalize a
     projectionPlan,
     "finalized",
   );
-  assert.equal(finalized.receipt.independentReadbackVerified, false);
+  assert.equal(finalized.event.observation.independentReadbackVerified, false);
   const verified = await verifyPortalLciaProjectionPublication({
     finalizationDir: finalized.path,
     outDir: path.join(root, "verified"),
@@ -101,24 +107,24 @@ test("V3 package publication freezes exact evidence before projection finalize a
     fetchImpl: remote.fetch,
     now: CLOCK,
   });
-  assert.equal(verified.receipt.status, "verified");
-  assert.equal(verified.receipt.isCurrent, true);
-  assert.equal(verified.receipt.isPubliclyVisible, true);
-  assert.equal(verified.receipt.finalizedAt, FINALIZED_AT);
+  assert.equal(verified.event.observation.status, "verified");
+  assert.equal(verified.event.observation.isCurrent, true);
+  assert.equal(verified.event.observation.isPubliclyVisible, true);
+  assert.equal(verified.event.observation.finalizedAt, FINALIZED_AT);
 
   assert.doesNotMatch(
     JSON.stringify([
       packagePlan.plan,
-      packagePublication.receipt,
+      packagePublication.event,
       projectionPlan.plan,
-      finalized.receipt,
-      verified.receipt,
+      finalized.event,
+      verified.event,
     ]),
     /https?:\/\/|s3:\/\/|bucket|locator/iu,
   );
 
   const persisted = await readFile(
-    path.join(verified.path, "portal-lcia-projection-readback-receipt.json"),
+    path.join(verified.path, "portal-lcia-projection-verified-event.json"),
     "utf8",
   );
   assert.doesNotMatch(persisted, /https?:\/\/|s3:\/\/|bucket|locator/iu);
@@ -130,13 +136,16 @@ test("Package publication survives process restart and reuses the original DB pl
   const plan = await preparePackagePlan(root, remote, "plan");
   const first = await publishPackage(root, remote, plan, "first");
   assert.equal(first.disposition, "published");
-  assert.equal(first.receipt.freshPrepareMatched, true);
+  assert.equal(first.event.parentArtifactSha256, plan.planSha256);
 
   const retry = await publishPackage(root, remote, plan, "retry");
   assert.equal(retry.disposition, "reused");
-  assert.equal(retry.receipt.publishResponseReused, true);
-  assert.equal(retry.receipt.freshPrepareMatched, false);
-  assert.equal(retry.receipt.reasonPersistence, "not_rewritten_on_reuse");
+  assert.equal(
+    retry.event.observation.reasonPersistence,
+    "not_rewritten_on_reuse",
+  );
+  assert.equal("publishResponseSha256" in retry.event, false);
+  assert.equal("freshPrepareEvidenceSha256" in retry.event, false);
   assert.equal(remote.counts.packagePublish, 2);
 
   remote.packagePrepareData.artifacts.bundleContentHash = "0".repeat(64);
@@ -154,13 +163,9 @@ test("Package publication reconciles fetch loss and response-body loss through a
     const plan = await preparePackagePlan(root, remote, "plan");
     remote.loseNextPackagePublish = lossMode;
     const published = await publishPackage(root, remote, plan, "published");
+    assert.equal(published.event.disposition, "reconciled_after_response_loss");
     assert.equal(
-      published.receipt.disposition,
-      "reconciled_after_response_loss",
-    );
-    assert.equal(published.receipt.publishResponseReused, true);
-    assert.equal(
-      published.receipt.reasonPersistence,
+      published.event.observation.reasonPersistence,
       "unknown_after_response_loss",
     );
     assert.equal(remote.counts.packagePublish, 2);
@@ -260,14 +265,12 @@ test("Projection finalize reconciles both fetch loss and response-body loss", as
       "finalized",
     );
     assert.equal(finalized.disposition, "reconciled_after_response_loss");
-    assert.match(
-      finalized.receipt.reconciliationReadbackSha256,
-      /^[0-9a-f]{64}$/u,
-    );
+    assert.equal(finalized.event.eventType, "projection_finalized");
+    assert.equal("reconciliationReadbackSha256" in finalized.event, false);
   }
 });
 
-test("Superseded, unpublished, or hidden projections cannot produce a verified receipt", async (t) => {
+test("Superseded, unpublished, or hidden projections cannot produce a verified event", async (t) => {
   for (const lifecycle of ["superseded", "unpublished"]) {
     const root = await temporaryRoot(t, lifecycle);
     const remote = createProjectionRemote();
@@ -326,7 +329,7 @@ test("Projection revoke exact confirmation, changed-reason replay, and response 
     revokePortalLciaProjectionPublication({
       finalizationDir: finalized.path,
       outDir: path.join(root, "wrong-revoke"),
-      confirmFinalizationReceiptSha256: "0".repeat(64),
+      confirmFinalizedEventSha256: "0".repeat(64),
       reason: "withdraw public projection",
       env: ENV,
       fetchImpl: remote.fetch,
@@ -341,8 +344,8 @@ test("Projection revoke exact confirmation, changed-reason replay, and response 
     "revoked",
     "withdraw public projection",
   );
-  assert.equal(revoked.receipt.reasonPersistence, "recorded");
-  assert.equal(revoked.receipt.isPubliclyVisible, false);
+  assert.equal(revoked.event.observation.reasonPersistence, "recorded");
+  assert.equal(revoked.event.observation.isPubliclyVisible, false);
 
   const retried = await revokeProjection(
     root,
@@ -351,9 +354,15 @@ test("Projection revoke exact confirmation, changed-reason replay, and response 
     "revoked-retry",
     "a different retry reason",
   );
-  assert.equal(retried.receipt.disposition, "reused");
-  assert.equal(retried.receipt.requestedReason, "a different retry reason");
-  assert.equal(retried.receipt.reasonPersistence, "not_rewritten_on_reuse");
+  assert.equal(retried.event.disposition, "reused");
+  assert.equal(
+    retried.event.observation.requestedReason,
+    "a different retry reason",
+  );
+  assert.equal(
+    retried.event.observation.reasonPersistence,
+    "not_rewritten_on_reuse",
+  );
 
   const responseLossRoot = await temporaryRoot(t, "revoke-loss");
   const responseLossRemote = createProjectionRemote();
@@ -377,7 +386,7 @@ test("Projection revoke exact confirmation, changed-reason replay, and response 
     "emergency withdrawal",
   );
   assert.equal(
-    reconciled.receipt.reasonPersistence,
+    reconciled.event.observation.reasonPersistence,
     "unknown_after_response_loss",
   );
 });
@@ -385,11 +394,8 @@ test("Projection revoke exact confirmation, changed-reason replay, and response 
 test("Portal LCIA package/projection contracts are strict Draft 2020-12 schemas", async () => {
   const files = [
     "portal-lcia-package-publication-plan.v1.schema.json",
-    "portal-lcia-package-publication-receipt.v1.schema.json",
     "portal-lcia-projection-plan.v1.schema.json",
-    "portal-lcia-projection-finalization-receipt.v1.schema.json",
-    "portal-lcia-projection-readback-receipt.v1.schema.json",
-    "portal-lcia-projection-revocation-receipt.v1.schema.json",
+    "portal-lcia-publication-event.v1.schema.json",
   ];
   for (const file of files) {
     const schema = JSON.parse(
@@ -530,7 +536,7 @@ async function revokeProjection(root, remote, finalized, name, reason) {
   return revokePortalLciaProjectionPublication({
     finalizationDir: finalized.path,
     outDir: path.join(root, name),
-    confirmFinalizationReceiptSha256: finalized.receiptSha256,
+    confirmFinalizedEventSha256: finalized.eventSha256,
     reason,
     env: ENV,
     fetchImpl: remote.fetch,

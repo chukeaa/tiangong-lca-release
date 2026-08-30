@@ -113,7 +113,7 @@ projection verify:
   --finalization-dir <path> --out-dir <path>
 
 projection revoke:
-  --finalization-dir <path> --confirm <finalization-receipt-sha256>
+  --finalization-dir <path> --confirm <finalized-event-sha256>
   --reason <text> --out-dir <path>
 
 Required remote environment:
@@ -387,17 +387,18 @@ async function projectionPrepare(options) {
     packagePublicationDir: path.resolve(options["package-publication-dir"]),
     outDir: path.resolve(options["out-dir"]),
   });
+  const projection = result.plan.projection;
   return success("projection prepare", "portal_lcia_projection_plan_prepared", {
     completeness: "projection_ready_for_exact_confirmation",
-    projectionId: result.plan.projectionId,
-    packageId: result.plan.packageId,
-    lciaResultPublicationId: result.plan.lciaResultPublicationId,
-    packageVersion: result.plan.packageVersion,
-    packageResultHash: result.plan.packageResultHash,
-    projectionContentHash: result.plan.projectionContentHash,
-    processCount: result.plan.processCount,
-    impactCount: result.plan.impactCount,
-    valueCount: result.plan.valueCount,
+    projectionId: projection.projectionId,
+    packageId: projection.packageId,
+    lciaResultPublicationId: projection.lciaResultPublicationId,
+    packageVersion: projection.packageVersion,
+    packageResultHash: projection.packageResultHash,
+    projectionContentHash: projection.projectionContentHash,
+    processCount: projection.processCount,
+    impactCount: projection.impactCount,
+    valueCount: projection.valueCount,
     projectionPlanSha256: result.planSha256,
     projectionFinalizationAuthorized: false,
     artifacts: {
@@ -484,28 +485,29 @@ async function projectionPackagePublish(options) {
     confirmPlanSha256: options.confirm,
     outDir: path.resolve(options["out-dir"]),
   });
+  const subject = result.event.subject;
   return success(
     "projection package-publish",
     "portal_lcia_package_published",
     {
       completeness: "package_publication_current_projection_plan_pending",
-      publicationId: result.receipt.publicationId,
-      packageId: result.receipt.packageId,
-      packageVersion: result.receipt.packageVersion,
-      packageResultHash: result.receipt.packageResultHash,
-      projectionId: result.receipt.projectionId,
-      projectionContentHash: result.receipt.projectionContentHash,
-      processCount: result.receipt.processCount,
-      impactCount: result.receipt.impactCount,
-      valueCount: result.receipt.valueCount,
+      publicationId: subject.lciaResultPublicationId,
+      packageId: subject.packageId,
+      packageVersion: subject.packageVersion,
+      packageResultHash: result.plan.package.resultHash,
+      projectionId: subject.projectionId,
+      projectionContentHash: subject.projectionContentHash,
+      processCount: result.plan.package.processCount,
+      impactCount: result.plan.package.impactCount,
+      valueCount: result.plan.package.valueCount,
       disposition: result.disposition,
-      reasonPersistence: result.receipt.reasonPersistence,
-      packagePublicationReceiptSha256: result.receiptSha256,
+      reasonPersistence: result.event.observation.reasonPersistence,
+      packagePublishedEventSha256: result.eventSha256,
       independentlyReadBack: true,
       artifacts: {
-        packagePublicationReceipt: path.join(
+        packagePublishedEvent: path.join(
           result.path,
-          "portal-lcia-package-publication-receipt.json",
+          "portal-lcia-package-published-event.json",
         ),
       },
       nextActions: [
@@ -530,19 +532,20 @@ async function projectionFinalize(options) {
     confirmPlanSha256: options.confirm,
     outDir: path.resolve(options["out-dir"]),
   });
+  const subject = result.event.subject;
   return success("projection finalize", "portal_lcia_projection_finalized", {
     completeness: "projection_finalized_independent_readback_pending",
-    projectionPublicationId: result.receipt.projectionPublicationId,
-    lciaResultPublicationId: result.receipt.lciaResultPublicationId,
-    projectionContentHash: result.receipt.projectionContentHash,
-    evidenceHash: result.receipt.evidenceHash,
+    projectionPublicationId: subject.projectionPublicationId,
+    lciaResultPublicationId: subject.lciaResultPublicationId,
+    projectionContentHash: subject.projectionContentHash,
+    evidenceHash: result.event.observation.evidenceHash,
     disposition: result.disposition,
-    finalizationReceiptSha256: result.receiptSha256,
+    finalizedEventSha256: result.eventSha256,
     independentReadbackVerified: false,
     artifacts: {
-      finalizationReceipt: path.join(
+      finalizedEvent: path.join(
         result.path,
-        "portal-lcia-projection-finalization-receipt.json",
+        "portal-lcia-projection-finalized-event.json",
       ),
     },
     nextActions: [
@@ -565,25 +568,26 @@ async function projectionVerify(options) {
     finalizationDir: path.resolve(options["finalization-dir"]),
     outDir: path.resolve(options["out-dir"]),
   });
+  const subject = result.event.subject;
   return success(
     "projection verify",
     "portal_lcia_projection_readback_verified",
     {
       completeness: "portal_lcia_projection_publication_complete",
-      projectionPublicationId: result.receipt.projectionPublicationId,
-      lciaResultPublicationId: result.receipt.lciaResultPublicationId,
-      projectionContentHash: result.receipt.projectionContentHash,
-      evidenceHash: result.receipt.evidenceHash,
-      processCount: result.receipt.processCount,
-      impactCount: result.receipt.impactCount,
-      valueCount: result.receipt.valueCount,
+      projectionPublicationId: subject.projectionPublicationId,
+      lciaResultPublicationId: subject.lciaResultPublicationId,
+      projectionContentHash: subject.projectionContentHash,
+      evidenceHash: result.event.observation.evidenceHash,
+      processCount: result.plan.projection.processCount,
+      impactCount: result.plan.projection.impactCount,
+      valueCount: result.plan.projection.valueCount,
       isCurrent: true,
       isPubliclyVisible: true,
-      readbackReceiptSha256: result.receiptSha256,
+      verifiedEventSha256: result.eventSha256,
       artifacts: {
-        readbackReceipt: path.join(
+        verifiedEvent: path.join(
           result.path,
-          "portal-lcia-projection-readback-receipt.json",
+          "portal-lcia-projection-verified-event.json",
         ),
       },
       nextActions: [],
@@ -595,24 +599,25 @@ async function projectionRevoke(options) {
   requireOptions(options, ["finalization-dir", "confirm", "reason", "out-dir"]);
   const result = await revokePortalLciaProjectionPublication({
     finalizationDir: path.resolve(options["finalization-dir"]),
-    confirmFinalizationReceiptSha256: options.confirm,
+    confirmFinalizedEventSha256: options.confirm,
     reason: options.reason,
     outDir: path.resolve(options["out-dir"]),
   });
+  const subject = result.event.subject;
   return success("projection revoke", "portal_lcia_projection_revoked", {
     completeness: "portal_lcia_projection_revoked_and_verified",
-    projectionPublicationId: result.receipt.projectionPublicationId,
-    lciaResultPublicationId: result.receipt.lciaResultPublicationId,
-    projectionContentHash: result.receipt.projectionContentHash,
-    disposition: result.receipt.disposition,
-    reasonPersistence: result.receipt.reasonPersistence,
+    projectionPublicationId: subject.projectionPublicationId,
+    lciaResultPublicationId: subject.lciaResultPublicationId,
+    projectionContentHash: subject.projectionContentHash,
+    disposition: result.event.disposition,
+    reasonPersistence: result.event.observation.reasonPersistence,
     isCurrent: false,
     isPubliclyVisible: false,
-    revocationReceiptSha256: result.receiptSha256,
+    revokedEventSha256: result.eventSha256,
     artifacts: {
-      revocationReceipt: path.join(
+      revokedEvent: path.join(
         result.path,
-        "portal-lcia-projection-revocation-receipt.json",
+        "portal-lcia-projection-revoked-event.json",
       ),
     },
     nextActions: [],

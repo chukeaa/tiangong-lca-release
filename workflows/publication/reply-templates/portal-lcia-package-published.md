@@ -9,8 +9,8 @@
 - 结果：`{{disposition}}`
 - 请求理由持久化语义：`{{reasonPersistence}}`
 - 已完成独立回读：`{{independentlyReadBack}}`
-- Receipt SHA-256：`{{packagePublicationReceiptSha256}}`
-- Receipt：`{{artifacts.packagePublicationReceipt}}`
+- Package-published Event SHA-256：`{{packagePublishedEventSha256}}`
+- Event：`{{artifacts.packagePublishedEvent}}`
 
 Package publication 已由 exact Database publish-plan hash 约束并通过 projection prepare 独立回读。下一步：
 

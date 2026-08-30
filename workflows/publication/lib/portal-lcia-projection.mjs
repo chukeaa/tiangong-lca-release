@@ -13,14 +13,7 @@ import { requestJson, resolvePublicationRuntime } from "./remote.mjs";
 const PLAN_SCHEMA = "tiangong.release.portal-lcia-projection-plan.v1";
 const PACKAGE_PUBLICATION_PLAN_SCHEMA =
   "tiangong.release.portal-lcia-package-publication-plan.v1";
-const PACKAGE_PUBLICATION_RECEIPT_SCHEMA =
-  "tiangong.release.portal-lcia-package-publication-receipt.v1";
-const FINALIZATION_SCHEMA =
-  "tiangong.release.portal-lcia-projection-finalization-receipt.v1";
-const READBACK_SCHEMA =
-  "tiangong.release.portal-lcia-projection-readback-receipt.v1";
-const REVOCATION_SCHEMA =
-  "tiangong.release.portal-lcia-projection-revocation-receipt.v1";
+const EVENT_SCHEMA = "tiangong.release.portal-lcia-publication-event.v1";
 const PROJECTION_CONTRACT = "portal.lcia-projection.v1";
 const HASH_CONTRACT = "portal.lcia-projection.int32be-frame-sha256.v1";
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
@@ -206,78 +199,53 @@ export async function publishPortalLciaPackage({
       };
     throw error;
   }
-  const receipt = {
-    schemaVersion: PACKAGE_PUBLICATION_RECEIPT_SCHEMA,
-    status: "current",
-    packagePublicationAuthorized: true,
-    independentlyReadBack: true,
-    disposition,
-    responseLossReconciled,
-    publishResponseReused: published.reused,
-    packagePublicationPlanSha256: artifacts.planSha256,
-    databasePublishPlanHash: artifacts.plan.publishPlanHash,
-    freshPrepareEvidenceSha256: hashJson(freshPrepared),
-    freshPrepareMatched,
-    freshPreparePublishPlanHash: freshPrepared.publishPlanHash,
-    freshPrepareCurrentPublication: freshPrepared.currentPublication,
-    publishResponseSha256: hashJson(published),
-    prepareReadbackSha256: hashJson(readback),
+  const event = {
+    schemaVersion: EVENT_SCHEMA,
+    eventType: "package_published",
+    parentArtifactSha256: artifacts.planSha256,
     targetEndpointFingerprint: artifacts.plan.targetEndpointFingerprint,
-    executedByActorUserId: runtime.actorUserId,
-    publicationId: published.data.publicationId,
-    packageId: published.data.packageId,
-    previousPublicationId: published.data.previousPublicationId,
-    isCurrent: true,
-    packageVersion: published.data.packageVersion,
-    packageResultHash: readback.packageResultHash,
-    buildWorkerJobId: readback.buildWorkerJobId,
-    projectionContractVersion: readback.projectionContractVersion,
-    hashContractVersion: readback.hashContractVersion,
-    inputManifestHash: artifacts.plan.package.inputManifestHash,
-    closureCertificateHash: artifacts.plan.package.closureCertificateHash,
-    snapshotHash: artifacts.plan.package.snapshotHash,
-    projectionId: published.data.projectionId,
-    projectionContentHash: published.data.projectionContentHash,
-    processCount: readback.processCount,
-    impactCount: readback.impactCount,
-    valueCount: readback.valueCount,
-    processAxisHash: readback.processAxisHash,
-    impactAxisHash: readback.impactAxisHash,
-    valueGridHash: readback.valueGridHash,
-    relationHash: readback.relationHash,
-    bundleContentHash: artifacts.plan.artifacts.bundleContentHash,
-    bundleManifestSha256: artifacts.plan.artifacts.bundleManifestSha256,
-    lciaChunkSetSha256: artifacts.plan.artifacts.lciaChunkSetSha256,
-    resultArtifactSha256: artifacts.plan.artifacts.resultArtifactSha256,
-    queryArtifactSha256: artifacts.plan.artifacts.queryArtifactSha256,
-    currentProcessSetHash: artifacts.plan.currentProcessSetHash,
-    currentPublicationPrecondition: artifacts.plan.currentPublication,
-    displayDefaultImpactCategory: artifacts.plan.displayDefaultImpactCategory,
-    requestedReason: artifacts.plan.requestedReason,
-    reasonPersistence:
-      published.reused && responseLossReconciled
-        ? "unknown_after_response_loss"
-        : published.reused
-          ? "not_rewritten_on_reuse"
-          : "recorded",
-    publishedAt: published.data.publishedAt,
+    actorUserId: runtime.actorUserId,
+    disposition,
+    subject: {
+      packageId: published.data.packageId,
+      projectionId: published.data.projectionId,
+      lciaResultPublicationId: published.data.publicationId,
+      projectionPublicationId: null,
+      packageVersion: published.data.packageVersion,
+      projectionContentHash: published.data.projectionContentHash,
+    },
+    observation: {
+      status: "current",
+      isCurrent: true,
+      independentlyReadBack: true,
+      databasePublishPlanHash: artifacts.plan.publishPlanHash,
+      previousPublicationId: published.data.previousPublicationId,
+      publishedAt: published.data.publishedAt,
+      reasonPersistence:
+        published.reused && responseLossReconciled
+          ? "unknown_after_response_loss"
+          : published.reused
+            ? "not_rewritten_on_reuse"
+            : "recorded",
+    },
     recordedAt: requiredTimestamp(now().toISOString(), "Recorded at"),
   };
-  validatePackagePublicationReceipt(receipt, artifacts.plan);
+  validatePackagePublishedEvent(event, artifacts.plan);
   await writeImmutableDirectory(target, async (staging) => {
     await writeCanonical(
       path.join(staging, "portal-lcia-package-publication-plan.json"),
       artifacts.plan,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-package-publication-receipt.json"),
-      receipt,
+      path.join(staging, "portal-lcia-package-published-event.json"),
+      event,
     );
   });
   return {
     path: target,
-    receipt,
-    receiptSha256: hashJson(receipt),
+    plan: artifacts.plan,
+    event,
+    eventSha256: hashJson(event),
     disposition,
   };
 }
@@ -295,44 +263,28 @@ export async function preparePortalLciaProjectionPlan({
   const target = path.resolve(outDir);
   await assertAbsent(target);
   const runtime = await resolveProjectionRuntime({ env, fetchImpl });
-  assertPackagePublicationReceiptTarget(publication.receipt, runtime);
+  assertPackagePublishedEventTarget(publication.event, runtime);
   const response = await invokeProjectionPrepare({
     runtime,
-    packageId: publication.receipt.packageId,
-    lciaResultPublicationId: publication.receipt.publicationId,
+    packageId: publication.event.subject.packageId,
+    lciaResultPublicationId: publication.event.subject.lciaResultPublicationId,
     fetchImpl,
   });
   const prepared = validatePrepareResponse(response);
-  assertProjectionPrepareMatchesPackagePublication(
-    prepared,
-    publication.receipt,
-  );
+  assertProjectionPrepareMatchesPackagePublication(prepared, {
+    plan: publication.plan,
+    event: publication.event,
+  });
   const preparedAt = requiredTimestamp(now().toISOString(), "Prepared at");
   const idempotencyKey = projectionIdempotencyKey(prepared);
   const plan = {
     schemaVersion: PLAN_SCHEMA,
     status: "ready_for_confirmation",
     projectionFinalizationAuthorized: false,
-    packagePublicationReceiptSha256: publication.receiptSha256,
+    packagePublishedEventSha256: publication.eventSha256,
     targetEndpointFingerprint: runtime.targetEndpointFingerprint,
     preparedByActorUserId: runtime.actorUserId,
-    projectionId: prepared.projectionId,
-    buildWorkerJobId: prepared.buildWorkerJobId,
-    packageId: prepared.packageId,
-    lciaResultPublicationId: prepared.lciaResultPublicationId,
-    packageVersion: prepared.packageVersion,
-    packageResultHash: prepared.packageResultHash,
-    projectionContractVersion: prepared.projectionContractVersion,
-    hashContractVersion: prepared.hashContractVersion,
-    processCount: prepared.processCount,
-    impactCount: prepared.impactCount,
-    valueCount: prepared.valueCount,
-    processAxisHash: prepared.processAxisHash,
-    impactAxisHash: prepared.impactAxisHash,
-    valueGridHash: prepared.valueGridHash,
-    relationHash: prepared.relationHash,
-    projectionContentHash: prepared.contentHash,
-    sourcePublishedAt: prepared.publishedAt,
+    projection: prepareEvidence(prepared),
     idempotencyKey,
     preparedAt,
   };
@@ -343,8 +295,8 @@ export async function preparePortalLciaProjectionPlan({
       publication.plan,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-package-publication-receipt.json"),
-      publication.receipt,
+      path.join(staging, "portal-lcia-package-published-event.json"),
+      publication.event,
     );
     await writeCanonical(
       path.join(staging, "portal-lcia-projection-plan.json"),
@@ -379,20 +331,18 @@ export async function finalizePortalLciaProjection({
 
   const prepareResponse = await invokeProjectionPrepare({
     runtime,
-    packageId: artifacts.plan.packageId,
-    lciaResultPublicationId: artifacts.plan.lciaResultPublicationId,
+    packageId: artifacts.plan.projection.packageId,
+    lciaResultPublicationId: artifacts.plan.projection.lciaResultPublicationId,
     fetchImpl,
   });
   const freshPrepared = validatePrepareResponse(prepareResponse);
-  const freshEvidenceSha256 = hashJson(prepareEvidence(freshPrepared));
-  if (freshEvidenceSha256 !== hashJson(planEvidence(artifacts.plan)))
+  if (
+    hashJson(prepareEvidence(freshPrepared)) !==
+    hashJson(artifacts.plan.projection)
+  )
     fail(
       "portal_lcia_projection_prepare_drift",
       "Projection evidence changed after the confirmed plan was prepared",
-      {
-        plannedEvidenceSha256: hashJson(planEvidence(artifacts.plan)),
-        observedEvidenceSha256: freshEvidenceSha256,
-      },
     );
 
   const audit = {
@@ -401,17 +351,18 @@ export async function finalizePortalLciaProjection({
   };
   let finalized;
   let disposition;
-  let reconciliationReadbackSha256 = null;
   try {
     const finalizeResponse = await invokeProjectionRpc({
       runtime,
       functionName: "cmd_portal_lcia_projection_finalize_publication_v1",
       body: {
-        p_projection_id: artifacts.plan.projectionId,
-        p_lcia_result_publication_id: artifacts.plan.lciaResultPublicationId,
-        p_package_version: artifacts.plan.packageVersion,
-        p_package_result_hash: artifacts.plan.packageResultHash,
-        p_projection_content_hash: artifacts.plan.projectionContentHash,
+        p_projection_id: artifacts.plan.projection.projectionId,
+        p_lcia_result_publication_id:
+          artifacts.plan.projection.lciaResultPublicationId,
+        p_package_version: artifacts.plan.projection.packageVersion,
+        p_package_result_hash: artifacts.plan.projection.packageResultHash,
+        p_projection_content_hash:
+          artifacts.plan.projection.projectionContentHash,
         p_idempotency_key: artifacts.plan.idempotencyKey,
         p_audit: audit,
       },
@@ -442,37 +393,27 @@ export async function finalizePortalLciaProjection({
     }
     finalized = finalizeDataFromReadback(reconciliation.readback);
     disposition = "reconciled_after_response_loss";
-    reconciliationReadbackSha256 = hashJson(reconciliation.readback);
   }
 
-  const receipt = {
-    schemaVersion: FINALIZATION_SCHEMA,
-    status: "finalized",
-    projectionFinalizationAuthorized: true,
-    independentReadbackVerified: false,
-    disposition,
-    projectionPlanSha256: artifacts.planSha256,
-    freshPrepareEvidenceSha256: freshEvidenceSha256,
-    reconciliationReadbackSha256,
+  const event = {
+    schemaVersion: EVENT_SCHEMA,
+    eventType: "projection_finalized",
+    parentArtifactSha256: artifacts.planSha256,
     targetEndpointFingerprint: artifacts.plan.targetEndpointFingerprint,
-    finalizedByActorUserId: runtime.actorUserId,
-    projectionPublicationId: finalized.projectionPublicationId,
-    projectionId: finalized.projectionId,
-    lciaResultPublicationId: finalized.lciaResultPublicationId,
-    packageId: finalized.packageId,
-    packageVersion: artifacts.plan.packageVersion,
-    packageResultHash: artifacts.plan.packageResultHash,
-    projectionContentHash: finalized.contentHash,
-    evidenceHash: finalized.evidenceHash,
-    processCount: artifacts.plan.processCount,
-    impactCount: artifacts.plan.impactCount,
-    valueCount: artifacts.plan.valueCount,
-    sourcePublishedAt: artifacts.plan.sourcePublishedAt,
-    idempotencyKey: artifacts.plan.idempotencyKey,
-    finalizedAt: finalized.finalizedAt,
+    actorUserId: runtime.actorUserId,
+    disposition,
+    subject: projectionSubject(artifacts.plan, {
+      projectionPublicationId: finalized.projectionPublicationId,
+    }),
+    observation: {
+      status: "finalized",
+      independentReadbackVerified: false,
+      evidenceHash: finalized.evidenceHash,
+      finalizedAt: finalized.finalizedAt,
+    },
     recordedAt: requiredTimestamp(now().toISOString(), "Recorded at"),
   };
-  validateFinalizationReceipt(receipt, artifacts.plan);
+  validateProjectionFinalizedEvent(event, artifacts.plan);
   await writeImmutableDirectory(target, async (staging) => {
     await writePackagePublicationLineage(staging, artifacts);
     await writeCanonical(
@@ -480,14 +421,15 @@ export async function finalizePortalLciaProjection({
       artifacts.plan,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-projection-finalization-receipt.json"),
-      receipt,
+      path.join(staging, "portal-lcia-projection-finalized-event.json"),
+      event,
     );
   });
   return {
     path: target,
-    receipt,
-    receiptSha256: hashJson(receipt),
+    plan: artifacts.plan,
+    event,
+    eventSha256: hashJson(event),
     disposition,
   };
 }
@@ -513,35 +455,30 @@ export async function verifyPortalLciaProjectionPublication({
   assertReadbackMatchesFinalization({
     readback,
     plan: artifacts.plan,
-    finalizationReceipt: artifacts.finalizationReceipt,
+    finalizationEvent: artifacts.finalizationEvent,
     requireCurrent: true,
     requiredStatus: "finalized",
   });
-  const receipt = {
-    schemaVersion: READBACK_SCHEMA,
-    status: "verified",
-    independentlyQueried: true,
-    isCurrent: true,
-    isPubliclyVisible: true,
-    projectionPlanSha256: artifacts.planSha256,
-    finalizationReceiptSha256: artifacts.finalizationReceiptSha256,
+  const event = {
+    schemaVersion: EVENT_SCHEMA,
+    eventType: "projection_verified",
+    parentArtifactSha256: artifacts.finalizationEventSha256,
     targetEndpointFingerprint: artifacts.plan.targetEndpointFingerprint,
-    verifiedByActorUserId: runtime.actorUserId,
-    projectionPublicationId: readback.projectionPublicationId,
-    projectionId: readback.projectionId,
-    lciaResultPublicationId: readback.lciaResultPublicationId,
-    packageId: readback.packageId,
-    packageVersion: readback.packageVersion,
-    projectionContentHash: readback.contentHash,
-    evidenceHash: readback.evidenceHash,
-    processCount: readback.processCount,
-    impactCount: readback.impactCount,
-    valueCount: readback.valueCount,
-    sourcePublishedAt: artifacts.plan.sourcePublishedAt,
-    finalizedAt: readback.finalizedAt,
-    verifiedAt: requiredTimestamp(now().toISOString(), "Verified at"),
+    actorUserId: runtime.actorUserId,
+    disposition: "observed",
+    subject: projectionSubject(artifacts.plan, {
+      projectionPublicationId: readback.projectionPublicationId,
+    }),
+    observation: {
+      status: "verified",
+      isCurrent: true,
+      isPubliclyVisible: true,
+      evidenceHash: readback.evidenceHash,
+      finalizedAt: readback.finalizedAt,
+    },
+    recordedAt: requiredTimestamp(now().toISOString(), "Recorded at"),
   };
-  validateReadbackReceipt(receipt, artifacts);
+  validateProjectionVerifiedEvent(event, artifacts);
   await writeImmutableDirectory(target, async (staging) => {
     await writePackagePublicationLineage(staging, artifacts);
     await writeCanonical(
@@ -549,34 +486,39 @@ export async function verifyPortalLciaProjectionPublication({
       artifacts.plan,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-projection-finalization-receipt.json"),
-      artifacts.finalizationReceipt,
+      path.join(staging, "portal-lcia-projection-finalized-event.json"),
+      artifacts.finalizationEvent,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-projection-readback-receipt.json"),
-      receipt,
+      path.join(staging, "portal-lcia-projection-verified-event.json"),
+      event,
     );
   });
-  return { path: target, receipt, receiptSha256: hashJson(receipt) };
+  return {
+    path: target,
+    plan: artifacts.plan,
+    event,
+    eventSha256: hashJson(event),
+  };
 }
 
 export async function revokePortalLciaProjectionPublication({
   finalizationDir,
   outDir,
-  confirmFinalizationReceiptSha256,
+  confirmFinalizedEventSha256,
   reason,
   env = process.env,
   fetchImpl = globalThis.fetch,
   now = () => new Date(),
 }) {
   const artifacts = await loadFinalizationArtifacts(finalizationDir);
-  if (confirmFinalizationReceiptSha256 !== artifacts.finalizationReceiptSha256)
+  if (confirmFinalizedEventSha256 !== artifacts.finalizationEventSha256)
     fail(
       "portal_lcia_projection_revoke_confirmation_mismatch",
-      "Projection revocation confirmation must exactly match the finalization receipt SHA-256",
+      "Projection revocation confirmation must exactly match the finalized-event SHA-256",
       {
-        expected: artifacts.finalizationReceiptSha256,
-        received: confirmFinalizationReceiptSha256 ?? null,
+        expected: artifacts.finalizationEventSha256,
+        received: confirmFinalizedEventSha256 ?? null,
       },
     );
   const normalizedReason = String(reason ?? "").trim();
@@ -599,24 +541,25 @@ export async function revokePortalLciaProjectionPublication({
   assertReadbackMatchesFinalization({
     readback: before,
     plan: artifacts.plan,
-    finalizationReceipt: artifacts.finalizationReceipt,
+    finalizationEvent: artifacts.finalizationEvent,
     requireCurrent: false,
     requiredStatus: ["finalized", "revoked"],
   });
 
   const audit = {
     schemaVersion: "tiangong.release.portal-lcia-projection-revoke-audit.v1",
-    finalizationReceiptSha256: artifacts.finalizationReceiptSha256,
+    finalizationEventSha256: artifacts.finalizationEventSha256,
   };
   let disposition;
-  let revokeResponseSha256 = null;
   try {
     const response = await invokeProjectionRpc({
       runtime,
       functionName: "cmd_portal_lcia_projection_revoke_publication_v1",
       body: {
-        p_lcia_result_publication_id: artifacts.plan.lciaResultPublicationId,
-        p_projection_content_hash: artifacts.plan.projectionContentHash,
+        p_lcia_result_publication_id:
+          artifacts.plan.projection.lciaResultPublicationId,
+        p_projection_content_hash:
+          artifacts.plan.projection.projectionContentHash,
         p_reason: normalizedReason,
         p_audit: audit,
       },
@@ -626,10 +569,9 @@ export async function revokePortalLciaProjectionPublication({
     assertRevokedMatchesPlan(
       revoked.data,
       artifacts.plan,
-      artifacts.finalizationReceipt,
+      artifacts.finalizationEvent,
     );
     disposition = revoked.reused ? "reused" : "revoked";
-    revokeResponseSha256 = hashJson(revoked);
   } catch (error) {
     if (!isAmbiguousRemoteError(error)) throw error;
     disposition = "reconciled_after_response_loss";
@@ -646,7 +588,7 @@ export async function revokePortalLciaProjectionPublication({
     assertReadbackMatchesFinalization({
       readback: after,
       plan: artifacts.plan,
-      finalizationReceipt: artifacts.finalizationReceipt,
+      finalizationEvent: artifacts.finalizationEvent,
       requireCurrent: false,
       requiredStatus: "revoked",
     });
@@ -654,41 +596,37 @@ export async function revokePortalLciaProjectionPublication({
     error.details = {
       ...(error.details ?? {}),
       safeRetry: true,
-      finalizationReceiptSha256: artifacts.finalizationReceiptSha256,
+      finalizationEventSha256: artifacts.finalizationEventSha256,
     };
     throw error;
   }
-  const receipt = {
-    schemaVersion: REVOCATION_SCHEMA,
-    status: "revoked",
-    independentlyQueried: true,
-    isCurrent: false,
-    isPubliclyVisible: false,
-    disposition,
-    projectionPlanSha256: artifacts.planSha256,
-    finalizationReceiptSha256: artifacts.finalizationReceiptSha256,
-    revokeResponseSha256,
-    revocationReadbackSha256: hashJson(after),
+  const event = {
+    schemaVersion: EVENT_SCHEMA,
+    eventType: "projection_revoked",
+    parentArtifactSha256: artifacts.finalizationEventSha256,
     targetEndpointFingerprint: artifacts.plan.targetEndpointFingerprint,
-    revokedByActorUserId: runtime.actorUserId,
-    projectionPublicationId: after.projectionPublicationId,
-    projectionId: after.projectionId,
-    lciaResultPublicationId: after.lciaResultPublicationId,
-    packageId: after.packageId,
-    packageVersion: after.packageVersion,
-    projectionContentHash: after.contentHash,
-    evidenceHash: after.evidenceHash,
-    requestedReason: normalizedReason,
-    reasonPersistence:
-      disposition === "revoked"
-        ? "recorded"
-        : disposition === "reused"
-          ? "not_rewritten_on_reuse"
-          : "unknown_after_response_loss",
-    revokedAt: after.revokedAt,
-    verifiedAt: requiredTimestamp(now().toISOString(), "Verified at"),
+    actorUserId: runtime.actorUserId,
+    disposition,
+    subject: projectionSubject(artifacts.plan, {
+      projectionPublicationId: after.projectionPublicationId,
+    }),
+    observation: {
+      status: "revoked",
+      isCurrent: false,
+      isPubliclyVisible: false,
+      evidenceHash: after.evidenceHash,
+      requestedReason: normalizedReason,
+      reasonPersistence:
+        disposition === "revoked"
+          ? "recorded"
+          : disposition === "reused"
+            ? "not_rewritten_on_reuse"
+            : "unknown_after_response_loss",
+      revokedAt: after.revokedAt,
+    },
+    recordedAt: requiredTimestamp(now().toISOString(), "Recorded at"),
   };
-  validateRevocationReceipt(receipt, artifacts);
+  validateProjectionRevokedEvent(event, artifacts);
   await writeImmutableDirectory(target, async (staging) => {
     await writePackagePublicationLineage(staging, artifacts);
     await writeCanonical(
@@ -696,15 +634,20 @@ export async function revokePortalLciaProjectionPublication({
       artifacts.plan,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-projection-finalization-receipt.json"),
-      artifacts.finalizationReceipt,
+      path.join(staging, "portal-lcia-projection-finalized-event.json"),
+      artifacts.finalizationEvent,
     );
     await writeCanonical(
-      path.join(staging, "portal-lcia-projection-revocation-receipt.json"),
-      receipt,
+      path.join(staging, "portal-lcia-projection-revoked-event.json"),
+      event,
     );
   });
-  return { path: target, receipt, receiptSha256: hashJson(receipt) };
+  return {
+    path: target,
+    plan: artifacts.plan,
+    event,
+    eventSha256: hashJson(event),
+  };
 }
 
 export async function loadProjectionPlan(planDir) {
@@ -715,17 +658,17 @@ export async function loadProjectionPlan(planDir) {
     "portal_lcia_projection_plan_missing",
   );
   validatePlan(plan);
-  if (plan.packagePublicationReceiptSha256 !== publication.receiptSha256)
+  if (plan.packagePublishedEventSha256 !== publication.eventSha256)
     fail(
       "portal_lcia_projection_package_publication_hash_mismatch",
-      "Projection plan does not match its package publication receipt",
+      "Projection plan does not match its package-published event",
     );
   return {
     root,
     plan,
     planSha256: hashJson(plan),
     packagePublicationPlan: publication.plan,
-    packagePublicationReceipt: publication.receipt,
+    packagePublishedEvent: publication.event,
   };
 }
 
@@ -742,38 +685,38 @@ export async function loadPackagePublicationPlan(packagePlanDir) {
 async function loadPackagePublicationArtifacts(packagePublicationDir) {
   const root = path.resolve(packagePublicationDir);
   const planArtifacts = await loadPackagePublicationPlan(root);
-  const { value: receipt } = await readJson(
-    path.join(root, "portal-lcia-package-publication-receipt.json"),
-    "portal_lcia_package_publication_receipt_missing",
+  const { value: event } = await readJson(
+    path.join(root, "portal-lcia-package-published-event.json"),
+    "portal_lcia_package_published_event_missing",
   );
-  validatePackagePublicationReceipt(receipt, planArtifacts.plan);
+  validatePackagePublishedEvent(event, planArtifacts.plan);
   verifyJsonHash(
     planArtifacts.plan,
-    receipt.packagePublicationPlanSha256,
+    event.parentArtifactSha256,
     "portal_lcia_package_publication_plan_hash_mismatch",
     "Portal LCIA package publication plan",
   );
-  return { ...planArtifacts, receipt, receiptSha256: hashJson(receipt) };
+  return { ...planArtifacts, event, eventSha256: hashJson(event) };
 }
 
 async function loadFinalizationArtifacts(finalizationDir) {
   const root = path.resolve(finalizationDir);
   const planArtifacts = await loadProjectionPlan(root);
-  const { value: finalizationReceipt } = await readJson(
-    path.join(root, "portal-lcia-projection-finalization-receipt.json"),
-    "portal_lcia_projection_finalization_receipt_missing",
+  const { value: finalizationEvent } = await readJson(
+    path.join(root, "portal-lcia-projection-finalized-event.json"),
+    "portal_lcia_projection_finalized_event_missing",
   );
-  validateFinalizationReceipt(finalizationReceipt, planArtifacts.plan);
+  validateProjectionFinalizedEvent(finalizationEvent, planArtifacts.plan);
   verifyJsonHash(
     planArtifacts.plan,
-    finalizationReceipt.projectionPlanSha256,
+    finalizationEvent.parentArtifactSha256,
     "portal_lcia_projection_finalization_plan_hash_mismatch",
     "Portal LCIA projection plan",
   );
   return {
     ...planArtifacts,
-    finalizationReceipt,
-    finalizationReceiptSha256: hashJson(finalizationReceipt),
+    finalizationEvent,
+    finalizationEventSha256: hashJson(finalizationEvent),
   };
 }
 
@@ -783,8 +726,8 @@ async function writePackagePublicationLineage(staging, artifacts) {
     artifacts.packagePublicationPlan,
   );
   await writeCanonical(
-    path.join(staging, "portal-lcia-package-publication-receipt.json"),
-    artifacts.packagePublicationReceipt,
+    path.join(staging, "portal-lcia-package-published-event.json"),
+    artifacts.packagePublishedEvent,
   );
 }
 
@@ -895,8 +838,8 @@ async function invokeProjectionReadback({ runtime, plan, fetchImpl }) {
     runtime,
     functionName: "qry_portal_lcia_projection_publication_readback_v1",
     body: {
-      p_lcia_result_publication_id: plan.lciaResultPublicationId,
-      p_projection_content_hash: plan.projectionContentHash,
+      p_lcia_result_publication_id: plan.projection.lciaResultPublicationId,
+      p_projection_content_hash: plan.projection.projectionContentHash,
     },
     fetchImpl,
   });
@@ -1470,259 +1413,6 @@ function validatePackagePublicationPlan(plan) {
   return plan;
 }
 
-function validatePackagePublicationReceipt(receipt, plan) {
-  assertExactObject(
-    receipt,
-    [
-      "schemaVersion",
-      "status",
-      "packagePublicationAuthorized",
-      "independentlyReadBack",
-      "disposition",
-      "responseLossReconciled",
-      "publishResponseReused",
-      "packagePublicationPlanSha256",
-      "databasePublishPlanHash",
-      "freshPrepareEvidenceSha256",
-      "freshPrepareMatched",
-      "freshPreparePublishPlanHash",
-      "freshPrepareCurrentPublication",
-      "publishResponseSha256",
-      "prepareReadbackSha256",
-      "targetEndpointFingerprint",
-      "executedByActorUserId",
-      "publicationId",
-      "packageId",
-      "previousPublicationId",
-      "isCurrent",
-      "packageVersion",
-      "packageResultHash",
-      "buildWorkerJobId",
-      "projectionContractVersion",
-      "hashContractVersion",
-      "inputManifestHash",
-      "closureCertificateHash",
-      "snapshotHash",
-      "projectionId",
-      "projectionContentHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "processAxisHash",
-      "impactAxisHash",
-      "valueGridHash",
-      "relationHash",
-      "bundleContentHash",
-      "bundleManifestSha256",
-      "lciaChunkSetSha256",
-      "resultArtifactSha256",
-      "queryArtifactSha256",
-      "currentProcessSetHash",
-      "currentPublicationPrecondition",
-      "displayDefaultImpactCategory",
-      "requestedReason",
-      "reasonPersistence",
-      "publishedAt",
-      "recordedAt",
-    ],
-    "portal_lcia_package_publication_receipt_invalid",
-    "Portal LCIA package publication receipt",
-  );
-  if (
-    receipt.schemaVersion !== PACKAGE_PUBLICATION_RECEIPT_SCHEMA ||
-    receipt.status !== "current" ||
-    receipt.packagePublicationAuthorized !== true ||
-    receipt.independentlyReadBack !== true ||
-    receipt.isCurrent !== true ||
-    !["published", "reused", "reconciled_after_response_loss"].includes(
-      receipt.disposition,
-    ) ||
-    receipt.responseLossReconciled !==
-      (receipt.disposition === "reconciled_after_response_loss") ||
-    typeof receipt.publishResponseReused !== "boolean" ||
-    typeof receipt.freshPrepareMatched !== "boolean" ||
-    (!receipt.freshPrepareMatched && !receipt.publishResponseReused) ||
-    (receipt.disposition === "published" && receipt.publishResponseReused) ||
-    (receipt.disposition === "reused" && !receipt.publishResponseReused) ||
-    receipt.reasonPersistence !==
-      (receipt.publishResponseReused
-        ? receipt.responseLossReconciled
-          ? "unknown_after_response_loss"
-          : "not_rewritten_on_reuse"
-        : "recorded")
-  )
-    fail(
-      "portal_lcia_package_publication_receipt_invalid",
-      "Portal LCIA package publication receipt has an unsupported state",
-    );
-  requiredHash(
-    receipt.packagePublicationPlanSha256,
-    "Package publication plan hash",
-  );
-  requiredHash(receipt.databasePublishPlanHash, "Database publish plan hash");
-  requiredHash(
-    receipt.freshPrepareEvidenceSha256,
-    "Fresh prepare evidence hash",
-  );
-  requiredHash(
-    receipt.freshPreparePublishPlanHash,
-    "Fresh Database publish plan hash",
-  );
-  validateCurrentPublicationPrecondition(
-    receipt.freshPrepareCurrentPublication,
-  );
-  requiredHash(receipt.publishResponseSha256, "Publish response hash");
-  requiredHash(receipt.prepareReadbackSha256, "Prepare readback hash");
-  requiredHash(
-    receipt.targetEndpointFingerprint,
-    "Target endpoint fingerprint",
-  );
-  requiredUuid(receipt.executedByActorUserId, "Executing actor user ID");
-  requiredUuid(receipt.publicationId, "Publication ID");
-  requiredUuid(receipt.packageId, "Package ID");
-  if (receipt.previousPublicationId !== null)
-    requiredUuid(receipt.previousPublicationId, "Previous publication ID");
-  requiredText(receipt.packageVersion, "Package version", 256);
-  requiredHash(receipt.packageResultHash, "Package result hash");
-  requiredUuid(receipt.buildWorkerJobId, "Build worker job ID");
-  if (
-    receipt.projectionContractVersion !== PROJECTION_CONTRACT ||
-    receipt.hashContractVersion !== HASH_CONTRACT
-  )
-    fail(
-      "portal_lcia_package_publication_receipt_invalid",
-      "Package publication readback has unsupported projection contracts",
-    );
-  requiredHash(receipt.inputManifestHash, "Input manifest hash");
-  requiredHash(receipt.closureCertificateHash, "Closure certificate hash");
-  requiredHash(receipt.snapshotHash, "Snapshot hash");
-  requiredUuid(receipt.projectionId, "Projection ID");
-  requiredHash(receipt.projectionContentHash, "Projection content hash");
-  const processCount = requiredPositiveInteger(
-    receipt.processCount,
-    "Process count",
-  );
-  const impactCount = requiredPositiveInteger(
-    receipt.impactCount,
-    "Impact count",
-  );
-  if (
-    requiredPositiveInteger(receipt.valueCount, "Value count") !==
-    processCount * impactCount
-  )
-    fail(
-      "portal_lcia_package_publication_receipt_invalid",
-      "Package publication readback has an inconsistent projection grid",
-    );
-  requiredHash(receipt.processAxisHash, "Process axis hash");
-  requiredHash(receipt.impactAxisHash, "Impact axis hash");
-  requiredHash(receipt.valueGridHash, "Value grid hash");
-  requiredHash(receipt.relationHash, "Relation hash");
-  requiredHash(receipt.bundleContentHash, "Bundle content hash");
-  requiredHash(receipt.bundleManifestSha256, "Bundle manifest SHA-256");
-  requiredHash(receipt.lciaChunkSetSha256, "LCIA chunk-set SHA-256");
-  requiredHash(receipt.resultArtifactSha256, "Result artifact SHA-256");
-  requiredHash(receipt.queryArtifactSha256, "Query artifact SHA-256");
-  requiredHash(receipt.currentProcessSetHash, "Current Process-set hash");
-  validateCurrentPublicationPrecondition(
-    receipt.currentPublicationPrecondition,
-  );
-  requiredText(
-    receipt.displayDefaultImpactCategory,
-    "Display default impact category",
-    512,
-  );
-  requiredText(receipt.requestedReason, "Publication reason", 2000);
-  requiredTimestamp(receipt.publishedAt, "Published at");
-  requiredTimestamp(receipt.recordedAt, "Recorded at");
-  const reconstructedFreshPrepare = {
-    ...packagePublishPrepareEvidenceFromPlan(plan),
-    publishPlanHash: receipt.freshPreparePublishPlanHash,
-    currentPublication: receipt.freshPrepareCurrentPublication,
-  };
-  const reconstructedPublishResponse = {
-    ok: true,
-    reused: receipt.publishResponseReused,
-    data: {
-      publicationId: receipt.publicationId,
-      packageId: receipt.packageId,
-      previousPublicationId: receipt.previousPublicationId,
-      isCurrent: receipt.isCurrent,
-      packageVersion: receipt.packageVersion,
-      projectionId: receipt.projectionId,
-      projectionContentHash: receipt.projectionContentHash,
-      publishedAt: receipt.publishedAt,
-      publishPlanHash: receipt.databasePublishPlanHash,
-    },
-  };
-  const reconstructedPrepareReadback = {
-    projectionId: receipt.projectionId,
-    buildWorkerJobId: receipt.buildWorkerJobId,
-    packageId: receipt.packageId,
-    lciaResultPublicationId: receipt.publicationId,
-    packageVersion: receipt.packageVersion,
-    packageResultHash: receipt.packageResultHash,
-    status: "prepared",
-    projectionContractVersion: receipt.projectionContractVersion,
-    hashContractVersion: receipt.hashContractVersion,
-    processCount: receipt.processCount,
-    impactCount: receipt.impactCount,
-    valueCount: receipt.valueCount,
-    processAxisHash: receipt.processAxisHash,
-    impactAxisHash: receipt.impactAxisHash,
-    valueGridHash: receipt.valueGridHash,
-    relationHash: receipt.relationHash,
-    contentHash: receipt.projectionContentHash,
-    publishedAt: receipt.publishedAt,
-  };
-  if (
-    receipt.packagePublicationPlanSha256 !== hashJson(plan) ||
-    receipt.databasePublishPlanHash !== plan.publishPlanHash ||
-    receipt.freshPrepareEvidenceSha256 !==
-      hashJson(reconstructedFreshPrepare) ||
-    receipt.freshPrepareMatched !==
-      (hashJson(reconstructedFreshPrepare) ===
-        hashJson(packagePublishPrepareEvidenceFromPlan(plan))) ||
-    receipt.publishResponseSha256 !== hashJson(reconstructedPublishResponse) ||
-    receipt.prepareReadbackSha256 !== hashJson(reconstructedPrepareReadback) ||
-    receipt.targetEndpointFingerprint !== plan.targetEndpointFingerprint ||
-    receipt.executedByActorUserId !== plan.preparedByActorUserId ||
-    receipt.packageId !== plan.package.id ||
-    receipt.previousPublicationId !==
-      (plan.currentPublication?.publicationId ?? null) ||
-    receipt.packageVersion !== plan.package.version ||
-    receipt.packageResultHash !== plan.package.resultHash ||
-    receipt.inputManifestHash !== plan.package.inputManifestHash ||
-    receipt.closureCertificateHash !== plan.package.closureCertificateHash ||
-    receipt.snapshotHash !== plan.package.snapshotHash ||
-    receipt.projectionId !== plan.projection.id ||
-    receipt.projectionContentHash !== plan.projection.contentHash ||
-    receipt.processCount !== plan.package.processCount ||
-    receipt.impactCount !== plan.package.impactCount ||
-    receipt.valueCount !== plan.package.valueCount ||
-    receipt.processAxisHash !== plan.projection.processAxisHash ||
-    receipt.impactAxisHash !== plan.projection.impactAxisHash ||
-    receipt.valueGridHash !== plan.projection.valueGridHash ||
-    receipt.relationHash !== plan.projection.relationHash ||
-    receipt.bundleContentHash !== plan.artifacts.bundleContentHash ||
-    receipt.bundleManifestSha256 !== plan.artifacts.bundleManifestSha256 ||
-    receipt.lciaChunkSetSha256 !== plan.artifacts.lciaChunkSetSha256 ||
-    receipt.resultArtifactSha256 !== plan.artifacts.resultArtifactSha256 ||
-    receipt.queryArtifactSha256 !== plan.artifacts.queryArtifactSha256 ||
-    receipt.currentProcessSetHash !== plan.currentProcessSetHash ||
-    hashJson(receipt.currentPublicationPrecondition) !==
-      hashJson(plan.currentPublication) ||
-    receipt.displayDefaultImpactCategory !==
-      plan.displayDefaultImpactCategory ||
-    receipt.requestedReason !== plan.requestedReason
-  )
-    fail(
-      "portal_lcia_package_publication_receipt_invalid",
-      "Package publication receipt does not match the confirmed plan",
-    );
-  return receipt;
-}
-
 function validatePlan(plan) {
   assertExactObject(
     plan,
@@ -1730,26 +1420,10 @@ function validatePlan(plan) {
       "schemaVersion",
       "status",
       "projectionFinalizationAuthorized",
-      "packagePublicationReceiptSha256",
+      "packagePublishedEventSha256",
       "targetEndpointFingerprint",
       "preparedByActorUserId",
-      "projectionId",
-      "buildWorkerJobId",
-      "packageId",
-      "lciaResultPublicationId",
-      "packageVersion",
-      "packageResultHash",
-      "projectionContractVersion",
-      "hashContractVersion",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "processAxisHash",
-      "impactAxisHash",
-      "valueGridHash",
-      "relationHash",
-      "projectionContentHash",
-      "sourcePublishedAt",
+      "projection",
       "idempotencyKey",
       "preparedAt",
     ],
@@ -1759,297 +1433,402 @@ function validatePlan(plan) {
   if (
     plan.schemaVersion !== PLAN_SCHEMA ||
     plan.status !== "ready_for_confirmation" ||
-    plan.projectionFinalizationAuthorized !== false ||
-    plan.projectionContractVersion !== PROJECTION_CONTRACT ||
-    plan.hashContractVersion !== HASH_CONTRACT
+    plan.projectionFinalizationAuthorized !== false
   )
     fail(
       "portal_lcia_projection_plan_invalid",
-      "Portal LCIA projection plan has an unsupported schema, status, or contract",
+      "Portal LCIA projection plan has an unsupported schema or status",
     );
-  requiredHash(plan.targetEndpointFingerprint, "Target endpoint fingerprint");
   requiredHash(
-    plan.packagePublicationReceiptSha256,
-    "Package publication receipt hash",
+    plan.packagePublishedEventSha256,
+    "Package-published event hash",
   );
+  requiredHash(plan.targetEndpointFingerprint, "Target endpoint fingerprint");
   requiredUuid(plan.preparedByActorUserId, "Preparing actor user ID");
-  requiredUuid(plan.projectionId, "Projection ID");
-  requiredUuid(plan.buildWorkerJobId, "Build worker job ID");
-  requiredUuid(plan.packageId, "Package ID");
-  requiredUuid(plan.lciaResultPublicationId, "LCIA result publication ID");
-  requiredText(plan.packageVersion, "Package version", 256);
-  requiredHash(plan.packageResultHash, "Package result hash");
-  requiredHash(plan.processAxisHash, "Process axis hash");
-  requiredHash(plan.impactAxisHash, "Impact axis hash");
-  requiredHash(plan.valueGridHash, "Value grid hash");
-  requiredHash(plan.relationHash, "Relation hash");
-  requiredHash(plan.projectionContentHash, "Projection content hash");
-  const processCount = requiredPositiveInteger(
-    plan.processCount,
-    "Process count",
-  );
-  const impactCount = requiredPositiveInteger(plan.impactCount, "Impact count");
-  if (
-    requiredPositiveInteger(plan.valueCount, "Value count") !==
-    processCount * impactCount
-  )
+  const projection = validateProjectionEvidence(plan.projection);
+  if (hashJson(projection) !== hashJson(plan.projection))
     fail(
       "portal_lcia_projection_plan_invalid",
-      "Projection plan value count does not equal the process-impact grid",
+      "Projection plan evidence is not canonical",
     );
-  requiredTimestamp(plan.sourcePublishedAt, "Source published at");
-  requiredTimestamp(plan.preparedAt, "Prepared at");
-  if (plan.idempotencyKey !== projectionIdempotencyKey(plan))
+  if (plan.idempotencyKey !== projectionIdempotencyKey(projection))
     fail(
       "portal_lcia_projection_plan_invalid",
       "Projection plan idempotency key does not match its exact evidence",
     );
+  requiredTimestamp(plan.preparedAt, "Prepared at");
   return plan;
 }
 
-function validateFinalizationReceipt(receipt, plan) {
+function validateProjectionEvidence(value) {
   assertExactObject(
-    receipt,
+    value,
     [
-      "schemaVersion",
-      "status",
-      "projectionFinalizationAuthorized",
-      "independentReadbackVerified",
-      "disposition",
-      "projectionPlanSha256",
-      "freshPrepareEvidenceSha256",
-      "reconciliationReadbackSha256",
-      "targetEndpointFingerprint",
-      "finalizedByActorUserId",
-      "projectionPublicationId",
       "projectionId",
-      "lciaResultPublicationId",
+      "buildWorkerJobId",
       "packageId",
+      "lciaResultPublicationId",
       "packageVersion",
       "packageResultHash",
-      "projectionContentHash",
-      "evidenceHash",
+      "projectionContractVersion",
+      "hashContractVersion",
       "processCount",
       "impactCount",
       "valueCount",
+      "processAxisHash",
+      "impactAxisHash",
+      "valueGridHash",
+      "relationHash",
+      "projectionContentHash",
       "sourcePublishedAt",
-      "idempotencyKey",
-      "finalizedAt",
+    ],
+    "portal_lcia_projection_plan_invalid",
+    "Portal LCIA projection evidence",
+  );
+  const projection = {
+    projectionId: requiredUuid(value.projectionId, "Projection ID"),
+    buildWorkerJobId: requiredUuid(
+      value.buildWorkerJobId,
+      "Build worker job ID",
+    ),
+    packageId: requiredUuid(value.packageId, "Package ID"),
+    lciaResultPublicationId: requiredUuid(
+      value.lciaResultPublicationId,
+      "LCIA result publication ID",
+    ),
+    packageVersion: requiredText(value.packageVersion, "Package version", 256),
+    packageResultHash: requiredHash(
+      value.packageResultHash,
+      "Package result hash",
+    ),
+    projectionContractVersion: value.projectionContractVersion,
+    hashContractVersion: value.hashContractVersion,
+    processCount: requiredPositiveInteger(value.processCount, "Process count"),
+    impactCount: requiredPositiveInteger(value.impactCount, "Impact count"),
+    valueCount: requiredPositiveInteger(value.valueCount, "Value count"),
+    processAxisHash: requiredHash(value.processAxisHash, "Process axis hash"),
+    impactAxisHash: requiredHash(value.impactAxisHash, "Impact axis hash"),
+    valueGridHash: requiredHash(value.valueGridHash, "Value grid hash"),
+    relationHash: requiredHash(value.relationHash, "Relation hash"),
+    projectionContentHash: requiredHash(
+      value.projectionContentHash,
+      "Projection content hash",
+    ),
+    sourcePublishedAt: requiredTimestamp(
+      value.sourcePublishedAt,
+      "Source published at",
+    ),
+  };
+  if (
+    projection.projectionContractVersion !== PROJECTION_CONTRACT ||
+    projection.hashContractVersion !== HASH_CONTRACT ||
+    projection.valueCount !== projection.processCount * projection.impactCount
+  )
+    fail(
+      "portal_lcia_projection_plan_invalid",
+      "Projection evidence has an unsupported contract or grid cardinality",
+    );
+  return projection;
+}
+
+function validatePublicationEvent(event) {
+  assertExactObject(
+    event,
+    [
+      "schemaVersion",
+      "eventType",
+      "parentArtifactSha256",
+      "targetEndpointFingerprint",
+      "actorUserId",
+      "disposition",
+      "subject",
+      "observation",
       "recordedAt",
     ],
-    "portal_lcia_projection_finalization_receipt_invalid",
-    "Portal LCIA projection finalization receipt",
+    "portal_lcia_publication_event_invalid",
+    "Portal LCIA publication event",
   );
   if (
-    receipt.schemaVersion !== FINALIZATION_SCHEMA ||
-    receipt.status !== "finalized" ||
-    receipt.projectionFinalizationAuthorized !== true ||
-    receipt.independentReadbackVerified !== false ||
-    !["created", "reused", "reconciled_after_response_loss"].includes(
-      receipt.disposition,
-    )
+    event.schemaVersion !== EVENT_SCHEMA ||
+    ![
+      "package_published",
+      "projection_finalized",
+      "projection_verified",
+      "projection_revoked",
+    ].includes(event.eventType)
   )
     fail(
-      "portal_lcia_projection_finalization_receipt_invalid",
-      "Projection finalization receipt has an unsupported state",
+      "portal_lcia_publication_event_invalid",
+      "Portal LCIA publication event has an unsupported schema or type",
     );
-  requiredHash(receipt.projectionPlanSha256, "Projection plan hash");
-  requiredHash(
-    receipt.freshPrepareEvidenceSha256,
-    "Fresh prepare evidence hash",
-  );
-  if (receipt.reconciliationReadbackSha256 !== null)
-    requiredHash(
-      receipt.reconciliationReadbackSha256,
-      "Reconciliation readback hash",
-    );
-  if (
-    (receipt.disposition === "reconciled_after_response_loss") !==
-    (receipt.reconciliationReadbackSha256 !== null)
-  )
+  requiredHash(event.parentArtifactSha256, "Parent artifact hash");
+  requiredHash(event.targetEndpointFingerprint, "Target endpoint fingerprint");
+  requiredUuid(event.actorUserId, "Event actor user ID");
+  const subject = validateEventSubject(event.subject);
+  if (hashJson(subject) !== hashJson(event.subject))
     fail(
-      "portal_lcia_projection_finalization_receipt_invalid",
-      "Projection finalization reconciliation evidence is inconsistent",
+      "portal_lcia_publication_event_invalid",
+      "Portal LCIA publication event subject is not canonical",
     );
-  requiredHash(receipt.targetEndpointFingerprint, "Target fingerprint");
-  requiredUuid(receipt.finalizedByActorUserId, "Finalizing actor user ID");
-  requiredUuid(receipt.projectionPublicationId, "Projection publication ID");
-  requiredUuid(receipt.projectionId, "Projection ID");
-  requiredUuid(receipt.lciaResultPublicationId, "LCIA result publication ID");
-  requiredUuid(receipt.packageId, "Package ID");
-  requiredText(receipt.packageVersion, "Package version", 256);
-  requiredHash(receipt.packageResultHash, "Package result hash");
-  requiredHash(receipt.projectionContentHash, "Projection content hash");
-  requiredHash(receipt.evidenceHash, "Projection evidence hash");
-  requiredPositiveInteger(receipt.processCount, "Process count");
-  requiredPositiveInteger(receipt.impactCount, "Impact count");
-  requiredPositiveInteger(receipt.valueCount, "Value count");
-  requiredTimestamp(receipt.sourcePublishedAt, "Source published at");
-  requiredTimestamp(receipt.finalizedAt, "Finalized at");
-  requiredTimestamp(receipt.recordedAt, "Recorded at");
-  if (
-    receipt.projectionPlanSha256 !== hashJson(plan) ||
-    receipt.targetEndpointFingerprint !== plan.targetEndpointFingerprint ||
-    receipt.finalizedByActorUserId !== plan.preparedByActorUserId ||
-    receipt.projectionId !== plan.projectionId ||
-    receipt.lciaResultPublicationId !== plan.lciaResultPublicationId ||
-    receipt.packageId !== plan.packageId ||
-    receipt.packageVersion !== plan.packageVersion ||
-    receipt.packageResultHash !== plan.packageResultHash ||
-    receipt.projectionContentHash !== plan.projectionContentHash ||
-    receipt.processCount !== plan.processCount ||
-    receipt.impactCount !== plan.impactCount ||
-    receipt.valueCount !== plan.valueCount ||
-    receipt.sourcePublishedAt !== plan.sourcePublishedAt ||
-    receipt.idempotencyKey !== plan.idempotencyKey
-  )
-    fail(
-      "portal_lcia_projection_finalization_receipt_invalid",
-      "Projection finalization receipt does not match the confirmed plan",
-    );
-  return receipt;
+  requiredTimestamp(event.recordedAt, "Recorded at");
+  if (event.eventType === "package_published")
+    validatePackagePublishedObservation(event);
+  if (event.eventType === "projection_finalized")
+    validateProjectionFinalizedObservation(event);
+  if (event.eventType === "projection_verified")
+    validateProjectionVerifiedObservation(event);
+  if (event.eventType === "projection_revoked")
+    validateProjectionRevokedObservation(event);
+  return event;
 }
 
-function validateReadbackReceipt(receipt, artifacts) {
+function validateEventSubject(subject) {
   assertExactObject(
-    receipt,
+    subject,
     [
-      "schemaVersion",
-      "status",
-      "independentlyQueried",
-      "isCurrent",
-      "isPubliclyVisible",
-      "projectionPlanSha256",
-      "finalizationReceiptSha256",
-      "targetEndpointFingerprint",
-      "verifiedByActorUserId",
-      "projectionPublicationId",
+      "packageId",
       "projectionId",
       "lciaResultPublicationId",
-      "packageId",
+      "projectionPublicationId",
       "packageVersion",
       "projectionContentHash",
-      "evidenceHash",
-      "processCount",
-      "impactCount",
-      "valueCount",
-      "sourcePublishedAt",
-      "finalizedAt",
-      "verifiedAt",
     ],
-    "portal_lcia_projection_readback_receipt_invalid",
-    "Portal LCIA projection readback receipt",
+    "portal_lcia_publication_event_invalid",
+    "Portal LCIA publication event subject",
   );
-  if (
-    receipt.schemaVersion !== READBACK_SCHEMA ||
-    receipt.status !== "verified" ||
-    receipt.independentlyQueried !== true ||
-    receipt.isCurrent !== true ||
-    receipt.isPubliclyVisible !== true ||
-    receipt.projectionPlanSha256 !== artifacts.planSha256 ||
-    receipt.finalizationReceiptSha256 !== artifacts.finalizationReceiptSha256
-  )
-    fail(
-      "portal_lcia_projection_readback_receipt_invalid",
-      "Projection readback receipt has invalid status or hash bindings",
-    );
-  requiredHash(receipt.targetEndpointFingerprint, "Target fingerprint");
-  requiredUuid(receipt.verifiedByActorUserId, "Verifying actor user ID");
-  requiredUuid(receipt.projectionPublicationId, "Projection publication ID");
-  requiredUuid(receipt.projectionId, "Projection ID");
-  requiredUuid(receipt.lciaResultPublicationId, "LCIA result publication ID");
-  requiredUuid(receipt.packageId, "Package ID");
-  requiredText(receipt.packageVersion, "Package version", 256);
-  requiredHash(receipt.projectionContentHash, "Projection content hash");
-  requiredHash(receipt.evidenceHash, "Projection evidence hash");
-  requiredPositiveInteger(receipt.processCount, "Process count");
-  requiredPositiveInteger(receipt.impactCount, "Impact count");
-  requiredPositiveInteger(receipt.valueCount, "Value count");
-  requiredTimestamp(receipt.sourcePublishedAt, "Source published at");
-  requiredTimestamp(receipt.finalizedAt, "Finalized at");
-  requiredTimestamp(receipt.verifiedAt, "Verified at");
-  return receipt;
+  return {
+    packageId: requiredUuid(subject.packageId, "Package ID"),
+    projectionId: requiredUuid(subject.projectionId, "Projection ID"),
+    lciaResultPublicationId: requiredUuid(
+      subject.lciaResultPublicationId,
+      "LCIA result publication ID",
+    ),
+    projectionPublicationId:
+      subject.projectionPublicationId === null
+        ? null
+        : requiredUuid(
+            subject.projectionPublicationId,
+            "Projection publication ID",
+          ),
+    packageVersion: requiredText(
+      subject.packageVersion,
+      "Package version",
+      256,
+    ),
+    projectionContentHash: requiredHash(
+      subject.projectionContentHash,
+      "Projection content hash",
+    ),
+  };
 }
 
-function validateRevocationReceipt(receipt, artifacts) {
+function validatePackagePublishedObservation(event) {
   assertExactObject(
-    receipt,
+    event.observation,
     [
-      "schemaVersion",
       "status",
-      "independentlyQueried",
+      "isCurrent",
+      "independentlyReadBack",
+      "databasePublishPlanHash",
+      "previousPublicationId",
+      "publishedAt",
+      "reasonPersistence",
+    ],
+    "portal_lcia_publication_event_invalid",
+    "Package-published observation",
+  );
+  const expectedReasonPersistence =
+    event.disposition === "published"
+      ? "recorded"
+      : event.disposition === "reused"
+        ? "not_rewritten_on_reuse"
+        : "unknown_after_response_loss";
+  if (
+    !["published", "reused", "reconciled_after_response_loss"].includes(
+      event.disposition,
+    ) ||
+    event.observation.status !== "current" ||
+    event.observation.isCurrent !== true ||
+    event.observation.independentlyReadBack !== true ||
+    event.observation.reasonPersistence !== expectedReasonPersistence ||
+    event.subject.projectionPublicationId !== null
+  )
+    fail(
+      "portal_lcia_publication_event_invalid",
+      "Package-published event has an inconsistent lifecycle",
+    );
+  requiredHash(
+    event.observation.databasePublishPlanHash,
+    "Database publish plan hash",
+  );
+  if (event.observation.previousPublicationId !== null)
+    requiredUuid(
+      event.observation.previousPublicationId,
+      "Previous publication ID",
+    );
+  requiredTimestamp(event.observation.publishedAt, "Published at");
+}
+
+function validateProjectionFinalizedObservation(event) {
+  assertExactObject(
+    event.observation,
+    ["status", "independentReadbackVerified", "evidenceHash", "finalizedAt"],
+    "portal_lcia_publication_event_invalid",
+    "Projection-finalized observation",
+  );
+  if (
+    !["created", "reused", "reconciled_after_response_loss"].includes(
+      event.disposition,
+    ) ||
+    event.observation.status !== "finalized" ||
+    event.observation.independentReadbackVerified !== false ||
+    event.subject.projectionPublicationId === null
+  )
+    fail(
+      "portal_lcia_publication_event_invalid",
+      "Projection-finalized event has an inconsistent lifecycle",
+    );
+  requiredHash(event.observation.evidenceHash, "Projection evidence hash");
+  requiredTimestamp(event.observation.finalizedAt, "Finalized at");
+}
+
+function validateProjectionVerifiedObservation(event) {
+  assertExactObject(
+    event.observation,
+    ["status", "isCurrent", "isPubliclyVisible", "evidenceHash", "finalizedAt"],
+    "portal_lcia_publication_event_invalid",
+    "Projection-verified observation",
+  );
+  if (
+    event.disposition !== "observed" ||
+    event.observation.status !== "verified" ||
+    event.observation.isCurrent !== true ||
+    event.observation.isPubliclyVisible !== true ||
+    event.subject.projectionPublicationId === null
+  )
+    fail(
+      "portal_lcia_publication_event_invalid",
+      "Projection-verified event has an inconsistent lifecycle",
+    );
+  requiredHash(event.observation.evidenceHash, "Projection evidence hash");
+  requiredTimestamp(event.observation.finalizedAt, "Finalized at");
+}
+
+function validateProjectionRevokedObservation(event) {
+  assertExactObject(
+    event.observation,
+    [
+      "status",
       "isCurrent",
       "isPubliclyVisible",
-      "disposition",
-      "projectionPlanSha256",
-      "finalizationReceiptSha256",
-      "revokeResponseSha256",
-      "revocationReadbackSha256",
-      "targetEndpointFingerprint",
-      "revokedByActorUserId",
-      "projectionPublicationId",
-      "projectionId",
-      "lciaResultPublicationId",
-      "packageId",
-      "packageVersion",
-      "projectionContentHash",
       "evidenceHash",
       "requestedReason",
       "reasonPersistence",
       "revokedAt",
-      "verifiedAt",
     ],
-    "portal_lcia_projection_revocation_receipt_invalid",
-    "Portal LCIA projection revocation receipt",
+    "portal_lcia_publication_event_invalid",
+    "Projection-revoked observation",
   );
+  const expectedReasonPersistence =
+    event.disposition === "revoked"
+      ? "recorded"
+      : event.disposition === "reused"
+        ? "not_rewritten_on_reuse"
+        : "unknown_after_response_loss";
   if (
-    receipt.schemaVersion !== REVOCATION_SCHEMA ||
-    receipt.status !== "revoked" ||
-    receipt.independentlyQueried !== true ||
-    receipt.isCurrent !== false ||
-    receipt.isPubliclyVisible !== false ||
     !["revoked", "reused", "reconciled_after_response_loss"].includes(
-      receipt.disposition,
+      event.disposition,
     ) ||
-    receipt.reasonPersistence !==
-      (receipt.disposition === "revoked"
-        ? "recorded"
-        : receipt.disposition === "reused"
-          ? "not_rewritten_on_reuse"
-          : "unknown_after_response_loss") ||
-    receipt.projectionPlanSha256 !== artifacts.planSha256 ||
-    receipt.finalizationReceiptSha256 !== artifacts.finalizationReceiptSha256
+    event.observation.status !== "revoked" ||
+    event.observation.isCurrent !== false ||
+    event.observation.isPubliclyVisible !== false ||
+    event.observation.reasonPersistence !== expectedReasonPersistence ||
+    event.subject.projectionPublicationId === null
   )
     fail(
-      "portal_lcia_projection_revocation_receipt_invalid",
-      "Projection revocation receipt has invalid status or hash bindings",
+      "portal_lcia_publication_event_invalid",
+      "Projection-revoked event has an inconsistent lifecycle",
     );
-  if (receipt.revokeResponseSha256 !== null)
-    requiredHash(receipt.revokeResponseSha256, "Revoke response hash");
-  if (
-    (receipt.disposition === "reconciled_after_response_loss") !==
-    (receipt.revokeResponseSha256 === null)
-  )
-    fail(
-      "portal_lcia_projection_revocation_receipt_invalid",
-      "Projection revocation response evidence is inconsistent",
-    );
-  requiredHash(receipt.revocationReadbackSha256, "Revocation readback hash");
-  requiredHash(receipt.targetEndpointFingerprint, "Target fingerprint");
-  requiredUuid(receipt.revokedByActorUserId, "Revoking actor user ID");
-  requiredUuid(receipt.projectionPublicationId, "Projection publication ID");
-  requiredUuid(receipt.projectionId, "Projection ID");
-  requiredUuid(receipt.lciaResultPublicationId, "LCIA result publication ID");
-  requiredUuid(receipt.packageId, "Package ID");
-  requiredText(receipt.packageVersion, "Package version", 256);
-  requiredHash(receipt.projectionContentHash, "Projection content hash");
-  requiredHash(receipt.evidenceHash, "Projection evidence hash");
-  requiredText(receipt.requestedReason, "Requested reason", 2000);
-  requiredTimestamp(receipt.revokedAt, "Revoked at");
-  requiredTimestamp(receipt.verifiedAt, "Verified at");
-  return receipt;
+  requiredHash(event.observation.evidenceHash, "Projection evidence hash");
+  requiredText(event.observation.requestedReason, "Requested reason", 2000);
+  requiredTimestamp(event.observation.revokedAt, "Revoked at");
 }
 
+function validatePackagePublishedEvent(event, plan) {
+  validatePublicationEvent(event);
+  if (
+    event.eventType !== "package_published" ||
+    event.parentArtifactSha256 !== hashJson(plan) ||
+    event.targetEndpointFingerprint !== plan.targetEndpointFingerprint ||
+    event.actorUserId !== plan.preparedByActorUserId ||
+    event.subject.packageId !== plan.package.id ||
+    event.subject.projectionId !== plan.projection.id ||
+    event.subject.packageVersion !== plan.package.version ||
+    event.subject.projectionContentHash !== plan.projection.contentHash ||
+    event.observation.databasePublishPlanHash !== plan.publishPlanHash ||
+    event.observation.previousPublicationId !==
+      (plan.currentPublication?.publicationId ?? null)
+  )
+    fail(
+      "portal_lcia_package_published_event_invalid",
+      "Package-published event does not match the confirmed plan",
+    );
+  return event;
+}
+
+function validateProjectionFinalizedEvent(event, plan) {
+  validatePublicationEvent(event);
+  if (
+    event.eventType !== "projection_finalized" ||
+    event.parentArtifactSha256 !== hashJson(plan) ||
+    event.targetEndpointFingerprint !== plan.targetEndpointFingerprint ||
+    event.actorUserId !== plan.preparedByActorUserId ||
+    !subjectMatchesProjection(event.subject, plan.projection)
+  )
+    fail(
+      "portal_lcia_projection_finalized_event_invalid",
+      "Projection-finalized event does not match the confirmed plan",
+    );
+  return event;
+}
+
+function validateProjectionVerifiedEvent(event, artifacts) {
+  validatePublicationEvent(event);
+  if (
+    event.eventType !== "projection_verified" ||
+    event.parentArtifactSha256 !== artifacts.finalizationEventSha256 ||
+    event.targetEndpointFingerprint !==
+      artifacts.plan.targetEndpointFingerprint ||
+    hashJson(event.subject) !== hashJson(artifacts.finalizationEvent.subject) ||
+    event.observation.evidenceHash !==
+      artifacts.finalizationEvent.observation.evidenceHash ||
+    event.observation.finalizedAt !==
+      artifacts.finalizationEvent.observation.finalizedAt
+  )
+    fail(
+      "portal_lcia_projection_verified_event_invalid",
+      "Projection-verified event does not match the finalized event",
+    );
+  return event;
+}
+
+function validateProjectionRevokedEvent(event, artifacts) {
+  validatePublicationEvent(event);
+  if (
+    event.eventType !== "projection_revoked" ||
+    event.parentArtifactSha256 !== artifacts.finalizationEventSha256 ||
+    event.targetEndpointFingerprint !==
+      artifacts.plan.targetEndpointFingerprint ||
+    hashJson(event.subject) !== hashJson(artifacts.finalizationEvent.subject) ||
+    event.observation.evidenceHash !==
+      artifacts.finalizationEvent.observation.evidenceHash
+  )
+    fail(
+      "portal_lcia_projection_revoked_event_invalid",
+      "Projection-revoked event does not match the finalized event",
+    );
+  return event;
+}
 function assertPackagePublicationPlanTarget(plan, runtime) {
   if (runtime.targetEndpointFingerprint !== plan.targetEndpointFingerprint)
     fail(
@@ -2063,11 +1842,11 @@ function assertPackagePublicationPlanTarget(plan, runtime) {
     );
 }
 
-function assertPackagePublicationReceiptTarget(receipt, runtime) {
-  if (runtime.targetEndpointFingerprint !== receipt.targetEndpointFingerprint)
+function assertPackagePublishedEventTarget(event, runtime) {
+  if (runtime.targetEndpointFingerprint !== event.targetEndpointFingerprint)
     fail(
       "portal_lcia_package_publication_target_mismatch",
-      "Projection preparation target differs from the package publication receipt",
+      "Projection preparation target differs from the package-published event",
     );
 }
 
@@ -2138,27 +1917,53 @@ function assertPackagePublicationReadbackMatches({
     );
 }
 
-function assertProjectionPrepareMatchesPackagePublication(prepared, receipt) {
+function assertProjectionPrepareMatchesPackagePublication(
+  prepared,
+  { plan, event },
+) {
   if (
-    prepared.packageId !== receipt.packageId ||
-    prepared.lciaResultPublicationId !== receipt.publicationId ||
-    prepared.packageVersion !== receipt.packageVersion ||
-    prepared.packageResultHash !== receipt.packageResultHash ||
-    prepared.projectionId !== receipt.projectionId ||
-    prepared.contentHash !== receipt.projectionContentHash ||
-    prepared.processCount !== receipt.processCount ||
-    prepared.impactCount !== receipt.impactCount ||
-    prepared.valueCount !== receipt.valueCount ||
-    prepared.processAxisHash !== receipt.processAxisHash ||
-    prepared.impactAxisHash !== receipt.impactAxisHash ||
-    prepared.valueGridHash !== receipt.valueGridHash ||
-    prepared.relationHash !== receipt.relationHash ||
-    prepared.publishedAt !== receipt.publishedAt
+    prepared.packageId !== event.subject.packageId ||
+    prepared.lciaResultPublicationId !==
+      event.subject.lciaResultPublicationId ||
+    prepared.packageVersion !== event.subject.packageVersion ||
+    prepared.packageResultHash !== plan.package.resultHash ||
+    prepared.projectionId !== event.subject.projectionId ||
+    prepared.contentHash !== event.subject.projectionContentHash ||
+    prepared.processCount !== plan.package.processCount ||
+    prepared.impactCount !== plan.package.impactCount ||
+    prepared.valueCount !== plan.package.valueCount ||
+    prepared.processAxisHash !== plan.projection.processAxisHash ||
+    prepared.impactAxisHash !== plan.projection.impactAxisHash ||
+    prepared.valueGridHash !== plan.projection.valueGridHash ||
+    prepared.relationHash !== plan.projection.relationHash ||
+    prepared.publishedAt !== event.observation.publishedAt
   )
     fail(
       "portal_lcia_projection_package_publication_drift",
-      "Projection preparation differs from the exact package publication receipt",
+      "Projection preparation differs from the confirmed plan and package-published event",
     );
+}
+
+function projectionSubject(plan, { projectionPublicationId }) {
+  return {
+    packageId: plan.projection.packageId,
+    projectionId: plan.projection.projectionId,
+    lciaResultPublicationId: plan.projection.lciaResultPublicationId,
+    projectionPublicationId,
+    packageVersion: plan.projection.packageVersion,
+    projectionContentHash: plan.projection.projectionContentHash,
+  };
+}
+
+function subjectMatchesProjection(subject, projection) {
+  return (
+    subject.packageId === projection.packageId &&
+    subject.projectionId === projection.projectionId &&
+    subject.lciaResultPublicationId === projection.lciaResultPublicationId &&
+    subject.projectionPublicationId !== null &&
+    subject.packageVersion === projection.packageVersion &&
+    subject.projectionContentHash === projection.projectionContentHash
+  );
 }
 
 function assertPlanTarget(
@@ -2182,11 +1987,12 @@ function assertPlanTarget(
 }
 
 function assertFinalizedMatchesPlan(finalized, plan) {
+  const projection = plan.projection;
   if (
-    finalized.projectionId !== plan.projectionId ||
-    finalized.lciaResultPublicationId !== plan.lciaResultPublicationId ||
-    finalized.packageId !== plan.packageId ||
-    finalized.contentHash !== plan.projectionContentHash
+    finalized.projectionId !== projection.projectionId ||
+    finalized.lciaResultPublicationId !== projection.lciaResultPublicationId ||
+    finalized.packageId !== projection.packageId ||
+    finalized.contentHash !== projection.projectionContentHash
   )
     fail(
       "portal_lcia_projection_finalize_identity_mismatch",
@@ -2194,11 +2000,12 @@ function assertFinalizedMatchesPlan(finalized, plan) {
     );
 }
 
-function assertRevokedMatchesPlan(revoked, plan, finalizationReceipt) {
+function assertRevokedMatchesPlan(revoked, plan, finalizationEvent) {
   if (
-    revoked.lciaResultPublicationId !== plan.lciaResultPublicationId ||
+    revoked.lciaResultPublicationId !==
+      plan.projection.lciaResultPublicationId ||
     revoked.projectionPublicationId !==
-      finalizationReceipt.projectionPublicationId
+      finalizationEvent.subject.projectionPublicationId
   )
     fail(
       "portal_lcia_projection_revoke_identity_mismatch",
@@ -2209,7 +2016,7 @@ function assertRevokedMatchesPlan(revoked, plan, finalizationReceipt) {
 function assertReadbackMatchesFinalization({
   readback,
   plan,
-  finalizationReceipt,
+  finalizationEvent,
   requireCurrent,
   requiredStatus,
 }) {
@@ -2219,13 +2026,13 @@ function assertReadbackMatchesFinalization({
   });
   if (
     readback.projectionPublicationId !==
-      finalizationReceipt.projectionPublicationId ||
-    readback.evidenceHash !== finalizationReceipt.evidenceHash ||
-    readback.finalizedAt !== finalizationReceipt.finalizedAt
+      finalizationEvent.subject.projectionPublicationId ||
+    readback.evidenceHash !== finalizationEvent.observation.evidenceHash ||
+    readback.finalizedAt !== finalizationEvent.observation.finalizedAt
   )
     fail(
       "portal_lcia_projection_readback_mismatch",
-      "Projection readback differs from the finalization receipt",
+      "Projection readback differs from the finalized event",
     );
 }
 
@@ -2234,18 +2041,19 @@ function assertReadbackMatchesPlan(
   plan,
   { requireCurrent, requiredStatus },
 ) {
+  const projection = plan.projection;
   const statuses = Array.isArray(requiredStatus)
     ? requiredStatus
     : [requiredStatus];
   if (
-    readback.projectionId !== plan.projectionId ||
-    readback.lciaResultPublicationId !== plan.lciaResultPublicationId ||
-    readback.packageId !== plan.packageId ||
-    readback.packageVersion !== plan.packageVersion ||
-    readback.contentHash !== plan.projectionContentHash ||
-    readback.processCount !== plan.processCount ||
-    readback.impactCount !== plan.impactCount ||
-    readback.valueCount !== plan.valueCount
+    readback.projectionId !== projection.projectionId ||
+    readback.lciaResultPublicationId !== projection.lciaResultPublicationId ||
+    readback.packageId !== projection.packageId ||
+    readback.packageVersion !== projection.packageVersion ||
+    readback.contentHash !== projection.projectionContentHash ||
+    readback.processCount !== projection.processCount ||
+    readback.impactCount !== projection.impactCount ||
+    readback.valueCount !== projection.valueCount
   )
     fail(
       "portal_lcia_projection_readback_mismatch",
@@ -2328,28 +2136,6 @@ function prepareEvidence(value) {
     relationHash: value.relationHash,
     projectionContentHash: value.contentHash,
     sourcePublishedAt: value.publishedAt,
-  };
-}
-
-function planEvidence(plan) {
-  return {
-    projectionId: plan.projectionId,
-    buildWorkerJobId: plan.buildWorkerJobId,
-    packageId: plan.packageId,
-    lciaResultPublicationId: plan.lciaResultPublicationId,
-    packageVersion: plan.packageVersion,
-    packageResultHash: plan.packageResultHash,
-    projectionContractVersion: plan.projectionContractVersion,
-    hashContractVersion: plan.hashContractVersion,
-    processCount: plan.processCount,
-    impactCount: plan.impactCount,
-    valueCount: plan.valueCount,
-    processAxisHash: plan.processAxisHash,
-    impactAxisHash: plan.impactAxisHash,
-    valueGridHash: plan.valueGridHash,
-    relationHash: plan.relationHash,
-    projectionContentHash: plan.projectionContentHash,
-    sourcePublishedAt: plan.sourcePublishedAt,
   };
 }
 

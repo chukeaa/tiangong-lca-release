@@ -5,9 +5,9 @@
 - Projection Content SHA-256：`{{projectionContentHash}}`
 - Evidence SHA-256：`{{evidenceHash}}`
 - 结果：`{{disposition}}`
-- Finalization Receipt SHA-256：`{{finalizationReceiptSha256}}`
+- Finalized Event SHA-256：`{{finalizedEventSha256}}`
 - 已完成独立回读：`{{independentReadbackVerified}}`
-- Receipt：`{{artifacts.finalizationReceipt}}`
+- Event：`{{artifacts.finalizedEvent}}`
 
 远程绑定已完成，但还不能声称公开投影闭环完成。下一步：
 

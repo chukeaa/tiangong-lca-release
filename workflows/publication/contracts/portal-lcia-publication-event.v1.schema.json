@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lca.tiangong.earth/release/portal-lcia-publication-event.v1.schema.json",
+  "title": "Portal LCIA Publication Lifecycle Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventType",
+    "parentArtifactSha256",
+    "targetEndpointFingerprint",
+    "actorUserId",
+    "disposition",
+    "subject",
+    "observation",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tiangong.release.portal-lcia-publication-event.v1"
+    },
+    "eventType": {
+      "enum": [
+        "package_published",
+        "projection_finalized",
+        "projection_verified",
+        "projection_revoked"
+      ]
+    },
+    "parentArtifactSha256": { "$ref": "#/$defs/hash" },
+    "targetEndpointFingerprint": { "$ref": "#/$defs/hash" },
+    "actorUserId": { "$ref": "#/$defs/uuid" },
+    "disposition": {
+      "enum": [
+        "published",
+        "created",
+        "reused",
+        "observed",
+        "revoked",
+        "reconciled_after_response_loss"
+      ]
+    },
+    "subject": { "$ref": "#/$defs/subject" },
+    "observation": { "type": "object" },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "eventType": { "const": "package_published" } }
+      },
+      "then": {
+        "properties": {
+          "observation": { "$ref": "#/$defs/packagePublished" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "eventType": { "const": "projection_finalized" } }
+      },
+      "then": {
+        "properties": {
+          "observation": { "$ref": "#/$defs/projectionFinalized" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "eventType": { "const": "projection_verified" } }
+      },
+      "then": {
+        "properties": {
+          "observation": { "$ref": "#/$defs/projectionVerified" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "eventType": { "const": "projection_revoked" } }
+      },
+      "then": {
+        "properties": {
+          "observation": { "$ref": "#/$defs/projectionRevoked" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "nullableUuid": {
+      "anyOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageId",
+        "projectionId",
+        "lciaResultPublicationId",
+        "projectionPublicationId",
+        "packageVersion",
+        "projectionContentHash"
+      ],
+      "properties": {
+        "packageId": { "$ref": "#/$defs/uuid" },
+        "projectionId": { "$ref": "#/$defs/uuid" },
+        "lciaResultPublicationId": { "$ref": "#/$defs/uuid" },
+        "projectionPublicationId": { "$ref": "#/$defs/nullableUuid" },
+        "packageVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "projectionContentHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "packagePublished": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "isCurrent",
+        "independentlyReadBack",
+        "databasePublishPlanHash",
+        "previousPublicationId",
+        "publishedAt",
+        "reasonPersistence"
+      ],
+      "properties": {
+        "status": { "const": "current" },
+        "isCurrent": { "const": true },
+        "independentlyReadBack": { "const": true },
+        "databasePublishPlanHash": { "$ref": "#/$defs/hash" },
+        "previousPublicationId": { "$ref": "#/$defs/nullableUuid" },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "reasonPersistence": {
+          "enum": [
+            "recorded",
+            "not_rewritten_on_reuse",
+            "unknown_after_response_loss"
+          ]
+        }
+      }
+    },
+    "projectionFinalized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "independentReadbackVerified",
+        "evidenceHash",
+        "finalizedAt"
+      ],
+      "properties": {
+        "status": { "const": "finalized" },
+        "independentReadbackVerified": { "const": false },
+        "evidenceHash": { "$ref": "#/$defs/hash" },
+        "finalizedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "projectionVerified": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "isCurrent",
+        "isPubliclyVisible",
+        "evidenceHash",
+        "finalizedAt"
+      ],
+      "properties": {
+        "status": { "const": "verified" },
+        "isCurrent": { "const": true },
+        "isPubliclyVisible": { "const": true },
+        "evidenceHash": { "$ref": "#/$defs/hash" },
+        "finalizedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "projectionRevoked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "isCurrent",
+        "isPubliclyVisible",
+        "evidenceHash",
+        "requestedReason",
+        "reasonPersistence",
+        "revokedAt"
+      ],
+      "properties": {
+        "status": { "const": "revoked" },
+        "isCurrent": { "const": false },
+        "isPubliclyVisible": { "const": false },
+        "evidenceHash": { "$ref": "#/$defs/hash" },
+        "requestedReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "reasonPersistence": {
+          "enum": [
+            "recorded",
+            "not_rewritten_on_reuse",
+            "unknown_after_response_loss"
+          ]
+        },
+        "revokedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -17,9 +17,9 @@ checkPaths:
   - README.md
   - .docpact/config.yaml
   - workflows/**
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
-lastReviewedNote: "Reviewed for Release #59: exact pnpm 11.24 topology, pure JavaScript, SDK 0.2, and Portal LCIA package/projection boundaries are jointly represented."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps Database authority, two F4 plans, and one append-only event representation."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -166,7 +166,7 @@ Publication 的 Candidate dataset recipe 只消费不可变 Candidate v2。它�
 
 Actor-scoped Target Snapshot 按 UUID + Version、canonical content、owner 和 state 分类；用户只批准 exact Executable Plan hash。执行使用现有平台 dataset commands，对缺失 row 创建、对 matching draft 转换状态、对 matching published 幂等跳过，并用哈希链 event 在部分失败后恢复。平台未提供跨多个 Edge 请求的全局事务，因此该边界明确是 resumable/idempotent，不声称 atomic promotion。只有新一轮 exact remote queries 生成的 Readback Receipt 才证明完成。Publication 不拥有内容变换或包重建。
 
-Publication 内另有独立的 Portal LCIA projection recipe。它从 ready V3 package 和 Worker prepared projection 开始，只调用 Database-owned actor RPC。Package prepare 冻结 package/projection/artifact hash、Process-set 与 current-publication precondition，由 Database 计算 exact `publishPlanHash`；第一个 confirmation 执行幂等 package publish 和独立 projection-prepare readback。第二个 confirmation 执行 projection finalize，新的 readback 必须通过与匿名 RLS 相同的完整 public-visibility predicate。Revoke 绑定 exact Finalization Receipt 和 projection content hash，并以 revoked readback 收敛。Package publish 与 projection finalize 没有跨 RPC 事务，中间状态由 Receipt 保留且 Portal 数值可以 unavailable。该 recipe 不进入 Candidate dataset payload/create/publish 路径，不访问 private artifact 数据面，Plan/Receipt 只保留 locator-free identity/hash/count/timestamp、前置条件和 endpoint fingerprint。
+Publication 内另有独立的 Portal LCIA projection recipe。它从 ready V3 package 和 Worker prepared projection 开始，只调用 Database-owned actor RPC。Package prepare 冻结 package/projection/artifact hash、Process-set 与 current-publication precondition，由 Database 计算 exact `publishPlanHash`；第一个 confirmation 执行幂等 package publish 和独立 projection-prepare readback。第二个 confirmation 执行 projection finalize，新的 readback 必须通过与匿名 RLS 相同的完整 public-visibility predicate。Package Publication Plan 与 Projection Plan 是两个 F4 授权边界；package-published、projection-finalized、projection-verified 和 projection-revoked 使用一个严格 lifecycle-event contract，只记录 immutable parent、主体与该阶段新增观察，不复制完整上游证据，也不保存临时 RPC response hash。Revoke 绑定 exact finalized event 和 projection content hash，并以 revoked readback 收敛。Package publish 与 projection finalize 没有跨 RPC 事务，中间状态由 event 保留且 Portal 数值可以 unavailable。该 recipe 不进入 Candidate dataset payload/create/publish 路径，不访问 private artifact 数据面；Database publication/projection 状态继续是权威真相。
 
 ## 恢复模型
 

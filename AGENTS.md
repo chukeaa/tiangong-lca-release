@@ -25,9 +25,9 @@ checkPaths:
   - pnpm-lock.yaml
   - .node-version
   - .github/workflows/ci.yml
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
-lastReviewedNote: "Reviewed for Release #59: Portal LCIA publication remains isolated and actor-scoped after reconciling current pnpm, Unit/Result Transformation, full-closure, and SDK changes."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA keeps two exact authorization plans while local recovery/readback evidence uses one minimal lifecycle-event contract."
 related:
   - README.md
   - .docpact/config.yaml
@@ -144,4 +144,4 @@ related:
 - Dataset Transformation 的 aggregation-target recommendation/confirmation、inspect、`needs_decision`、Frozen DSL、加权 Unit/Result Process、validation receipt 和条件 handoff 真实可执行；Unit Process 路线不得复用旧 Result evidence，Result Process 路线只组合 hash-bound 兼容 Result；
 - Publication 的范围规划、payload、target inspection、Approval、可恢复远程执行和 independent readback 真实可执行；没有 Readback Receipt 不得声称完成；
 - 当前变更通过仓库门禁并形成独立 Git commit。
-- Portal LCIA projection 在 exact Package Publication/Projection Plan 两次 confirmation、幂等远程写入和独立 current + publicly-visible readback 后才完成；revoke 在 exact Finalization Receipt confirmation 和 revoked readback 后才完成，既有 Candidate Publication 回归保持全绿。
+- Portal LCIA projection 在 exact Package Publication/Projection Plan 两次 confirmation、幂等远程写入和独立 current + publicly-visible readback 后才完成；中间和终态只追加统一 lifecycle event，revoke 绑定 exact finalized event 并以 revoked readback 完成，既有 Candidate Publication 回归保持全绿。

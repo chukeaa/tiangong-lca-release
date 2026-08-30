@@ -12,9 +12,9 @@ whenToUpdate:
   - 当所有 Workflow 共享的证据、权限、恢复或文档规则变化时
 checkPaths:
   - workflows/**
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
-lastReviewedNote: "Reviewed for Release #59: shared pnpm Workflow decisions preserve the separate confirmation and readback boundaries of Portal LCIA publication."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedNote: "Reviewed for Release #59: shared Workflow rules distinguish Portal LCIA authorization plans from lifecycle observations."
 related:
   - ../AGENTS.md
   - ../README.md
@@ -48,7 +48,7 @@ related:
 - 远程状态由外部系统权威持有；本地只保存观察、引用和证据。
 - Release Candidate 一经成功冻结即不可原地修改；Publication 可以通过新 plan 选择引用完整的子集，数据再加工或 Candidate bytes 变化必须生成绑定父 Candidate hash 的新 Candidate。
 - Publication 的 Candidate dataset recipe 只消费已经冻结并验证的 Candidate，不得改变数据内容；范围解析、payload、target snapshot、Approval、execution events/receipt 和 independent readback 都产生独立 hash-bound artifacts。
-- Publication 的 Portal LCIA projection recipe 只消费 Database 已确认的 ready V3 package 和 Worker prepared projection；它先用 Database-computed exact plan hash 发布 package，再 finalize/verify/revoke projection，不读取 private artifact，并用独立 hash-bound Package Publication 与 Projection artifacts 保存证据。
+- Publication 的 Portal LCIA projection recipe 只消费 Database 已确认的 ready V3 package 和 Worker prepared projection；它先用 Database-computed exact plan hash 发布 package，再 finalize/verify/revoke projection，不读取 private artifact；两个待确认 Plan 是 F4 授权边界，中间和终态观察使用统一、严格、只追加的 lifecycle event，Database 继续拥有远程真相。
 
 ## 人工决定
 
@@ -58,7 +58,7 @@ related:
 - 启动可能耗时或产生远程副作用的验证和计算；
 - Dataset Transformation 的 aggregation target、具体加工规则、语义、权重、功能单位和重要字段；
 - Release Candidate 内容与正式发布授权。
-- Portal LCIA V3 package 的 exact publication、Projection Plan finalize 与 exact Finalization Receipt revoke。
+- Portal LCIA V3 package 的 exact publication、Projection Plan finalize 与 exact finalized event revoke。
 
 观察、建议、决定、发布授权和执行必须在语义上保持区分。
 

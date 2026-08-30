@@ -13,9 +13,9 @@ whenToUpdate:
   - 当 Publication 的范围、状态、授权、写入、恢复或回读规则变化时
 checkPaths:
   - workflows/publication/**
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
-lastReviewedNote: "Reviewed for Release #59: full-closure Candidate publication and Portal LCIA package/projection publication retain separate exact authorization and readback boundaries."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA uses two exact plans plus one minimal lifecycle-event contract while Candidate Publication remains unchanged."
 related:
   - README.md
   - ../AGENTS.md
@@ -40,7 +40,7 @@ related:
 - Scope Request：F2；
 - Scope Resolution、Payload Manifest、Target Snapshot：F3；
 - Draft Plan、Executable Plan、Approval、Execution Intent/Event/Receipt、Readback Receipt：F4。
-- Portal LCIA Package Publication Plan/Receipt 与 Projection Plan、Finalization/Readback/Revocation Receipt：F4；全部拒绝未知字段、只保存 identity/hash/count/timestamp、前置条件和 endpoint fingerprint，不保存远端 URL 或 artifact locator。
+- Portal LCIA Package Publication Plan 与 Projection Plan：F4 授权边界；统一 Portal LCIA Lifecycle Event：F3/F4 严格、只追加的恢复与终态观察。Event 只保存 immutable parent hash、目标、actor、精确主体和该阶段新增观察，不复制完整上游 evidence，不保存临时 RPC response hash、远端 URL 或 artifact locator；Database publication/projection 状态仍是权威真相。
 
 F4 artifact 必须拒绝未知字段、绑定所有上游 hash，并保存在新的输出目录。Execution events 是唯一例外：同一 execution 目录中只追加有序、前向 hash-linked 文件，不修改旧 event。
 
@@ -50,7 +50,7 @@ F4 artifact 必须拒绝未知字段、绑定所有上游 hash，并保存在新
 - Target Inspection 和 Readback 是 actor-scoped 只读远程操作；
 - 只有未过期 Approval 严格绑定当前 Plan/Payload/Snapshot 且 target precondition 通过后，才可调用远程写接口；
 - 远程执行只使用 `app_dataset_create`、`save_lifecycle_model_bundle` 和 `app_dataset_publish`；
-- Portal LCIA projection 只调用 Database-owned `api.qry_portal_lcia_result_package_publish_prepare_v1`、`api.cmd_portal_lcia_result_package_publish_v1`、`api.qry_portal_lcia_projection_prepare_v1`、`api.cmd_portal_lcia_projection_finalize_publication_v1`、`api.qry_portal_lcia_projection_publication_readback_v1` 和 `api.cmd_portal_lcia_projection_revoke_publication_v1`；所有 PostgREST RPC 请求显式选择 `Content-Profile: api`；package publish、projection finalize、revoke 分别要求 exact Plan、Projection Plan、Finalization Receipt SHA-256 confirmation；
+- Portal LCIA projection 只调用 Database-owned `api.qry_portal_lcia_result_package_publish_prepare_v1`、`api.cmd_portal_lcia_result_package_publish_v1`、`api.qry_portal_lcia_projection_prepare_v1`、`api.cmd_portal_lcia_projection_finalize_publication_v1`、`api.qry_portal_lcia_projection_publication_readback_v1` 和 `api.cmd_portal_lcia_projection_revoke_publication_v1`；所有 PostgREST RPC 请求显式选择 `Content-Profile: api`；package publish、projection finalize、revoke 分别要求 exact Package Plan、Projection Plan、finalized Event SHA-256 confirmation；
 - 不接受、读取或建议 service-role secret。
 
 ## 必须 fail closed
@@ -92,4 +92,4 @@ Publication 只有在以下条件全部满足时完成：
 - 新的一轮 actor-scoped 查询验证全部 canonical content hash 和 published state；
 - Readback Receipt `status=verified`。
 
-Portal LCIA projection recipe 只有在 exact Package Publication Plan 已确认且发布/回读完成、exact Projection Plan 已确认、idempotent finalize 成功、独立 readback 同时验证 publication/package/content/evidence/count、`isCurrent=true` 和 `isPubliclyVisible=true` 后完成。Revoke 只有在 exact Finalization Receipt 已确认且独立 readback 返回 `revoked`、`isPubliclyVisible=false` 后完成。Supersede/unpublish 必须使后续 verification fail closed。
+Portal LCIA projection recipe 只有在 exact Package Publication Plan 已确认且 package-published Event 已通过独立 prepare 回读、exact Projection Plan 已确认、idempotent finalize 成功、projection-verified Event 来自独立 readback 且同时验证 publication/package/content/evidence/count、`isCurrent=true` 和 `isPubliclyVisible=true` 后完成。Revoke 只有在 exact finalized Event 已确认且 revoked Event 来自独立 `revoked`、`isPubliclyVisible=false` 回读后完成。Supersede/unpublish 必须使后续 verification fail closed。

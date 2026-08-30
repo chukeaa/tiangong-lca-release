@@ -19,9 +19,9 @@ checkPaths:
   - docs/architecture.md
   - workflows/**
   - .docpact/config.yaml
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1d3a3df27c6ea881426cfa1c279a879abe29363a
-lastReviewedNote: "Reviewed for Release #59: current Transformation semantics and pnpm workspace coexist with the opt-in Portal LCIA package/projection recipe without changing release authority."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: 9c3fb05a04ba7f3722ea8dd81f00179c722a6737
+lastReviewedNote: "Reviewed for Release #59: Portal LCIA authorization plans and lifecycle events preserve Release orchestration without duplicating Database truth."
 related:
   - AGENTS.md
   - docs/architecture.md
@@ -159,7 +159,7 @@ Publication 负责消费不可变 Release Candidate，在精确选择和授权�
 
 Publication 不修改 Candidate；纯范围选择生成 hash-bound Draft/Executable Plan 和精确 payload。内容变化必须返回 Release Candidate、Dataset Transformation 或更早上游生成新 Candidate。
 
-Portal LCIA projection recipe 与 Candidate dataset publication 相互独立：前者不创建/发布 TIDAS dataset，不读取 private LCIA artifact，只发布 exact V3 LCIA result package，并把 Worker 已准备、Database 重新核对的 typed numeric projection 绑定到该 publication。Package publish 与 projection finalize 是两个独立 confirmation/receipt 边界，中间可能短暂 unavailable，不伪造原子切换。现有 artifact、signed-download 和 Candidate Publication 行为保持不变。
+Portal LCIA projection recipe 与 Candidate dataset publication 相互独立：前者不创建/发布 TIDAS dataset，不读取 private LCIA artifact，只发布 exact V3 LCIA result package，并把 Worker 已准备、Database 重新核对的 typed numeric projection 绑定到该 publication。Package publish 与 projection finalize 是两个独立 Plan confirmation 边界；中间和终态用一个只追加 lifecycle-event contract 记录，Database 仍拥有远程真相。两步之间可能短暂 unavailable，不伪造原子切换。现有 artifact、signed-download 和 Candidate Publication 行为保持不变。
 
 详见 [Publication Workflow](workflows/publication/README.md)。
 
